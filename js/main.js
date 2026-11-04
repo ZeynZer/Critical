@@ -14,7 +14,23 @@ const KEY = 'critical.v1';
 const S = { stars: {}, daily: {}, set: { sfx: true, mus: true, vib: true, q: 'auto' } };
 try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(S, o); S.set = Object.assign({ sfx: true, mus: true, vib: true, q: 'auto' }, o.set); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
-const vib = (p) => { if (S.set.vib && navigator.vibrate) try { navigator.vibrate(p); } catch (e) { /* ignore */ } };
+// Vibrations : Android = navigator.vibrate ; iPhone (iOS 17.4+) = « tic » d'un interrupteur natif <input switch>.
+// Sur iPhone, le tic ne part que depuis un geste du doigt (pointerdown/up, clic), pas depuis un timer.
+let hapLabel = null, hapLast = 0;
+const iosTick = () => {
+  const now = performance.now(); if (now - hapLast < 35) return; hapLast = now;
+  if (!hapLabel) {
+    hapLabel = document.createElement('label'); hapLabel.setAttribute('aria-hidden', 'true');
+    hapLabel.style.cssText = 'position:fixed;left:-60px;top:0;width:1px;height:1px;opacity:.01;overflow:hidden;pointer-events:none';
+    const inp = document.createElement('input'); inp.type = 'checkbox'; inp.setAttribute('switch', '');
+    hapLabel.appendChild(inp); document.body.appendChild(hapLabel);
+  }
+  hapLabel.click();
+};
+const vib = (p) => {
+  if (!S.set.vib) return;
+  try { if (navigator.vibrate) navigator.vibrate(p); else iosTick(); } catch (e) { /* ignore */ }
+};
 const starsOf = (i) => S.stars[i] || 0;
 const totalStars = () => Object.values(S.stars).reduce((a, b) => a + b, 0);
 
