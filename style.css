@@ -7,10 +7,10 @@
   --disp:Orbitron,var(--font);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden;overscroll-behavior:none;touch-action:none}
+html,body{margin:0;height:100%;min-height:100vh;min-height:100lvh;background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden;overscroll-behavior:none;touch-action:none}
 #probe-t,#probe-b{position:fixed;left:0;width:0;visibility:hidden}
 #probe-t{top:0;height:env(safe-area-inset-top,0px)} #probe-b{bottom:0;height:env(safe-area-inset-bottom,0px)}
-#cv{position:fixed;inset:0;width:100%;height:100%;display:block}
+#cv{position:fixed;left:0;top:0;width:100%;height:100%;display:block}
 [hidden]{display:none!important}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
 svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

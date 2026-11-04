@@ -1,6 +1,6 @@
 // Service worker : le jeu fonctionne hors-ligne après la première visite.
 // Pour publier une mise à jour, change simplement VERSION.
-const VERSION = 'critical-v3';
+const VERSION = 'critical-v4';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js',
