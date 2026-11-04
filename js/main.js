@@ -10,15 +10,15 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - (1 - t) ** 3;
 
 /* ============================== sauvegarde ============================== */
-const KEY = 'critical.v3';
+const KEY = 'critical.v1';
 const S = { stars: {}, daily: {}, set: { sfx: true, mus: true, vib: true, q: 'auto' } };
 try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(S, o); S.set = Object.assign({ sfx: true, mus: true, vib: true, q: 'auto' }, o.set); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
 // Vibrations : Android = navigator.vibrate ; iPhone (iOS 17.4+) = « tic » d'un interrupteur natif <input switch>.
-// Sur iPhone, le tic ne part que depuis un geste du doigt (pointerdown/up, clic), pas depuis un timer.
+// Sur iPhone, un motif [on, off, on, …] devient une suite de tics (un par segment « on »).
 let hapLabel = null, hapLast = 0;
 const iosTick = () => {
-  const now = performance.now(); if (now - hapLast < 35) return; hapLast = now;
+  const now = performance.now(); if (now - hapLast < 28) return; hapLast = now;
   if (!hapLabel) {
     hapLabel = document.createElement('label'); hapLabel.setAttribute('aria-hidden', 'true');
     hapLabel.style.cssText = 'position:fixed;left:-60px;top:0;width:1px;height:1px;opacity:.01;overflow:hidden;pointer-events:none';
@@ -27,10 +27,22 @@ const iosTick = () => {
   }
   hapLabel.click();
 };
+const HP = { tap: 12, dbl: [12, 62, 12], tri: [12, 62, 12, 62, 12], quad: [12, 62, 12, 62, 12, 62, 12] };
 const vib = (p) => {
   if (!S.set.vib) return;
-  try { if (navigator.vibrate) navigator.vibrate(p); else iosTick(); } catch (e) { /* ignore */ }
+  try {
+    if (navigator.vibrate) { navigator.vibrate(p); return; }
+    if (!Array.isArray(p)) { iosTick(); return; }
+    let t = 0;
+    p.forEach((d, k) => { if (k % 2 === 0) { if (t === 0) iosTick(); else setTimeout(iosTick, t); } t += d; });
+  } catch (e) { /* ignore */ }
 };
+// Chaque toucher sur un bouton : 1 tic (petit), 2 tics (gros bouton), 3 tics (bouton principal).
+document.addEventListener('pointerdown', (e) => {
+  const el = e.target.closest && e.target.closest('button, label.sw');
+  if (!el || el.disabled) return;
+  vib(el.classList.contains('primary') ? HP.tri : el.classList.contains('big') ? HP.dbl : HP.tap);
+}, { passive: true, capture: true });
 const starsOf = (i) => S.stars[i] || 0;
 const totalStars = () => Object.values(S.stars).reduce((a, b) => a + b, 0);
 
@@ -49,6 +61,14 @@ let B = { x: 0, y: 0, cs: 40, w: 1, h: 1 };
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, Q.dpr);
   W = window.innerWidth; H = window.innerHeight;
+  const de = document.documentElement;
+  W = Math.max(W, de.clientWidth); H = Math.max(H, de.clientHeight);
+  // PWA iPhone en portrait : innerHeight est parfois plus court que l'écran (bande / ligne manquante).
+  const standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (standalone && /iPhone|iPod/.test(navigator.userAgent) && window.innerHeight > window.innerWidth) {
+    H = Math.max(H, Math.max(screen.width, screen.height)); W = Math.max(W, Math.min(screen.width, screen.height));
+  }
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   SAT = $('#probe-t').offsetHeight || 0; SAB = $('#probe-b').offsetHeight || 0;
   layout();
@@ -104,7 +124,7 @@ function boomFx(x, y, type, n) {
   G.energy = Math.min(1, G.energy + 0.12);
   G.shake = Math.max(G.shake, Math.min(15, 2.5 + n * 0.95));
   G.comboN = n; G.comboAge = 0;
-  if (!G.attract) { A.boom(n); vib(clamp(5 + n * 2.5, 6, 30)); }
+  if (!G.attract) { A.boom(n); vib(n >= 8 ? HP.quad : n >= 5 ? HP.tri : n >= 3 ? HP.dbl : HP.tap); }
   if (n >= 4 && !G.attract) G.hitstop = Math.min(0.075, 0.018 + n * 0.006);
 }
 function applyBoom(b) {
@@ -511,7 +531,7 @@ function showResult(won, stars, left) {
   $('#r-again').style.display = won ? '' : 'none'; $('#r-menu').style.flex = won ? '' : '1';
   $('#r-share').hidden = !(won && L.daily);
   m.classList.add('on');
-  if (won) for (let i = 0; i < stars; i++) setTimeout(() => { st[i].classList.add('on'); A.star(i); vib(15); }, 350 + i * 330);
+  if (won) for (let i = 0; i < stars; i++) setTimeout(() => { st[i].classList.add('on'); A.star(i); vib(i === 2 ? HP.tri : i === 1 ? HP.dbl : HP.tap); }, 350 + i * 330);
 }
 const closeResult = () => $('#m-result').classList.remove('on');
 $('#r-next').onclick = () => {
@@ -544,7 +564,7 @@ btn('#o-close', () => setM.classList.remove('on'));
 setM.addEventListener('click', (e) => { if (e.target === setM) setM.classList.remove('on'); });
 $('#o-sfx').onchange = (e) => { S.set.sfx = e.target.checked; A.setSfx(S.set.sfx); save(); };
 $('#o-mus').onchange = (e) => { S.set.mus = e.target.checked; A.setMusic(S.set.mus); save(); };
-$('#o-vib').onchange = (e) => { S.set.vib = e.target.checked; save(); if (S.set.vib) vib(20); };
+$('#o-vib').onchange = (e) => { S.set.vib = e.target.checked; save(); if (S.set.vib) vib(HP.dbl); };
 document.querySelectorAll('#o-q button').forEach((b) => b.onclick = () => { S.set.q = b.dataset.q; applyQuality(); resize(); syncQ(); save(); A.ui(); });
 let armed = false;
 $('#o-reset').onclick = () => {
@@ -556,6 +576,9 @@ $('#o-reset').onclick = () => {
 A.setSfx(S.set.sfx); A.setMusic(S.set.mus);
 applyQuality(); resize();
 window.addEventListener('resize', resize);
+if (window.visualViewport) visualViewport.addEventListener('resize', resize);
+window.addEventListener('pageshow', () => setTimeout(resize, 50));
+window.addEventListener('load', () => { setTimeout(resize, 150); setTimeout(resize, 700); });
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);
