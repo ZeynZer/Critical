@@ -10,7 +10,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - (1 - t) ** 3;
 
 /* ============================== sauvegarde ============================== */
-const KEY = 'critical.v1';
+const KEY = 'critical.v3';
 const S = { stars: {}, daily: {}, set: { sfx: true, mus: true, vib: true, q: 'auto' } };
 try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(S, o); S.set = Object.assign({ sfx: true, mus: true, vib: true, q: 'auto' }, o.set); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
