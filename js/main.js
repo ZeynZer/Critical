@@ -64,7 +64,8 @@ function layout() {
   const cs = Math.min(aw / w, ah / h, 92);
   B = { cs, w, h, x: (W - cs * w) / 2, y: top + 10 + (ah - cs * h) / 2 };
 }
-const cc = (x, y) => ({ x: B.x + (x + 0.5) * B.cs, y: B.y + (y + 0.5) * B.cs });
+let FALL = 0; // décalage vertical continu du contenu en mode Cascade (px)
+const cc = (x, y) => ({ x: B.x + (x + 0.5) * B.cs, y: B.y + (y + 0.5) * B.cs + FALL });
 
 /* ============================== état du jeu ============================== */
 const TICK = 0.078;
@@ -277,7 +278,7 @@ function drawBoard(t, dt) {
     ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1; ctx.stroke();
   }
   // éléments
-  const V = G.vis, intro = G.introT, oy = G.endless ? -(1 - easeOut(clamp(E.fallT / 0.17, 0, 1))) * cs : 0;
+  const V = G.vis, intro = G.introT, oy = 0;
   if (G.endless) drawDanger(t);
   for (let i = 0; i < V.type.length; i++) {
     const ty = V.type[i]; if (!ty) continue;
@@ -388,8 +389,9 @@ function update(dt) {
   G.boardA += ((G.mode === 'play' ? 1 : G.mode === 'title' ? 0.34 : 0.18) - G.boardA) * Math.min(1, dt * 5);
   G.energy = Math.max(0, G.energy - dt * 0.45); G.flash = Math.max(0, G.flash - dt * 3.2); G.shake = Math.max(0, G.shake - dt * 42);
   G.comboAge += dt; if (G.label) G.label.age += dt;
-  if (G.endless) { if (!E.paused) updateEndless(dt); }
+  if (G.endless) { if (!E.paused) updateEndless(dt); FALL = (E.stepAcc / E.stepInt - 0.5) * B.cs; }
   else if (G.phase === 'run') {
+    FALL = 0;
     if (G.hitstop > 0) G.hitstop -= dt;
     else { G.acc += dt; let g = 0; while (G.acc >= TICK && G.phase === 'run' && g++ < 4) { G.acc -= TICK; tick(); if (G.hitstop > 0) break; } }
   }
@@ -436,7 +438,7 @@ function shiftDown() {
   for (let x = 0; x < w; x++) { ty[x] = hp[x] = vt[x] = vh[x] = 0; }
   for (const sh of E.sim.shots) sh.y++;
   E.sim.shots = E.sim.shots.filter((sh) => sh.y < h);
-  E.fallT = 0; A.step(E.d);
+  A.step(E.d);
   if (breach) {
     E.lives -= breach; E.mult = 1; G.flash = 0.9; G.fpos = [W / 2, B.y + B.cs * h]; G.fcol = [255, 70, 90]; G.shake = 14;
     A.breach(); vib([40, 30, 70]); updateLives(); if (E.lives <= 0) endOver();
@@ -446,7 +448,6 @@ function etick() {
   for (const f of G.fxNext) f();
   G.fxNext = [];
   if (E.over) return;
-  E.stepAcc += TICK;
   if (E.stepAcc >= E.stepInt) { E.stepAcc -= E.stepInt; shiftDown(); if (E.over) return; if (++E.sinceSpawn >= spawnEvery(E.d)) spawnChunk(); }
   const r = step(G.st, E.sim);
   G.flying = r.mv;
@@ -472,10 +473,15 @@ function updateEndless(dt) {
   if (stage > E.stage) { E.stage = stage; G.label = { t: 'Palier ' + stage, age: 0 }; }
   G.hueT = (190 + E.d * 16) % 360; G.energy = Math.max(G.energy, Math.min(0.5, E.d / 24));
   if (G.hitstop > 0) G.hitstop -= dt;
-  else { G.acc += dt; let g = 0; while (G.acc >= TICK && g++ < 4 && !E.over) { G.acc -= TICK; etick(); if (G.hitstop > 0) break; } }
+  else { E.stepAcc += dt; G.acc += dt; let g = 0; while (G.acc >= TICK && g++ < 4 && !E.over) { G.acc -= TICK; etick(); if (G.hitstop > 0) break; } }
   E.shown += (E.score - E.shown) * Math.min(1, dt * 9); if (E.score - E.shown < 1) E.shown = E.score;
   const txt = Math.round(E.shown).toLocaleString('fr-FR') + '|' + E.mult + '|' + E.stage;
   if (txt !== E.shownTxt) { E.shownTxt = txt; $('#h-lvl').textContent = Math.round(E.shown).toLocaleString('fr-FR'); $('#h-goal').textContent = `×${E.mult} · Palier ${E.stage} · Record ${Math.max(S.endless.best, E.score).toLocaleString('fr-FR')}`; }
+}
+function pickNear(px, py) {
+  let best = -1, bd = (B.cs * 2.4) ** 2;
+  for (const i of reactors(G.st)) { const c = cc(i % G.st.w, (i / G.st.w) | 0), d = (c.x - px) ** 2 + (c.y - py) ** 2; if (d < bd) { bd = d; best = i; } }
+  return best;
 }
 function efire(i) {
   if (E.over || E.paused || !isReactor(G.st.type[i])) return;
@@ -566,7 +572,12 @@ function pick(px, py) {
 }
 cv.addEventListener('pointerdown', (e) => {
   A.init(); A.resume();
-  if (G.mode === 'play' && G.endless) { const i = pick(e.clientX, e.clientY); if (i >= 0) efire(i); return; }
+  if (G.mode === 'play' && G.endless) {
+    if (E.over || E.paused) return;
+    const i = pickNear(e.clientX, e.clientY);
+    if (i >= 0) efire(i); else { ring(e.clientX, e.clientY, 4, B.cs * 0.6, 0.25, [255, 255, 255], 0.03); A.select(); }
+    return;
+  }
   if (G.mode !== 'play' || G.phase !== 'idle') return;
   if (G.used >= G.allowed) return;
   G.ptr = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ }
