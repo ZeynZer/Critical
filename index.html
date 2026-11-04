@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Critical</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060f">
+<meta name="description" content="Critical — déclenche la réaction en chaîne.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Critical">
+<meta property="og:title" content="Critical">
+<meta property="og:description" content="Un tap. Une réaction en chaîne. Un puzzle néon.">
+<meta property="og:image" content="assets/social.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="probe-t"></div><div id="probe-b"></div>
+<canvas id="cv"></canvas>
+
+<!-- HUD de jeu -->
+<div id="hud" hidden>
+  <div class="hud-top">
+    <button class="icon glass" id="b-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="hud-title glass"><b id="h-lvl">Monde 1 · 1</b><span id="h-goal">Parfait en 1 tap</span></div>
+    <button class="icon glass" id="b-set1" aria-label="Réglages"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></button>
+  </div>
+  <div class="taps" id="h-taps"></div>
+  <div class="hud-bot">
+    <button class="pill glass" id="b-restart"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>Recommencer</button>
+    <button class="pill glass" id="b-hint"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.9.7 1.5 1.6 1.5 2.6h4c0-1 .6-1.9 1.5-2.6A6 6 0 0 0 12 3z"/></svg>Indice</button>
+  </div>
+</div>
+
+<!-- Titre -->
+<section class="screen on" id="s-title">
+  <div class="title-wrap">
+    <h1 class="logo" aria-label="Critical"><span>C</span><span>R</span><span>I</span><span>T</span><span>I</span><span>C</span><span>A</span><span>L</span></h1>
+    <p class="tag">Un tap. Une réaction en chaîne.</p>
+    <div class="menu">
+      <button class="big primary" id="b-play"><span id="b-play-t">Jouer</span><small id="b-play-s"></small></button>
+      <button class="big glass" id="b-daily"><span>Défi du jour</span><small id="b-daily-s"></small></button>
+      <div class="row">
+        <button class="big glass half" id="b-levels">Niveaux</button>
+        <button class="big glass half" id="b-set2">Réglages</button>
+      </div>
+    </div>
+    <p class="foot" id="t-stars"></p>
+  </div>
+</section>
+
+<!-- Sélection des niveaux -->
+<section class="screen" id="s-levels">
+  <header class="bar">
+    <button class="icon glass" id="b-lback" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h2>Niveaux</h2><span class="count glass" id="l-count"></span>
+  </header>
+  <div class="scroll" id="l-list"></div>
+</section>
+
+<!-- Résultat -->
+<div class="modal" id="m-result">
+  <div class="card glass">
+    <div class="stars" id="r-stars"><i>★</i><i>★</i><i>★</i></div>
+    <h2 id="r-title">Réaction complète</h2>
+    <p id="r-sub"></p>
+    <div class="stats"><div><b id="r-taps">0</b><span>taps</span></div><div><b id="r-chain">0</b><span>chaîne max</span></div></div>
+    <div class="btns">
+      <button class="big primary" id="r-next">Niveau suivant</button>
+      <button class="big glass" id="r-share" hidden>Partager le score</button>
+      <div class="row"><button class="big glass half" id="r-again">Rejouer</button><button class="big glass half" id="r-menu">Menu</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Réglages -->
+<div class="modal" id="m-settings">
+  <div class="card glass">
+    <h2>Réglages</h2>
+    <label class="sw"><span>Effets sonores</span><input type="checkbox" id="o-sfx"><i></i></label>
+    <label class="sw"><span>Musique</span><input type="checkbox" id="o-mus"><i></i></label>
+    <label class="sw"><span>Vibrations</span><input type="checkbox" id="o-vib"><i></i></label>
+    <div class="seg" id="o-q"><span>Effets visuels</span><div><button data-q="low">Léger</button><button data-q="auto">Auto</button><button data-q="high">Max</button></div></div>
+    <div class="btns">
+      <button class="big glass danger" id="o-reset">Effacer la progression</button>
+      <button class="big primary" id="o-close">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
