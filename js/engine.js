@@ -29,33 +29,37 @@ export const clone = (s) => ({ w: s.w, h: s.h, type: s.type.slice(), hp: s.hp.sl
 export function remaining(s) { let n = 0; for (let i = 0; i < s.type.length; i++) if (isReactor(s.type[i])) n++; return n; }
 export function reactors(s) { const r = []; for (let i = 0; i < s.type.length; i++) if (isReactor(s.type[i])) r.push(i); return r; }
 
-function detonate(s, i, out, sim) {
+function detonate(s, i, out, sim, k = 0) {
   const t = s.type[i], x = i % s.w, y = (i / s.w) | 0;
   s.type[i] = 0; s.hp[i] = 0; sim.booms++;
-  for (const d of DIRS[t]) out.push({ x, y, dx: d[0], dy: d[1], c: t, life: 0 });
-  return { x, y, i, t, n: sim.booms };
+  const n = (sim.cnt[k] = (sim.cnt[k] || 0) + 1); // longueur de chaîne PAR tap (mode sans fin : taps simultanés)
+  for (const d of DIRS[t]) out.push({ x, y, dx: d[0], dy: d[1], c: t, life: 0, k });
+  return { x, y, i, t, n, k };
 }
 
 // Démarre une réaction en tapant la case i. `rec` = true pour obtenir les événements (rendu).
 export function begin(s, i, rec) {
-  const sim = { shots: [], booms: 0, tick: 0, rec: !!rec };
-  const b = detonate(s, i, sim.shots, sim);
-  sim.first = b;
+  const sim = newSim(rec);
+  sim.first = detonate(s, i, sim.shots, sim, 0);
   return sim;
 }
+export function newSim(rec) { return { shots: [], booms: 0, tick: 0, rec: !!rec, cnt: {} }; }
+// Ajoute un tap à une simulation déjà en cours (mode sans fin : plusieurs chaînes en parallèle).
+export function addTap(s, sim, i, k) { return detonate(s, i, sim.shots, sim, k); }
 
 // Avance d'un tick. Tous les impacts d'un tick sont appliqués AVANT les détonations :
 // le résultat ne dépend donc pas de l'ordre de traitement des tirs.
 export function step(s, sim) {
   const { w, h, type: ty, hp } = s;
   const next = [], hits = [], mv = sim.rec ? [] : null, boom = sim.rec ? [] : null;
+  let hk = null;
   for (const sh of sim.shots) {
     const fx = sh.x, fy = sh.y, nx = sh.x + sh.dx, ny = sh.y + sh.dy;
     if (nx < 0 || ny < 0 || nx >= w || ny >= h) { if (mv) mv.push({ fx, fy, tx: nx, ty: ny, c: sh.c, end: 1 }); continue; }
     const i = ny * w + nx, c = ty[i];
     let end = 0;
     if (c === 0 || (c >= 5 && sh.dx && sh.dy)) { sh.x = nx; sh.y = ny; }
-    else if (c <= 3) { hp[i]--; hits.push(i); end = 2; }
+    else if (c <= 3) { hp[i]--; hits.push(i); (hk || (hk = new Map())).has(i) || hk.set(i, sh.k); end = 2; }
     else if (c === 4) end = 3;
     else {
       const a = c === 5 ? (-sh.dy) | 0 : sh.dy, b = c === 5 ? (-sh.dx) | 0 : sh.dx;
@@ -66,7 +70,7 @@ export function step(s, sim) {
   }
   if (hits.length) {
     const uniq = [...new Set(hits)].sort((a, b) => a - b);
-    for (const i of uniq) if (isReactor(ty[i]) && hp[i] <= 0) { const b = detonate(s, i, next, sim); if (boom) boom.push(b); }
+    for (const i of uniq) if (isReactor(ty[i]) && hp[i] <= 0) { const b = detonate(s, i, next, sim, hk.get(i) || 0); if (boom) boom.push(b); }
   }
   sim.shots = next; sim.tick++;
   return mv ? { mv, hits, boom } : null;

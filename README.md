@@ -32,5 +32,10 @@ Après avoir ajouté des fichiers, change `VERSION` dans `sw.js` (ex. `critical-
 - `js/main.js` : rendu canvas, effets, interface
 - `js/audio.js` : sons et musique synthétisés (aucun fichier audio)
 
+## Modes
+- **Cascade (sans fin)** : les réacteurs tombent par vagues, de plus en plus vite. Un tap tire immédiatement et les chaînes peuvent se chevaucher. Chaîne de 3 ou plus = multiplicateur +1 (max ×8), un tap raté brise la série, 3 brèches = fin. Les vagues sont générées par le solveur : au début presque toutes les cases marchent, plus tard une seule est la bonne.
+- **Campagne** : 60 niveaux en 6 mondes, 3 étoiles par niveau.
+- **Défi du jour** : même niveau pour tout le monde.
+
 ## Règles
 Chaque réacteur tapé explose et tire dans ses directions (noyau `+`, pulsar `×`, étoile les deux). Un tir touche le premier élément rencontré : il retire 1 PV à un réacteur, il est bloqué par un mur, et les miroirs `/` `\` dévient les tirs droits. Vide tous les réacteurs : 3 étoiles si tu y arrives dans le minimum de taps.

@@ -1,7 +1,7 @@
 // Critical — audio 100 % synthétisé (WebAudio) : aucun fichier son, aucune licence.
 let ctx = null, master, sfx, mus, verb;
 const on = { sfx: true, mus: true };
-let musTimer = null, chordI = 0;
+let musTimer = null, chordI = 0, sess = null;
 const SCALE = [0, 3, 5, 7, 10]; // pentatonique mineure : toute chaîne sonne juste
 const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
 
@@ -15,6 +15,7 @@ export function init() {
   if (ctx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ } // iPhone : son même en mode silencieux
   ctx = new AC();
   const comp = ctx.createDynamicsCompressor();
   master = ctx.createGain(); master.gain.value = 0.85;
@@ -66,6 +67,9 @@ export function boom(n) {
   noise(0.16, 0.16 + Math.min(n, 10) * 0.012, 3200, 180);
   if (n < 3) tone(90, 'sine', 0.18, 0.3, { to: 45 });
 }
+export const step = (d = 0) => tone(95 + d * 7, 'sine', 0.07, 0.09);
+export const breach = () => { tone(130, 'sawtooth', 0.45, 0.25, { to: 38 }); noise(0.35, 0.3, 2200, 90); };
+export const mult = (m) => { const f = mtof(72 + [0, 2, 4, 7, 9, 12, 14, 16][Math.min(8, m) - 1]); tone(f, 'sine', 0.4, 0.22); tone(f * 2, 'triangle', 0.22, 0.08); };
 export function win() { [0, 2, 4, 7, 9, 12].forEach((s, i) => { tone(mtof(69 + s), 'sine', 0.7, 0.2, { at: i * 0.08 }); tone(mtof(81 + s), 'triangle', 0.4, 0.07, { at: i * 0.08 + 0.02 }); }); }
 export function fail() { tone(330, 'triangle', 0.35, 0.2, { to: 220 }); tone(247, 'sine', 0.5, 0.2, { at: 0.18, to: 150 }); }
 export function star(i) { tone(mtof(81 + i * 4), 'sine', 0.6, 0.22); tone(mtof(93 + i * 4), 'triangle', 0.3, 0.08); }
@@ -74,6 +78,8 @@ export function star(i) { tone(mtof(81 + i * 4), 'sine', 0.6, 0.22); tone(mtof(9
 const CHORDS = [[57, 60, 64, 67], [53, 57, 60, 64], [48, 55, 59, 64], [55, 59, 62, 65]];
 function startMusic() {
   if (musTimer || !ctx) return;
+  sess = ctx.createGain(); sess.gain.value = 1; sess.connect(mus);
+  const bus = sess;
   const play = () => {
     if (!ctx || ctx.state !== 'running') return;
     const t = ctx.currentTime, ch = CHORDS[chordI++ % CHORDS.length];
@@ -83,7 +89,7 @@ function startMusic() {
         o.type = 'sawtooth'; o.frequency.value = mtof(m - 12); o.detune.value = det;
         f.type = 'lowpass'; f.frequency.value = 520 + k * 80;
         g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.018, t + 2.2); g.gain.linearRampToValueAtTime(0.0001, t + 7.6);
-        o.connect(f); f.connect(g); g.connect(mus); o.start(t); o.stop(t + 8);
+        o.connect(f); f.connect(g); g.connect(bus); o.start(t); o.stop(t + 8);
       }
     });
     for (let k = 0; k < 3; k++) {
@@ -91,9 +97,15 @@ function startMusic() {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = 'sine'; o.frequency.value = mtof(m);
       g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.05, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + 1.8);
-      o.connect(g); g.connect(mus); o.start(at); o.stop(at + 2);
+      o.connect(g); g.connect(bus); o.start(at); o.stop(at + 2);
     }
   };
   play(); musTimer = setInterval(play, 7000);
 }
-function stopMusic() { clearInterval(musTimer); musTimer = null; }
+function stopMusic() {
+  clearInterval(musTimer); musTimer = null;
+  if (!sess) return;
+  const old = sess; sess = null; // coupe tout de suite, y compris les nappes en cours
+  old.gain.cancelScheduledValues(ctx.currentTime); old.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
+  setTimeout(() => { try { old.disconnect(); } catch (e) { /* ignore */ } }, 300);
+}
