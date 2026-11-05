@@ -11,11 +11,32 @@ function impulse(sec) {
   return b;
 }
 
+// iOS (surtout < 17) : le WebAudio est coupé par le switch silencieux. Une balise <audio> qui boucle
+// en silence force le canal "média" et débloque aussi le son en PWA.
+let keep = null;
+function keepAlive() {
+  try {
+    if (!keep) {
+      const n = 8000, h = new Uint8Array(44 + n), d = new DataView(h.buffer);
+      const w = (o, t) => { for (let i = 0; i < t.length; i++) h[o + i] = t.charCodeAt(i); };
+      w(0, 'RIFF'); d.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+      d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+      d.setUint32(24, 8000, true); d.setUint32(28, 8000, true); d.setUint16(32, 1, true); d.setUint16(34, 8, true);
+      w(36, 'data'); d.setUint32(40, n, true); h.fill(128, 44);
+      let bin = ''; for (let i = 0; i < h.length; i++) bin += String.fromCharCode(h[i]);
+      keep = new Audio('data:audio/wav;base64,' + btoa(bin));
+      keep.loop = true; keep.setAttribute('playsinline', '');
+    }
+    if (keep.paused) { const p = keep.play(); if (p && p.catch) p.catch(() => {}); }
+  } catch (e) { /* ignore */ }
+}
+
 export function init() {
   if (ctx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ } // iPhone : son même en mode silencieux
+  keepAlive();
   ctx = new AC();
   // iOS PWA : le contexte peut passer en suspended/interrupted (arrière-plan, appel, verrouillage).
   // Dès qu'il repasse en "running", on relance la musique immédiatement.
@@ -136,8 +157,11 @@ export function chestReveal(r = 0) {
 // ---- Déblocage iOS / PWA ----
 // Listeners permanents (pas de { once: true }) : iOS recoupe le contexte à chaque passage en arrière-plan.
 // On utilise des événements "de fin de geste" (touchend / pointerup / click), seuls valides pour débloquer l'audio sur iOS.
-const unlock = () => { init(); resume(); };
+const unlock = () => {
+  init(); resume(); keepAlive();
+  if (ctx) { try { const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ } }
+};
 ['pointerup', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) resume(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { resume(); if (keep) keepAlive(); } });
 window.addEventListener('pageshow', resume);
 window.addEventListener('focus', resume);
