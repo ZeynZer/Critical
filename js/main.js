@@ -1,6 +1,6 @@
 // Critical — jeu, rendu canvas, effets (« juice ») et interface.
-import { decode, begin, newSim, addTap, step, done, remaining, reactors, solve, trace, isReactor } from './engine.js';
-import { chunk, stepInterval, spawnEvery } from './endless.js';
+import { decode, begin, newSim, addTap, step, done, remaining, reactors, solve, trace, isReactor, FUSE_TICKS } from './engine.js';
+import { chunk, stepInterval, spawnEvery, STAGE_SECONDS } from './endless.js';
 import { LEVELS } from './levels.js';
 import { WORLDS, PER_WORLD, dailyLevel } from './gen.js';
 import * as A from './audio.js';
@@ -12,8 +12,8 @@ const easeOut = (t) => 1 - (1 - t) ** 3;
 
 /* ============================== sauvegarde ============================== */
 const KEY = 'critical.v1';
-const S = { stars: {}, daily: {}, endless: { best: 0, chain: 0, runs: 0, seen: false }, set: { sfx: true, mus: true, vib: true, q: 'auto' } };
-try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(S, o); S.set = Object.assign({ sfx: true, mus: true, vib: true, q: 'auto' }, o.set); S.endless = Object.assign({ best: 0, chain: 0, runs: 0, seen: false }, o.endless); } catch (e) { /* stockage indisponible */ }
+const S = { stars: {}, daily: {}, endless: { best: 0, chain: 0, runs: 0, seen: false, helpV: 0 }, set: { sfx: true, mus: true, vib: true, q: 'auto' } };
+try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); Object.assign(S, o); S.set = Object.assign({ sfx: true, mus: true, vib: true, q: 'auto' }, o.set); S.endless = Object.assign({ best: 0, chain: 0, runs: 0, seen: false, helpV: 0 }, o.endless); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } };
 // Haptique : Android = navigator.vibrate ; iPhone (iOS 17.4+) = astuce de l'interrupteur natif de Safari.
 const canVib = typeof navigator.vibrate === 'function';
@@ -60,16 +60,16 @@ function layout() {
   if (!G.st) return;
   const { w, h } = G.st, play = G.mode === 'play';
   const top = SAT + (play ? 138 : 70), bot = SAB + (play ? 92 : 70);
-  const aw = W - 44, ah = H - top - bot - 20;
-  const cs = Math.min(aw / w, ah / h, 92);
-  B = { cs, w, h, x: (W - cs * w) / 2, y: top + 10 + (ah - cs * h) / 2 };
+  const rows = G.endless ? h - 1 : h, aw = W - 44, ah = H - top - bot - 20;
+  const cs = Math.min(aw / w, ah / rows, 92);
+  B = { cs, w, h: rows, x: (W - cs * w) / 2, y: top + 10 + (ah - cs * rows) / 2 };
 }
 let FALL = 0; // décalage vertical continu du contenu en mode Cascade (px)
 const cc = (x, y) => ({ x: B.x + (x + 0.5) * B.cs, y: B.y + (y + 0.5) * B.cs + FALL });
 
 /* ============================== état du jeu ============================== */
 const TICK = 0.078;
-const COL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71] };
+const COL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71], 7: [150, 255, 90], 8: [255, 125, 60], 9: [255, 85, 85], 11: [205, 220, 255] };
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const G = {
   mode: 'title', lv: null, st: null, vis: null, sim: null, phase: 'idle', used: 0, allowed: 0,
@@ -78,7 +78,7 @@ const G = {
   endless: false, shake: 0, comboN: 0, comboAge: 9, label: null, introT: 0, boardA: 0.5, celeb: 0, ptr: null,
 };
 const rings = [], parts = [];
-const E = { t: 0, d: 0, score: 0, shown: 0, mult: 1, lives: 3, stepAcc: 0, stepInt: 1.1, sinceSpawn: 0, fallT: 1, tapId: 0, taps: {}, sim: null, over: false, paused: false, maxChain: 0, stage: 0, empty: false, spawned: 0, nTaps: 0, shownTxt: '' };
+const E = { t: 0, d: 0, score: 0, shown: 0, mult: 1, lives: 3, stepAcc: 0, stepInt: 0.95, queue: [], sinceSpawn: 0, fallT: 1, tapId: 0, taps: {}, sim: null, over: false, paused: false, maxChain: 0, stage: 0, empty: false, spawned: 0, nTaps: 0, shownTxt: '' };
 let curIdx = -1;
 
 function load(lv, attract = false) {
@@ -124,6 +124,18 @@ function hitFx(m) {
   const x = c.x - dx * B.cs * 0.32, y = c.y - dy * B.cs * 0.32, col = COL[m.c];
   burst(x, y, 7, col, B.cs * 2.2, 0.45, 2); ring(x, y, B.cs * 0.05, B.cs * 0.42, 0.28, col, 0.05);
   G.energy = Math.min(1, G.energy + 0.03); if (!G.attract) A.hit(); G.shake = Math.max(G.shake, 1.5);
+}
+function armFx(a) {
+  G.vis.type[a.i] = 9; G.vis.hp[a.i] = FUSE_TICKS;
+  const c = cc(a.x, a.y); ring(c.x, c.y, B.cs * 0.15, B.cs * 0.8, 0.3, COL[8], 0.07); burst(c.x, c.y, 8, COL[8], B.cs * 2, 0.5, 2); A.hit();
+}
+function friendKillFx(k) {
+  G.vis.type[k.i] = 0; G.vis.hp[k.i] = 0;
+  const c = cc(k.x, k.y); ring(c.x, c.y, B.cs * 0.2, B.cs * 1.4, 0.45, COL[11], 0.09); burst(c.x, c.y, 26, COL[11], B.cs * 3.4, 0.9, 2.6);
+  if (G.endless) {
+    E.lives--; E.mult = 1; G.label = { t: 'Cristal perdu', age: 0 }; G.flash = 0.7; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = 11;
+    A.breach(); vib([40, 30, 60]); updateLives(); if (E.lives <= 0) endOver();
+  }
 }
 function wallFx(m) {
   const dx = Math.sign(m.tx - m.fx), dy = Math.sign(m.ty - m.fy), c = cc(m.tx, m.ty);
@@ -231,7 +243,8 @@ function drawReactor(i, type, hp, cx, cy, t, sc, sel) {
   ctx.fillStyle = g; ctx.fillRect(cx - r * 2.5, cy - r * 2.5, r * 5, r * 5);
   ctx.globalCompositeOperation = 'source-over';
   ctx.lineWidth = Math.max(1.5, cs * 0.034);
-  for (let k = 0; k < hp; k++) {
+  if (type === 9) { const f = clamp(hp / FUSE_TICKS, 0, 1); ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = Math.max(2, cs * 0.06); ctx.beginPath(); ctx.arc(cx, cy, r * 1.32, -1.5708, -1.5708 + 6.2832 * f); ctx.stroke(); ctx.lineWidth = Math.max(1.5, cs * 0.034); }
+  for (let k = 0; k < (type === 9 ? 0 : hp); k++) {
     const rad = r * (1.24 + 0.21 * k);
     ctx.strokeStyle = rgba(col, 0.85 - k * 0.17);
     ctx.setLineDash([rad * 0.95, rad * 0.4]); ctx.lineDashOffset = -t * 22 * (k % 2 ? 1 : -1);
@@ -242,24 +255,41 @@ function drawReactor(i, type, hp, cx, cy, t, sc, sel) {
   g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(0.3, rgba(col.map((v) => Math.min(255, v + 40)), 0.95)); g.addColorStop(1, rgba(col.map((v) => v * 0.42), 0.96));
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.stroke();
+  if (type === 9) { ctx.fillStyle = `rgba(255,255,255,${0.12 + 0.5 * (0.5 + 0.5 * Math.sin(t * 28))})`; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fill(); }
   // symbole : + noyau, × pulsar, ✳ étoile
   ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(2, cs * 0.045);
   const L = r * (type === 3 ? 0.5 : 0.46);
   ctx.beginPath();
-  if (type !== 2) { ctx.moveTo(cx - L, cy); ctx.lineTo(cx + L, cy); ctx.moveTo(cx, cy - L); ctx.lineTo(cx, cy + L); }
-  if (type !== 1) { const d = L * 0.72; ctx.moveTo(cx - d, cy - d); ctx.lineTo(cx + d, cy + d); ctx.moveTo(cx + d, cy - d); ctx.lineTo(cx - d, cy + d); }
+  if (type === 7) { const q = L * 0.5; for (const sg of [-1, 1]) { ctx.moveTo(cx - L, cy + sg * q); ctx.lineTo(cx + L, cy + sg * q); ctx.moveTo(cx + sg * q, cy - L); ctx.lineTo(cx + sg * q, cy + L); } }
+  else if (type === 8 || type === 9) { ctx.moveTo(cx + L * 0.55, cy); ctx.arc(cx, cy, L * 0.55, 0, 6.2832); }
+  else if (type !== 2) { ctx.moveTo(cx - L, cy); ctx.lineTo(cx + L, cy); ctx.moveTo(cx, cy - L); ctx.lineTo(cx, cy + L); }
+  if (type === 2 || type === 3) { const d = L * 0.72; ctx.moveTo(cx - d, cy - d); ctx.lineTo(cx + d, cy + d); ctx.moveTo(cx + d, cy - d); ctx.lineTo(cx - d, cy + d); }
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(cx - r * 0.34, cy - r * 0.5, r * 0.3, r * 0.15, -0.6, 0, 6.2832); ctx.fill();
 }
 
 function drawDanger(t) {
   const { x, y, cs, w, h } = B, p = 0.5 + 0.5 * Math.sin(t * 6);
-  let hot = false; for (let i = (h - 1) * w; i < h * w; i++) if (G.vis.type[i] >= 1 && G.vis.type[i] <= 3) hot = true;
+  let hot = false; for (let i = (h - 1) * w; i < (h + 1) * w; i++) { const q = G.vis.type[i]; if (isReactor(q) || q === 9) hot = true; }
   const g = ctx.createLinearGradient(0, y + cs * (h - 1.6), 0, y + cs * h);
   g.addColorStop(0, 'rgba(255,70,90,0)'); g.addColorStop(1, `rgba(255,70,90,${hot ? 0.16 + 0.2 * p : 0.07})`);
   ctx.fillStyle = g; ctx.fillRect(x, y + cs * (h - 1.6), cs * w, cs * 1.6);
   ctx.strokeStyle = `rgba(255,90,110,${hot ? 0.5 + 0.4 * p : 0.25})`; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(x + 6, y + cs * h + 1); ctx.lineTo(x + cs * w - 6, y + cs * h + 1); ctx.stroke();
+}
+
+function drawFriend(cx, cy, t, k) {
+  const cs = B.cs, r = cs * 0.31 * k, col = COL[11], by = cy + Math.sin(t * 3 + cx) * cs * 0.02;
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(cx, by, r * 0.3, cx, by, r * 2.3); g.addColorStop(0, rgba(col, 0.4)); g.addColorStop(1, rgba(col, 0));
+  ctx.fillStyle = g; ctx.fillRect(cx - r * 2.4, by - r * 2.4, r * 4.8, r * 4.8);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.save(); ctx.translate(cx, by); ctx.rotate(Math.sin(t * 1.6 + cx) * 0.12);
+  ctx.beginPath(); ctx.moveTo(0, -r * 1.2); ctx.lineTo(r * 0.88, 0); ctx.lineTo(0, r * 1.2); ctx.lineTo(-r * 0.88, 0); ctx.closePath();
+  const lg = ctx.createLinearGradient(-r, -r, r, r); lg.addColorStop(0, 'rgba(255,255,255,.95)'); lg.addColorStop(0.5, rgba(col, 0.75)); lg.addColorStop(1, 'rgba(150,170,255,.55)');
+  ctx.fillStyle = lg; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r * 0.88, 0); ctx.lineTo(r * 0.88, 0); ctx.moveTo(0, -r * 1.2); ctx.lineTo(-r * 0.3, 0); ctx.lineTo(0, r * 1.2); ctx.stroke();
+  ctx.restore();
 }
 
 function drawBoard(t, dt) {
@@ -277,14 +307,16 @@ function drawBoard(t, dt) {
     rr(x + c * cs + 2.5, y + r * cs + 2.5, cs - 5, cs - 5, cs * 0.2);
     ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1; ctx.stroke();
   }
-  // éléments
+  // éléments (découpés au panneau : les vagues entrent depuis hors écran)
+  if (G.endless) { ctx.save(); ctx.beginPath(); ctx.rect(x - 4, y - 2, cs * w + 8, cs * h + 4); ctx.clip(); }
   const V = G.vis, intro = G.introT, oy = 0;
   if (G.endless) drawDanger(t);
   for (let i = 0; i < V.type.length; i++) {
     const ty = V.type[i]; if (!ty) continue;
     const c = cc(i % w, (i / w) | 0), k = G.endless ? 1 : easeOut(clamp((intro - i * 0.012) / 0.4, 0, 1)); if (k <= 0) continue;
     c.y += oy;
-    if (ty <= 3) drawReactor(i, ty, V.hp[i], c.x, c.y, t, k, i === G.sel);
+    if (isReactor(ty) || ty === 9) drawReactor(i, ty, ty === 9 ? G.st.hp[i] : V.hp[i], c.x, c.y, t, k, i === G.sel);
+    else if (ty === 11) drawFriend(c.x, c.y, t, k);
     else if (ty === 4) {
       rr(c.x - cs * 0.4 * k, c.y - cs * 0.4 * k, cs * 0.8 * k, cs * 0.8 * k, cs * 0.14);
       ctx.fillStyle = 'rgba(8,10,26,.88)'; ctx.fill(); ctx.strokeStyle = 'rgba(165,175,255,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -327,15 +359,16 @@ function drawBoard(t, dt) {
       if (m.end >= 2) { tx -= Math.sign(tx - m.fx) * 0.3; ty -= Math.sign(ty - m.fy) * 0.3; }
       const a = cc(m.fx, m.fy), b = cc(tx, ty), px = lerp(a.x, b.x, p), py = lerp(a.y, b.y, p);
       const vx = b.x - a.x, vy = b.y - a.y, col = COL[m.c];
-      const tg = ctx.createLinearGradient(px, py, px - vx * 1.1, py - vy * 1.1);
+      const tg = ctx.createLinearGradient(px, py, px - vx * (m.c === 7 ? 2.4 : 1.1), py - vy * (m.c === 7 ? 2.4 : 1.1));
       tg.addColorStop(0, rgba(col, 0.95)); tg.addColorStop(1, rgba(col, 0));
-      ctx.strokeStyle = tg; ctx.lineWidth = cs * 0.1; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - vx * 1.1, py - vy * 1.1); ctx.stroke();
+      const tl = m.c === 7 ? 2.4 : 1.1; ctx.strokeStyle = tg; ctx.lineWidth = cs * (m.c === 7 ? 0.17 : 0.1); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - vx * tl, py - vy * tl); ctx.stroke();
       const rg = ctx.createRadialGradient(px, py, 0, px, py, cs * 0.26);
       rg.addColorStop(0, 'rgba(255,255,255,.95)'); rg.addColorStop(0.3, rgba(col, 0.8)); rg.addColorStop(1, rgba(col, 0));
       ctx.fillStyle = rg; ctx.fillRect(px - cs * 0.27, py - cs * 0.27, cs * 0.54, cs * 0.54);
     }
     ctx.globalCompositeOperation = 'source-over';
   }
+  if (G.endless) ctx.restore();
 }
 
 function drawFx() {
@@ -389,7 +422,7 @@ function update(dt) {
   G.boardA += ((G.mode === 'play' ? 1 : G.mode === 'title' ? 0.34 : 0.18) - G.boardA) * Math.min(1, dt * 5);
   G.energy = Math.max(0, G.energy - dt * 0.45); G.flash = Math.max(0, G.flash - dt * 3.2); G.shake = Math.max(0, G.shake - dt * 42);
   G.comboAge += dt; if (G.label) G.label.age += dt;
-  if (G.endless) { if (!E.paused) updateEndless(dt); FALL = (E.stepAcc / E.stepInt - 0.5) * B.cs; }
+  if (G.endless) { if (!E.paused) updateEndless(dt); FALL = (E.stepAcc / E.stepInt - 1) * B.cs; }
   else if (G.phase === 'run') {
     FALL = 0;
     if (G.hitstop > 0) G.hitstop -= dt;
@@ -422,25 +455,28 @@ function eBoom(b) {
   if (tk) { tk.n = Math.max(tk.n, b.n); if (b.n >= 3 && !tk.ok) { tk.ok = true; if (E.mult < 8) { E.mult++; A.mult(E.mult); vib(12); } } }
 }
 function spawnChunk() {
-  const { w } = G.st;
-  for (let y = 0; y < 3; y++) for (let x = 0; x < w; x++) if (G.st.type[y * w + x]) return false;
-  for (const c of chunk(E.d, w, 3)) { const i = c.y * w + c.x; G.st.type[i] = G.vis.type[i] = c.t; G.st.hp[i] = G.vis.hp[i] = c.hp; }
+  if (E.queue.length) return false;
+  const w = G.st.w, rows = [0, 1, 2].map(() => Array(w).fill(null));
+  for (const c of chunk(E.d, w, 3)) rows[c.y][c.x] = { t: c.t, hp: c.hp };
+  E.queue.push(rows[2], rows[1], rows[0]); // la ligne du bas entre en premier, depuis hors écran
   E.sinceSpawn = 0; E.spawned++; E.empty = false; return true;
 }
 function shiftDown() {
-  const { w, h } = G.st, ty = G.st.type, hp = G.st.hp, vt = G.vis.type, vh = G.vis.hp;
+  const { w, h } = G.st, ty = G.st.type, hp = G.st.hp, vt = G.vis.type, vh = G.vis.hp, yb = B.y + B.cs * B.h;
   let breach = 0;
-  for (let x = 0; x < w; x++) {
-    const i = (h - 1) * w + x;
-    if (ty[i] >= 1 && ty[i] <= 3) { breach++; const c = cc(x, h - 1); ring(c.x, c.y, B.cs * 0.2, B.cs * 1.7, 0.5, [255, 70, 90], 0.1); burst(c.x, c.y, 20, [255, 70, 90], B.cs * 3.2, 0.7, 2.6); }
+  for (let x = 0; x < w; x++) { // dernière ligne = ligne de sortie
+    const i = (h - 1) * w + x, t = ty[i], cx = B.x + (x + 0.5) * B.cs;
+    if (isReactor(t) || t === 9) { breach++; ring(cx, yb, B.cs * 0.2, B.cs * 1.7, 0.5, [255, 70, 90], 0.1); burst(cx, yb, 20, [255, 70, 90], B.cs * 3.2, 0.7, 2.6); }
+    else if (t === 11) { const bonus = 300 * E.mult; E.score += bonus; G.label = { t: 'Cristal sauvé +' + bonus, age: 0 }; ring(cx, yb, B.cs * 0.2, B.cs * 1.4, 0.5, COL[11], 0.08); burst(cx, yb, 22, COL[11], B.cs * 3, 0.9, 2.4); A.star(1); vib(14); }
   }
   for (let y = h - 1; y > 0; y--) for (let x = 0; x < w; x++) { const a = y * w + x, b = a - w; ty[a] = ty[b]; hp[a] = hp[b]; vt[a] = vt[b]; vh[a] = vh[b]; }
-  for (let x = 0; x < w; x++) { ty[x] = hp[x] = vt[x] = vh[x] = 0; }
+  const row = E.queue.shift();
+  for (let x = 0; x < w; x++) { const c = row && row[x]; ty[x] = vt[x] = c ? c.t : 0; hp[x] = vh[x] = c ? c.hp : 0; }
   for (const sh of E.sim.shots) sh.y++;
   E.sim.shots = E.sim.shots.filter((sh) => sh.y < h);
   A.step(E.d);
   if (breach) {
-    E.lives -= breach; E.mult = 1; G.flash = 0.9; G.fpos = [W / 2, B.y + B.cs * h]; G.fcol = [255, 70, 90]; G.shake = 14;
+    E.lives -= breach; E.mult = 1; G.flash = 0.9; G.fpos = [W / 2, yb]; G.fcol = [255, 70, 90]; G.shake = 14;
     A.breach(); vib([40, 30, 70]); updateLives(); if (E.lives <= 0) endOver();
   }
 }
@@ -451,8 +487,10 @@ function etick() {
   if (E.stepAcc >= E.stepInt) { E.stepAcc -= E.stepInt; shiftDown(); if (E.over) return; if (++E.sinceSpawn >= spawnEvery(E.d)) spawnChunk(); }
   const r = step(G.st, E.sim);
   G.flying = r.mv;
-  for (const m of r.mv) { if (m.end === 2) G.fxNext.push(() => hitFx(m)); else if (m.end === 3) G.fxNext.push(() => wallFx(m)); }
+  for (const m of r.mv) { if (m.end === 2 || m.ph) G.fxNext.push(() => hitFx(m)); else if (m.end === 3) G.fxNext.push(() => wallFx(m)); }
   for (const b of r.boom) G.fxNext.push(() => applyBoom(b));
+  for (const a of r.arm) G.fxNext.push(() => armFx(a));
+  for (const k of r.kill) G.fxNext.push(() => friendKillFx(k));
   // série brisée : un tap qui n'a pas atteint ×3 en 1,3 s fait retomber le multiplicateur
   for (const k in E.taps) {
     const tk = E.taps[k];
@@ -461,14 +499,14 @@ function etick() {
     else if (E.t - tk.t > 1.3) { tk.done = true; if (E.mult > 1) { E.mult = 1; G.label = { t: 'Série brisée', age: 0 }; } }
   }
   // plateau vide : bonus + nouvelle vague immédiate
-  if (remaining(G.st) === 0 && !E.sim.shots.length) {
+  if (remaining(G.st) === 0 && !E.sim.shots.length && !E.queue.length && !(E.sim.fuse > 0)) {
     if (!E.empty && E.spawned > 0) { E.empty = true; E.score += 250 * E.mult; G.label = { t: 'Plateau vide +' + 250 * E.mult, age: 0 }; vib([10, 30, 10]); spawnChunk(); }
   } else E.empty = false;
 }
 function updateEndless(dt) {
   if (E.over) return;
-  E.t += dt; E.fallT += dt;
-  E.d = E.t / 9; E.stepInt = stepInterval(E.d);
+  E.t += dt;
+  E.d = E.t / STAGE_SECONDS; E.stepInt = stepInterval(E.d);
   const stage = Math.floor(E.d);
   if (stage > E.stage) { E.stage = stage; G.label = { t: 'Palier ' + stage, age: 0 }; }
   G.hueT = (190 + E.d * 16) % 360; G.energy = Math.max(G.energy, Math.min(0.5, E.d / 24));
@@ -479,9 +517,14 @@ function updateEndless(dt) {
   if (txt !== E.shownTxt) { E.shownTxt = txt; $('#h-lvl').textContent = Math.round(E.shown).toLocaleString('fr-FR'); $('#h-goal').textContent = `×${E.mult} · Palier ${E.stage} · Record ${Math.max(S.endless.best, E.score).toLocaleString('fr-FR')}`; }
 }
 function pickNear(px, py) {
-  let best = -1, bd = (B.cs * 2.4) ** 2;
-  for (const i of reactors(G.st)) { const c = cc(i % G.st.w, (i / G.st.w) | 0), d = (c.x - px) ** 2 + (c.y - py) ** 2; if (d < bd) { bd = d; best = i; } }
+  let best = -1, bd = (B.cs * 0.62) ** 2; // rayon serré : il faut viser le réacteur
+  const top = B.y - B.cs * 0.1, bot = B.y + B.cs * B.h + B.cs * 0.3;
+  for (const i of reactors(G.st)) { const c = cc(i % G.st.w, (i / G.st.w) | 0); if (c.y < top || c.y > bot) continue; const d = (c.x - px) ** 2 + (c.y - py) ** 2; if (d < bd) { bd = d; best = i; } }
   return best;
+}
+function missTap(x, y) {
+  ring(x, y, 4, B.cs * 0.5, 0.22, [255, 255, 255], 0.03); A.select();
+  if (E.mult > 1) { E.mult = 1; G.label = { t: 'Raté', age: 0 }; vib(8); }
 }
 function efire(i) {
   if (E.over || E.paused || !isReactor(G.st.type[i])) return;
@@ -496,12 +539,12 @@ function updateLives() {
   [...box.children].forEach((el, i) => el.classList.toggle('off', i >= E.lives));
 }
 function startEndless() {
-  const w = COLS_E, h = ROWS_E;
+  const w = COLS_E, h = ROWS_E + 1; // +1 : ligne de sortie sous l'écran
   G.endless = true; G.attract = false; G.phase = 'e'; G.lv = { world: 5, idx: 0, min: 1, sol: [] };
   G.st = { w, h, type: new Uint8Array(w * h), hp: new Uint8Array(w * h) }; G.vis = { type: new Uint8Array(w * h), hp: new Uint8Array(w * h) };
   G.flying = []; G.fxNext = []; G.hitstop = 0; G.acc = 0; G.sel = -1; G.label = null; G.comboAge = 9; G.introT = 9; G.hint = -1; G.sim = null;
   rings.length = 0; parts.length = 0; curIdx = -1;
-  Object.assign(E, { t: 0, d: 0, score: 0, shown: 0, mult: 1, lives: 3, stepAcc: 0, stepInt: 1.1, sinceSpawn: 0, fallT: 1, tapId: 0, taps: {}, sim: newSim(true), over: false, paused: false, maxChain: 0, stage: 0, empty: false, spawned: 0, nTaps: 0, shownTxt: '' });
+  Object.assign(E, { t: 0, d: 0, score: 0, shown: 0, mult: 1, lives: 3, stepAcc: stepInterval(0) * 0.7, stepInt: stepInterval(0), queue: [], sinceSpawn: 0, fallT: 1, tapId: 0, taps: {}, sim: newSim(true), over: false, paused: false, maxChain: 0, stage: 0, empty: false, spawned: 0, nTaps: 0, shownTxt: '' });
   G.hueT = 190; document.documentElement.style.setProperty('--acc', '#ff5c7a');
   show('play'); layout(); spawnChunk(); updateLives();
   $('#h-lvl').textContent = '0'; $('#h-goal').textContent = `×1 · Palier 0 · Record ${S.endless.best.toLocaleString('fr-FR')}`;
@@ -541,9 +584,9 @@ function pauseEndless() {
   showInfo('Pause', `Score ${Math.round(E.score).toLocaleString('fr-FR')} · ×${E.mult}`, 'Reprendre', () => { E.paused = false; }, 'Quitter', () => { saveEndless(); E.paused = false; show('title'); });
 }
 function playEndless() {
-  if (!S.endless.seen) {
-    S.endless.seen = true; save();
-    showInfo('Cascade', 'Les réacteurs tombent. Touche-les avant qu\'ils touchent le bas : 3 brèches et le cœur lâche.\n\nUne bonne case déclenche une grosse chaîne. Chaîne de 3 ou plus : multiplicateur +1. Un tap raté brise ta série.\n\nPlus tu tiens, plus ça accélère.', 'C\'est parti', startEndless);
+  if (S.endless.helpV !== 2) {
+    S.endless.helpV = 2; S.endless.seen = true; save();
+    showInfo('Cascade', 'Les réacteurs descendent. Touche-les avant qu\'ils sortent en bas : 3 brèches et le cœur lâche.\n\nChaîne de 3 ou plus : multiplicateur +1. Taper dans le vide brise ta série.\n\nLaser vert : perce toute la ligne. Mèche orange : explose avec retard. Cristal blanc : ne le détruis pas, laisse-le passer !', 'C\'est parti', startEndless);
   } else startEndless();
 }
 
@@ -575,7 +618,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (G.mode === 'play' && G.endless) {
     if (E.over || E.paused) return;
     const i = pickNear(e.clientX, e.clientY);
-    if (i >= 0) efire(i); else { ring(e.clientX, e.clientY, 4, B.cs * 0.6, 0.25, [255, 255, 255], 0.03); A.select(); }
+    if (i >= 0) efire(i); else missTap(e.clientX, e.clientY);
     return;
   }
   if (G.mode !== 'play' || G.phase !== 'idle') return;
