@@ -13,6 +13,7 @@ function impulse(sec) {
 
 // iOS (surtout < 17) : le WebAudio est coupé par le switch silencieux. Une balise <audio> qui boucle
 // en silence force le canal "média" et débloque aussi le son en PWA.
+let lastTry = 0;
 let keep = null;
 function keepAlive() {
   try {
@@ -41,7 +42,7 @@ export function init() {
   // iOS PWA : le contexte peut passer en suspended/interrupted (arrière-plan, appel, verrouillage).
   // Dès qu'il repasse en "running", on relance la musique immédiatement.
   ctx.onstatechange = () => {
-    if (ctx && ctx.state === 'running' && on.mus) { stopMusic(); startMusic(); }
+    if (ctx && ctx.state === 'running') { lastTry = 0; if (on.mus) { stopMusic(); startMusic(); } }
   };
   const comp = ctx.createDynamicsCompressor();
   master = ctx.createGain(); master.gain.value = 0.85;
@@ -54,6 +55,15 @@ export function init() {
   sfx.connect(verb); mus.connect(verb);
   if (on.mus) startMusic();
   resume();
+}
+// iOS PWA : un contexte créé hors geste valide peut rester "suspended" pour toujours.
+// Si un geste précédent n'a pas suffi, on détruit le contexte et on en recrée un NEUF, dans ce geste.
+function rebuild() {
+  const old = ctx;
+  try { stopMusic(); } catch (e) { /* ignore */ }
+  if (old) { old.onstatechange = null; try { old.close().catch(() => {}); } catch (e) { /* ignore */ } }
+  ctx = null; sess = null; musTimer = null;
+  init();
 }
 export function resume() {
   if (!ctx) return;
@@ -158,7 +168,10 @@ export function chestReveal(r = 0) {
 // Listeners permanents (pas de { once: true }) : iOS recoupe le contexte à chaque passage en arrière-plan.
 // On utilise des événements "de fin de geste" (touchend / pointerup / click), seuls valides pour débloquer l'audio sur iOS.
 const unlock = () => {
-  init(); resume(); keepAlive();
+  const now = performance.now();
+  if (ctx && ctx.state !== 'running' && lastTry && now - lastTry > 400) { lastTry = now; rebuild(); }
+  else { init(); resume(); if (!lastTry) lastTry = now; }
+  keepAlive();
   if (ctx) { try { const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ } }
 };
 ['pointerup', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
