@@ -17,6 +17,11 @@ export function init() {
   if (!AC) return;
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ } // iPhone : son même en mode silencieux
   ctx = new AC();
+  // iOS PWA : le contexte peut passer en suspended/interrupted (arrière-plan, appel, verrouillage).
+  // Dès qu'il repasse en "running", on relance la musique immédiatement.
+  ctx.onstatechange = () => {
+    if (ctx && ctx.state === 'running' && on.mus) { stopMusic(); startMusic(); }
+  };
   const comp = ctx.createDynamicsCompressor();
   master = ctx.createGain(); master.gain.value = 0.85;
   master.connect(comp); comp.connect(ctx.destination);
@@ -27,10 +32,16 @@ export function init() {
   verb.connect(vg); vg.connect(master);
   sfx.connect(verb); mus.connect(verb);
   if (on.mus) startMusic();
+  resume();
 }
-export function resume() { if (ctx && ctx.state !== 'running') ctx.resume(); }
+export function resume() {
+  if (!ctx) return;
+  if (ctx.state !== 'running') {
+    try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
+  }
+}
 export function setSfx(v) { on.sfx = v; }
-export function setMusic(v) { on.mus = v; if (!ctx) return; v ? startMusic() : stopMusic(); }
+export function setMusic(v) { on.mus = v; if (!ctx) return; if (v) { startMusic(); resume(); } else stopMusic(); }
 
 function tone(f, type, dur, vol, o = {}) {
   if (!ctx || !on.sfx) return;
@@ -121,3 +132,12 @@ export function chestReveal(r = 0) {
   for (let i = 0; i < n; i++) { const f = mtof(64 + base[i % base.length]); tone(f, 'sine', 0.9 + r * 0.15, 0.2, { at: i * 0.07 }); tone(f * 2, 'triangle', 0.5, 0.08, { at: i * 0.07 + 0.01 }); }
   if (r >= 3) [0, 7, 12, 16].forEach((s, i) => tone(mtof(48 + s), 'sawtooth', 1.8, 0.07, { at: 0.1 + i * 0.03 }));
 }
+
+// ---- Déblocage iOS / PWA ----
+// Listeners permanents (pas de { once: true }) : iOS recoupe le contexte à chaque passage en arrière-plan.
+// On utilise des événements "de fin de geste" (touchend / pointerup / click), seuls valides pour débloquer l'audio sur iOS.
+const unlock = () => { init(); resume(); };
+['pointerup', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) resume(); });
+window.addEventListener('pageshow', resume);
+window.addEventListener('focus', resume);
