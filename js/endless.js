@@ -1,6 +1,6 @@
 // Critical — mode sans fin « Cascade » : génération des vagues et courbe de vitesse.
 // Chaque vague est un mini-puzzle vérifié par le moteur : on sait combien de cases "résolvent tout" en un tap.
-// Début : presque toutes les cases marchent. Plus tard : une seule est la bonne, sans toucher aux cristaux amis.
+// Début : presque toutes les cases marchent. Plus tard : une seule est la bonne, (les cristaux dorés sont des bonus).
 import { clone, run, remaining, solve, reactors } from './engine.js';
 
 export const STAGE_SECONDS = 7; // un palier toutes les 7 s
@@ -20,7 +20,7 @@ function params(d) {
     n, good, w,
     hp: d < 1 ? 1 : d < 4 ? 2 : 3,                      // boucliers : présents dès le début
     sp: Math.min(0.65, 0.2 + d * 0.06),                  // probabilité d'avoir un bouclier
-    friend: d < 4 ? 0 : Math.min(0.65, 0.25 + (d - 4) * 0.05), // cristal ami à épargner
+    friend: d < 1.5 ? 0 : Math.min(0.7, 0.3 + (d - 1.5) * 0.04), // cristal doré : bonus à aller chercher
   };
 }
 
@@ -60,8 +60,8 @@ export function chunk(d, cols, rows = 3, rnd = Math.random) {
     } else s = build(P, cols, rows, rnd);
     if (!remaining(s)) continue;
     const friends = count(s, 11);
-    let good = 0;
-    for (const i of reactors(s)) { const c = clone(s); run(c, i); if (!remaining(c) && count(c, 11) === friends) good++; }
+    let good = 0; // les cristaux dorés sont un bonus : les toucher n'est jamais une erreur
+    for (const i of reactors(s)) { const c = clone(s); run(c, i); if (!remaining(c)) good++ }
     const inRange = good >= P.good[0] && good <= P.good[1];
     if (!(good > 0 || solve(s, 2, 1))) continue;
     if (inRange) { best = s; break; }
