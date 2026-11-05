@@ -4,6 +4,7 @@ import { chunk, stepInterval, spawnEvery, STAGE_SECONDS } from './endless.js';
 import { LEVELS } from './levels.js';
 import { WORLDS, PER_WORLD, dailyLevel } from './gen.js';
 import * as A from './audio.js';
+import * as CH from './chest.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -110,6 +111,7 @@ function boomFx(x, y, type, n) {
   G.shake = Math.max(G.shake, Math.min(15, 2.5 + n * 0.95));
   G.comboN = n; G.comboAge = 0;
   if (!G.attract) { A.boom(n); const d = clamp(5 + n * 2.2, 7, 28); vib(n >= 6 ? [d, 28, d] : d); }
+  if (!G.attract) CH.boom(n, { ring, burst }, x, y, col, cs);
   if (n >= 4 && !G.attract) G.hitstop = G.endless ? Math.min(0.04, 0.012 + n * 0.003) : Math.min(0.075, 0.018 + n * 0.006);
 }
 function applyBoom(b) {
@@ -183,6 +185,7 @@ function win() {
   if (G.lv.daily) { const o = S.daily[G.lv.daily]; if (!o || stars > o.stars || (stars === o.stars && G.used < o.taps)) S.daily[G.lv.daily] = { stars, taps: G.used, chain: G.maxChain }; }
   else S.stars[curIdx] = Math.max(starsOf(curIdx), stars);
   save();
+  { const wi = G.lv.daily ? -1 : (curIdx / PER_WORLD) | 0, full = wi >= 0 && Array.from({ length: PER_WORLD }, (_, k) => starsOf(wi * PER_WORLD + k)).every(Boolean); CH.onWin({ stars, daily: !!G.lv.daily, world: full ? wi : -1 }); }
   setTimeout(() => showResult(true, stars), 1250);
 }
 function lose(left) {
@@ -557,7 +560,7 @@ function saveEndless() {
 function endOver() {
   if (E.over) return;
   E.over = true; G.phase = 'over'; G.flying = []; G.shake = 18; G.flash = 1; G.energy = 1;
-  const record = E.score > S.endless.best; S.endless.runs++; saveEndless();
+  const record = E.score > S.endless.best; S.endless.runs++; saveEndless(); CH.onEndless(E.score);
   A.fail(); vib([70, 40, 70, 40, 120]);
   setTimeout(() => showEndlessOver(record), 1000);
 }
@@ -592,7 +595,9 @@ function playEndless() {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  if (CH.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
   const dt = Math.min(0.05, (now - last) / 1000); last = now; G.clock += dt;
+  CH.tick(dt);
   update(dt);
   ctx.setTransform(DPR, 0, 0, DPR, OV * DPR, OV * DPR);
   drawBG(G.clock);
@@ -767,6 +772,7 @@ A.setSfx(S.set.sfx); A.setMusic(S.set.mus);
 applyQuality(); resize();
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+CH.init({ vib, toast: (m) => toast(m), COL });
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* hors-ligne indisponible */ });

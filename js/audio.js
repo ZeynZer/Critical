@@ -109,3 +109,15 @@ function stopMusic() {
   old.gain.cancelScheduledValues(ctx.currentTime); old.gain.setTargetAtTime(0, ctx.currentTime, 0.04);
   setTimeout(() => { try { old.disconnect(); } catch (e) { /* ignore */ } }, 300);
 }
+
+// ---- Coffres / noyaux scellés ----
+export const setScale = (a) => { SCALE.splice(0, SCALE.length, ...a); }; // gamme de la skin équipée
+export const chestBeat = (p = 0) => { tone(62 + p * 40, 'sine', 0.2, 0.5, { to: 38 }); tone(240 + p * 900, 'triangle', 0.05, 0.1 + p * 0.1); };
+export function chestCrack() { noise(0.5, 0.4, 7000, 160); tone(180, 'sawtooth', 0.6, 0.28, { to: 36 }); tone(1200, 'triangle', 0.25, 0.12, { to: 300 }); }
+export function chestRise(d = 1) { tone(180, 'sawtooth', d, 0.1, { to: 1700, atk: d * 0.95 }); tone(360, 'sine', d, 0.12, { to: 3400, atk: d * 0.95 }); }
+export function chestReveal(r = 0) {
+  const base = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21], n = [3, 4, 6, 8, 10][r];
+  noise(0.6, 0.3 + r * 0.05, 8000, 200); tone(60, 'sine', 0.9, 0.5, { to: 30 });
+  for (let i = 0; i < n; i++) { const f = mtof(64 + base[i % base.length]); tone(f, 'sine', 0.9 + r * 0.15, 0.2, { at: i * 0.07 }); tone(f * 2, 'triangle', 0.5, 0.08, { at: i * 0.07 + 0.01 }); }
+  if (r >= 3) [0, 7, 12, 16].forEach((s, i) => tone(mtof(48 + s), 'sawtooth', 1.8, 0.07, { at: 0.1 + i * 0.03 }));
+}
