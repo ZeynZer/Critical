@@ -635,7 +635,7 @@ function pick(px, py) {
   return best;
 }
 cv.addEventListener('pointerdown', (e) => {
-  A.init(); A.resume();
+  A.resume(); // pas d'init ici : sur iOS, pointerdown ne débloque pas l'audio (init se fait sur pointerup/click)
   if (G.mode === 'play' && G.endless) {
     if (E.over || E.paused) return;
     const i = pickNear(e.clientX, e.clientY);
@@ -654,7 +654,7 @@ cv.addEventListener('pointermove', (e) => {
 const release = (e, go) => { if (G.ptr !== e.pointerId) return; G.ptr = null; const s = G.sel; G.sel = -1; if (go && s >= 0) fire(s); };
 cv.addEventListener('pointerup', (e) => release(e, true));
 cv.addEventListener('pointercancel', (e) => release(e, false));
-['pointerdown', 'pointerup', 'click'].forEach((ev) => document.addEventListener(ev, () => { A.init(); A.resume(); }, { passive: true }));
+['pointerup', 'touchend', 'click'].forEach((ev) => document.addEventListener(ev, () => { A.init(); A.resume(); }, { passive: true }));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) A.resume(); else pauseEndless(); });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
