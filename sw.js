@@ -1,9 +1,9 @@
 // Service worker : le jeu fonctionne hors-ligne après la première visite.
 // Pour publier une mise à jour, change simplement VERSION.
-const VERSION = 'critical-v7';
+const VERSION = 'critical-v8';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js',
+  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/chest.js',
   'assets/fonts/orbitron-latin-700-normal.woff2', 'assets/fonts/orbitron-latin-900-normal.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
