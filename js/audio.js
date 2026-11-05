@@ -165,3 +165,21 @@ const unlock = () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { resume(); if (keep) keepAlive(); } });
 window.addEventListener('pageshow', resume);
 window.addEventListener('focus', resume);
+
+// ---- Bouton de secours : visible tant que l'audio n'est pas réellement actif ----
+// Garantit un vrai geste utilisateur sur un élément dédié (iOS PWA) et sert de diagnostic (affiche l'état du contexte).
+function sosButton() {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:99999;display:none;padding:10px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,10,24,.85);color:#fff;font:700 14px system-ui,sans-serif;letter-spacing:.02em;-webkit-tap-highlight-color:transparent';
+  const refresh = () => {
+    const need = (on.mus || on.sfx) && (!ctx || ctx.state !== 'running');
+    b.style.display = need ? 'block' : 'none';
+    if (need) b.textContent = '🔊 Toucher pour activer le son (' + (ctx ? ctx.state : 'inactif') + ')';
+  };
+  b.addEventListener('click', (e) => { e.stopPropagation(); unlock(); setTimeout(refresh, 150); setTimeout(refresh, 800); });
+  document.body.appendChild(b);
+  setInterval(refresh, 700);
+  refresh();
+}
+if (document.body) sosButton(); else document.addEventListener('DOMContentLoaded', sosButton);
