@@ -64,7 +64,14 @@ const RAW = [
 export const ITEMS = RAW.map(([id, r, n, c, o]) => ({ id, r, n, c, rgb: c.map(hex), ...(o || {}) }));
 const item = (id) => ITEMS.find((i) => i.id === id) || ITEMS[0];
 // Matière (rendu) de la skin équipée et intensité de halo associée — utilisées par le jeu et l'éditeur.
-export const matOf = () => item(st.eq).v || 'glass';
+// Matière du rendu : choisie séparément de la skin (st.mat). 'skin' = suit la matière de la skin équipée.
+// Une matière se débloque dès qu'on possède une skin qui l'utilise (mets ALL_MATS_FREE à true pour tout offrir).
+const ALL_MATS_FREE = false;
+let curMat = 'glass';
+const matName = (id) => (Skins.MATS.find((m) => m[0] === id) || [id, id])[1];
+const matUnlocked = (m) => ALL_MATS_FREE || m === 'glass' || ITEMS.some((i) => i.v === m && st.owned[i.id]);
+const calcMat = () => { curMat = st.mat && st.mat !== 'skin' && matUnlocked(st.mat) ? st.mat : (item(st.eq).v || 'glass'); };
+export const matOf = () => curMat;
 export const matGl = () => [0.85, 0.95, 1.05, 1.15, 1.3][Math.max(0, item(st.eq).r)];
 const DROPS = ITEMS.filter((i) => i.r >= 0);
 const DEF_SCALE = [0, 3, 5, 7, 10];
@@ -84,7 +91,7 @@ function colorOf(it, ty, T, bump = 0) {
 }
 
 /* ============================== sauvegarde ============================== */
-const st = { energy: 0, cores: [], owned: { default: 1 }, eq: 'default', dust: 0, opens: 0, pity: [0, 0, 0], worlds: [] };
+const st = { energy: 0, cores: [], owned: { default: 1 }, eq: 'default', mat: 'skin', dust: 0, opens: 0, pity: [0, 0, 0], worlds: [] };
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 st.owned.default = st.owned.default || 1;
 if (!ITEMS.some((i) => i.id === st.eq)) st.eq = 'default';
@@ -114,6 +121,7 @@ function addCore(minR = 0) { const r = rollRar(minR); st.cores.push({ r, id: pic
 
 /* ============================== branchement jeu ============================== */
 function applyEq() {
+  calcMat();
   const it = item(st.eq);
   if (H.COL) for (let ty = 1; ty <= 3; ty++) { const a = H.COL[ty], c = colorOf(it, ty, T, bump); a[0] = c[0]; a[1] = c[1]; a[2] = c[2]; }
   A.setScale(it.s || DEF_SCALE);
@@ -164,6 +172,17 @@ const CSS = `
 @keyframes chorb{50%{filter:hue-rotate(150deg);transform:scale(1.08)}}
 #ch-coll{position:fixed;inset:0;z-index:25;display:none;flex-direction:column;align-items:center;padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px);background:rgba(3,4,12,.9);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
 #ch-coll.on{display:flex;animation:fade .3s}
+.ch-tabs{width:100%;max-width:520px;display:flex;gap:8px;padding:2px 0 10px}
+.ch-tabs button{flex:1;height:42px;border-radius:21px;font:700 13px var(--disp);letter-spacing:.04em;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);transition:transform .5s cubic-bezier(.2,1.6,.4,1)}
+.ch-tabs button.on{background:linear-gradient(135deg,rgba(77,243,255,.4),rgba(255,79,216,.34));border-color:rgba(255,255,255,.45);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),0 0 18px rgba(77,243,255,.25)}
+.ch-tabs button:active{transform:scale(.95)}
+.ch-prev{width:100%;max-width:520px;border-radius:26px;padding:8px 10px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:10px}
+.ch-prev canvas{width:min(100%,300px);aspect-ratio:600/168;display:block}
+.ch-pl{display:flex;gap:8px;width:100%}
+.ch-pl button{flex:1;min-width:0;height:34px;border-radius:17px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 10px}
+.ch-pl b{font-family:var(--disp)}
+.ch-th{width:56px;height:56px;display:block}
+.ch-it.lock .ch-th{filter:grayscale(1) brightness(.4)}
 .ch-grid{width:100%;max-width:520px;flex:1;overflow-y:auto;touch-action:pan-y;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start;padding:4px 0 16px;scrollbar-width:none}
 .ch-grid::-webkit-scrollbar{display:none}
 .ch-it{border-radius:16px;padding:10px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--rc,rgba(255,255,255,.14));font-size:11px;font-weight:600;text-align:center;position:relative}
@@ -202,7 +221,7 @@ function mount() {
     <p id="ch-msub"></p><i class="ch-bar" style="width:100%;height:7px"><b></b></i><p style="font-size:12px">À 100 % d'énergie, un noyau apparaît. Gagne de l'énergie en finissant des niveaux et des parties.</p>
     <div class="btns"><button class="big primary" id="ch-go">Ouvrir un noyau</button><button class="big glass" id="ch-tocoll">Collection</button><button class="big glass" id="ch-mclose">Fermer</button></div></div></div>
   <div id="ch-coll"><header class="bar"><button class="icon glass" id="ch-cback" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Collection</h2><span class="ch-dust glass" id="ch-dust"></span></header>
-    <div class="ch-grid" id="ch-grid"></div><div class="ch-det glass" id="ch-det" style="border-radius:20px;padding:14px"></div></div>
+    <div class="ch-tabs" id="ch-tabs"></div><div class="ch-prev glass" id="ch-prev"></div><div class="ch-grid" id="ch-grid"></div><div class="ch-det glass" id="ch-det" style="border-radius:20px;padding:14px"></div></div>
   <div class="modal" id="ch-admin"><div class="card glass"><h2>Admin</h2><p>Teste tout sans jouer. Retire ce panneau en passant ADMIN à false dans chest.js.</p>
     <div class="btns" id="ch-admbtns"></div></div></div>
   <div id="ch-open"><canvas></canvas><div class="co-hint">MAINTIENS POUR LIBÉRER L'ÉNERGIE</div><button class="co-x glass" aria-label="Fermer">✕</button><div class="co-card" hidden></div></div>`;
@@ -243,36 +262,69 @@ function showBanner(g, cores, extra, delay) {
   }, delay);
 }
 
-/* ---- collection ---- */
-let selId = 'default';
-const swatch = (it) => {
-  const c = it.c;
-  if (it.m === 'rainbow' || it.m === 'prism') return 'conic-gradient(#ff4d4d,#ffd24a,#4dff88,#4df3ff,#8a5bff,#ff4fd8,#ff4d4d)';
-  if (it.m === 'aurora') return 'conic-gradient(#4dffb0,#8a5bff,#4df3ff,#4dffb0)';
-  return `linear-gradient(135deg,${c[0]},${c[1]} 55%,${c[2]})`;
-};
+/* ---- collection : skins + matières, avec aperçus en direct ---- */
+let selId = 'default', selMat = 'skin', tab = 'skins', thumbs = [], cRaf = 0, cLast = 0;
+const unlockedBy = (m) => ITEMS.filter((i) => i.v === m).map((i) => i.n).join(', ') || '—';
+// matière d'aperçu d'une skin : celle choisie, sinon la sienne
+const previewMat = (it) => (st.mat && st.mat !== 'skin' && matUnlocked(st.mat) ? st.mat : it.v || 'glass');
+function paintThumbs(t) {
+  const eq = item(st.eq);
+  for (const th of thumbs) {
+    const cv = th.cv; if (!cv.isConnected) continue;
+    const c = th.c || (th.c = cv.getContext('2d')), w = cv.width, h = cv.height, k = w / (th.css || 56);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, w, h); c.setTransform(k, 0, 0, k, 0, 0);
+    const W = w / k, Hh = h / k;
+    if (th.kind === 'prev') [1, 2, 3].forEach((ty, i) => Skins.drawOrb(c, curMat, W * (0.2 + i * 0.3), Hh / 2, ty === 1 ? 30 : 25, colorOf(eq, ty, t, t * 40), ty, t, { gl: matGl() }));
+    else if (th.kind === 'skin') Skins.drawOrb(c, previewMat(th.it), W / 2, Hh / 2, 19, colorOf(th.it, 1, t, t * 40), 1, t, { gl: 0.9 });
+    else Skins.drawOrb(c, th.mat === 'skin' ? eq.v || 'glass' : th.mat, W / 2, Hh / 2, 19, colorOf(eq, 1, t, t * 40), 1, t, { gl: 0.9 });
+  }
+}
+function collLoop(now) {
+  if (!ui.coll.classList.contains('on')) { cRaf = 0; return; }
+  cRaf = requestAnimationFrame(collLoop);
+  if (O || now - cLast < 45) return; cLast = now; paintThumbs(now / 1000);
+}
 function buildColl() {
   $('#ch-dust').textContent = `✦ ${st.dust}`;
-  const g = $('#ch-grid');
-  g.innerHTML = ITEMS.map((it) => {
-    const own = !!st.owned[it.id], rc = rarCol(Math.max(0, it.r), 0);
-    return `<button class="ch-it ${own ? '' : 'lock'} ${it.id === selId ? 'sel' : ''}" data-id="${it.id}" style="--rc:${rg(rc, 1)}">${st.eq === it.id ? '<em>✓</em>' : ''}<span class="ch-sw" style="background:${swatch(it)}"></span><span>${own ? it.n : '???'}</span><i>${it.r < 0 ? 'Départ' : RAR[it.r].n}</i></button>`;
-  }).join('');
-  g.querySelectorAll('.ch-it').forEach((b) => b.onclick = () => { A.select(); H.vib(8); selId = b.dataset.id; buildColl(); });
-  const it = item(selId), own = !!st.owned[it.id], eq = st.eq === it.id;
-  const det = $('#ch-det');
-  const bits = [it.m && 'animée', it.b && 'explosion spéciale', it.s && 'gamme sonore unique'].filter(Boolean).join(' · ');
-  det.innerHTML = `<p><b>${own ? it.n : 'Skin inconnue'}</b> · ${it.r < 0 ? 'Départ' : RAR[it.r].n}${own && bits ? ' · ' + bits : ''}${own ? ' · ×' + st.owned[it.id] : ''}</p><div class="row" id="ch-actions"></div>`;
-  const act = $('#ch-actions', det);
-  const add = (label, cls, f) => { const b = document.createElement('button'); b.className = 'big ' + cls + ' half'; b.textContent = label; b.onclick = () => { A.ui(); H.vib(9); f(); }; act.appendChild(b); };
-  if (own) add(eq ? 'Équipée ✓' : 'Équiper', eq ? 'glass' : 'primary', () => { st.eq = it.id; applyEq(); save(); buildColl(); });
-  else if (it.r >= 0) add(`Fabriquer ✦ ${RAR[it.r].cost}`, st.dust >= RAR[it.r].cost ? 'primary' : 'glass', () => {
-    if (st.dust < RAR[it.r].cost) { H.toast(`Il te faut ${RAR[it.r].cost} ✦ de poussière`); return; }
-    st.dust -= RAR[it.r].cost; st.owned[it.id] = 1; save(); H.vib([14, 60, 14, 60, 14]); H.toast(it.n + ' débloquée'); refresh(); buildColl();
-  });
-  if (ADMIN && it.r >= 0) add('Tester l\'ouverture', 'glass', () => startOpen({ r: it.r, id: it.id }, true));
+  thumbs = [];
+  const eq = item(st.eq), auto = !(st.mat && st.mat !== 'skin' && matUnlocked(st.mat));
+  // onglets
+  const tabs = $('#ch-tabs');
+  tabs.innerHTML = `<button data-t="skins" class="${tab === 'skins' ? 'on' : ''}">Skins</button><button data-t="mats" class="${tab === 'mats' ? 'on' : ''}">Matières</button>`;
+  tabs.querySelectorAll('button').forEach((b) => b.onclick = () => { A.select(); H.vib(8); tab = b.dataset.t; buildColl(); });
+  // aperçu de ce qui est équipé + raccourcis vers les deux menus
+  const pv = $('#ch-prev');
+  pv.innerHTML = `<canvas width="600" height="168"></canvas><div class="ch-pl"><button data-t="skins">Skin · <b>${eq.n}</b></button><button data-t="mats">Matière · <b>${matName(curMat)}</b>${auto ? ' (auto)' : ''}</button></div>`;
+  thumbs.push({ cv: pv.querySelector('canvas'), kind: 'prev', css: 300 });
+  pv.querySelectorAll('button').forEach((b) => b.onclick = () => { A.select(); H.vib(8); tab = b.dataset.t; buildColl(); });
+  const g = $('#ch-grid'), det = $('#ch-det');
+  const addBtn = (label, cls, f) => { const b = document.createElement('button'); b.className = 'big ' + cls + ' half'; b.textContent = label; b.onclick = () => { A.ui(); H.vib(9); f(); }; $('#ch-actions', det).appendChild(b); };
+  const tile = (cls, id, rc, name, sub, badge) => `<button class="ch-it ${cls}" data-id="${id}" style="--rc:${rg(rc, 1)}">${badge ? '<em>✓</em>' : ''}<canvas class="ch-th" width="112" height="112"></canvas><span>${name}</span><i>${sub}</i></button>`;
+  if (tab === 'skins') {
+    g.innerHTML = ITEMS.map((it) => { const own = !!st.owned[it.id]; return tile(`${own ? '' : 'lock'} ${it.id === selId ? 'sel' : ''}`, it.id, rarCol(Math.max(0, it.r), 0), own ? it.n : '???', it.r < 0 ? 'Départ' : RAR[it.r].n, st.eq === it.id); }).join('');
+    g.querySelectorAll('.ch-it').forEach((b, i) => { thumbs.push({ cv: b.querySelector('canvas'), kind: 'skin', it: ITEMS[i] }); b.onclick = () => { A.select(); H.vib(8); selId = b.dataset.id; buildColl(); }; });
+    const it = item(selId), own = !!st.owned[it.id], isEq = st.eq === it.id;
+    const bits = [it.m && 'animée', it.b && 'explosion spéciale', it.s && 'gamme sonore unique', it.v && 'matière ' + matName(it.v).toLowerCase()].filter(Boolean).join(' · ');
+    det.innerHTML = `<p><b>${own ? it.n : 'Skin inconnue'}</b> · ${it.r < 0 ? 'Départ' : RAR[it.r].n}${own && bits ? ' · ' + bits : ''}${own ? ' · ×' + st.owned[it.id] : ''}</p><div class="row" id="ch-actions"></div>`;
+    if (own) addBtn(isEq ? 'Équipée ✓' : 'Équiper', isEq ? 'glass' : 'primary', () => { st.eq = it.id; applyEq(); save(); buildColl(); });
+    else if (it.r >= 0) addBtn(`Fabriquer ✦ ${RAR[it.r].cost}`, st.dust >= RAR[it.r].cost ? 'primary' : 'glass', () => {
+      if (st.dust < RAR[it.r].cost) { H.toast(`Il te faut ${RAR[it.r].cost} ✦ de poussière`); return; }
+      st.dust -= RAR[it.r].cost; st.owned[it.id] = 1; save(); H.vib([14, 60, 14, 60, 14]); H.toast(it.n + ' débloquée'); refresh(); buildColl();
+    });
+    if (ADMIN && it.r >= 0) addBtn('Tester l\'ouverture', 'glass', () => startOpen({ r: it.r, id: it.id }, true));
+  } else {
+    const list = [['skin', 'Auto']].concat(Skins.MATS);
+    g.innerHTML = list.map(([id, n]) => { const ok = id === 'skin' || matUnlocked(id); return tile(`${ok ? '' : 'lock'} ${id === selMat ? 'sel' : ''}`, id, ok ? [160, 220, 255] : [160, 170, 190], ok ? n : '???', id === 'skin' ? 'Suit la skin' : ok ? (st.mat === id ? 'Utilisée' : 'Matière') : 'Verrouillée', id === 'skin' ? auto : st.mat === id && !auto); }).join('');
+    g.querySelectorAll('.ch-it').forEach((b, i) => { thumbs.push({ cv: b.querySelector('canvas'), kind: 'mat', mat: list[i][0] }); b.onclick = () => { A.select(); H.vib(8); selMat = b.dataset.id; buildColl(); }; });
+    const ok = selMat === 'skin' || matUnlocked(selMat), used = selMat === 'skin' ? auto : !auto && st.mat === selMat;
+    det.innerHTML = `<p><b>${selMat === 'skin' ? 'Matière de la skin' : ok ? matName(selMat) : 'Matière verrouillée'}</b> · ${selMat === 'skin' ? 'chaque skin garde sa propre matière' : ok ? 's\'applique à n\'importe quelle skin' : 'débloquée par : ' + unlockedBy(selMat)}</p><div class="row" id="ch-actions"></div>`;
+    if (ok) addBtn(used ? 'Utilisée ✓' : 'Utiliser', used ? 'glass' : 'primary', () => { st.mat = selMat; applyEq(); save(); H.vib(HP_OK); buildColl(); });
+  }
+  if (!cRaf) cRaf = requestAnimationFrame(collLoop);
+  paintThumbs(performance.now() / 1000);
 }
-function showColl() { buildColl(); ui.coll.classList.add('on'); }
+const HP_OK = [12, 50, 12];
+function showColl() { buildColl(); ui.coll.classList.add('on'); if (!cRaf) cRaf = requestAnimationFrame(collLoop); }
 
 /* ---- admin ---- */
 function showAdmin() {
@@ -284,7 +336,7 @@ function showAdmin() {
   add('+100 énergie', () => { H.toast('+100 énergie'); showBanner(100, gain(100), '', 0); });
   add('+1000 poussière', () => { st.dust += 1000; save(); refresh(); H.toast('+1000 ✦'); });
   add('Tout débloquer', () => { ITEMS.forEach((i) => { st.owned[i.id] = st.owned[i.id] || 1; }); save(); refresh(); H.toast('Tout est débloqué'); });
-  add('Réinitialiser le coffre', () => { Object.assign(st, { energy: 0, cores: [], owned: { default: 1 }, eq: 'default', dust: 0, opens: 0, pity: [0, 0, 0], worlds: [] }); applyEq(); save(); refresh(); H.toast('Coffre réinitialisé'); });
+  add('Réinitialiser le coffre', () => { Object.assign(st, { energy: 0, cores: [], owned: { default: 1 }, eq: 'default', mat: 'skin', dust: 0, opens: 0, pity: [0, 0, 0], worlds: [] }); applyEq(); save(); refresh(); H.toast('Coffre réinitialisé'); });
   add('Fermer', () => $('#ch-admin').classList.remove('on'), 'primary');
   $('#ch-admin').classList.add('on');
 }
