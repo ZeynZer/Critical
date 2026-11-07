@@ -12,7 +12,7 @@ const MAX_LIFE = 40; // garde-fou contre les boucles de miroirs
 
 // Encodage compact d'un niveau : 1 caractère par case
 //  . vide | 1 2 3 noyau (pv) | p q r pulsar (pv) | s t u étoile (pv) | # mur | / \ miroirs
-const CH = { '.': [0, 0], '1': [1, 1], '2': [1, 2], '3': [1, 3], p: [2, 1], q: [2, 2], r: [2, 3], s: [3, 1], t: [3, 2], u: [3, 3], '#': [4, 0], '/': [5, 0], '\\': [6, 0] };
+const CH = { '.': [0, 0], '1': [1, 1], '2': [1, 2], '3': [1, 3], p: [2, 1], q: [2, 2], r: [2, 3], s: [3, 1], t: [3, 2], u: [3, 3], '#': [4, 0], '/': [5, 0], '\\': [6, 0], a: [7, 1], b: [7, 2], c: [7, 3], d: [8, 1], e: [8, 2], f: [8, 3], '*': [11, 1] };
 const REV = {};
 for (const k in CH) REV[CH[k][0] * 4 + CH[k][1]] = k;
 
@@ -106,26 +106,36 @@ export function run(s, i) {
 
 const key = (s) => { let k = ''; for (let i = 0; i < s.type.length; i++) k += String.fromCharCode(48 + s.type[i] * 8 + s.hp[i]); return k; };
 
-// Solveur : cherche les séquences de taps les plus courtes qui nettoient le plateau.
-export function solve(s0, maxDepth, limit = 30) {
+const countOf = (s, t) => { let c = 0; for (let i = 0; i < s.type.length; i++) if (s.type[i] === t) c++; return c; };
+let _timedOut = false;
+export const solveTimedOut = () => _timedOut;
+
+// Solveur : cherche les séquences de taps les plus courtes qui nettoient le plateau
+// SANS détruire de cristal ami. `ms` = budget de temps (0 = illimité). Renvoie null si rien trouvé (voir solveTimedOut()).
+export function solve(s0, maxDepth, limit = 30, ms = 0) {
+  _timedOut = false;
+  const stop = ms ? Date.now() + ms : 0, friends = countOf(s0, 11);
   for (let d = 1; d <= maxDepth; d++) {
     const sols = [], seen = new Set();
     (function dfs(s, left, path) {
-      if (sols.length >= limit) return;
+      if (sols.length >= limit || _timedOut) return;
+      if (stop && Date.now() > stop) { _timedOut = true; return; }
       const k = left + key(s);
       if (seen.has(k)) return;
       seen.add(k);
       for (const i of reactors(s)) {
         const c = clone(s);
         run(c, i);
+        if (friends && countOf(c, 11) !== friends) continue;
         path.push(i);
         if (left === 1) { if (remaining(c) === 0) sols.push(path.slice()); }
         else if (remaining(c) > 0) dfs(c, left - 1, path);
         path.pop();
-        if (sols.length >= limit) return;
+        if (sols.length >= limit || _timedOut) return;
       }
     })(s0, d, []);
     if (sols.length) return { depth: d, sols };
+    if (_timedOut) return null;
   }
   return null;
 }
@@ -135,16 +145,19 @@ export function trace(s, i) {
   const t = s.type[i], x0 = i % s.w, y0 = (i / s.w) | 0, out = [];
   for (const d of DIRS[t]) {
     let x = x0, y = y0, dx = d[0], dy = d[1];
-    const pts = [[x, y]]; let hit = null;
+    const pts = [[x, y]], hits = [];
     for (let life = 0; life < MAX_LIFE; life++) {
       x += dx; y += dy;
       if (x < 0 || y < 0 || x >= s.w || y >= s.h) { pts.push([x, y]); break; }
       const c = s.type[y * s.w + x];
       pts.push([x, y]);
-      if (c >= 1 && c <= 4) { if (c <= 3) hit = [x, y]; break; }
-      if (c >= 5 && !(dx && dy)) { const a = c === 5 ? (-dy) | 0 : dy, b = c === 5 ? (-dx) | 0 : dx; dx = a; dy = b; }
+      if (c === 0) continue;
+      if ((c === 5 || c === 6) && !(dx && dy)) { const a = c === 5 ? (-dy) | 0 : dy, b = c === 5 ? (-dx) | 0 : dx; dx = a; dy = b; continue; }
+      if (c === 5 || c === 6) continue;
+      if (isReactor(c) || c === 11) { hits.push([x, y]); if (t === 7 && isReactor(c)) continue; }
+      break;
     }
-    out.push({ pts, hit });
+    out.push({ pts, hits, hit: hits[hits.length - 1] || null });
   }
   return out;
 }

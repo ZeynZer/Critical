@@ -5,6 +5,7 @@ import { LEVELS } from './levels.js';
 import { WORLDS, PER_WORLD, dailyLevel } from './gen.js';
 import * as A from './audio.js';
 import * as CH from './chest.js';
+import * as ED from './editor.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -70,7 +71,7 @@ const cc = (x, y) => ({ x: B.x + (x + 0.5) * B.cs, y: B.y + (y + 0.5) * B.cs + F
 
 /* ============================== état du jeu ============================== */
 const TICK = 0.078;
-const COL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71], 7: [150, 255, 90], 8: [255, 125, 60], 9: [255, 85, 85], 11: [255, 222, 100] };
+const COL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71], 7: [150, 255, 90], 8: [255, 125, 60], 9: [255, 85, 85], 11: [205, 220, 255] };
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const G = {
   mode: 'title', lv: null, st: null, vis: null, sim: null, phase: 'idle', used: 0, allowed: 0,
@@ -84,7 +85,7 @@ let curIdx = -1;
 
 function load(lv, attract = false) {
   G.endless = false; G.lv = lv; G.st = decode(lv); G.vis = { type: G.st.type.slice(), hp: G.st.hp.slice() };
-  G.sim = null; G.phase = 'idle'; G.used = 0; G.allowed = lv.min + 2; G.chain = 0; G.maxChain = 0;
+  G.sim = null; G.phase = 'idle'; G.used = 0; G.allowed = lv.min + (lv.extra ?? 2); G.friendLost = false; G.chain = 0; G.maxChain = 0;
   G.sel = -1; G.hint = -1; G.flying = []; G.fxNext = []; G.attract = attract; G.atT = 0;
   G.introT = 0; G.comboAge = 9; G.label = null; G.celeb = 0; G.hitstop = 0;
   G.hueT = lv.daily ? 280 : WORLDS[lv.world].hue;
@@ -134,12 +135,10 @@ function armFx(a) {
 function friendKillFx(k) {
   G.vis.type[k.i] = 0; G.vis.hp[k.i] = 0;
   const c = cc(k.x, k.y); ring(c.x, c.y, B.cs * 0.2, B.cs * 1.4, 0.45, COL[11], 0.09); burst(c.x, c.y, 26, COL[11], B.cs * 3.4, 0.9, 2.6);
-  if (G.endless) { // cristal doré : bonus de multiplicateur + points (plus aucune vie perdue)
-    if (E.mult < 8) E.mult++;
-    const bonus = 200 * E.mult; E.score += bonus;
-    G.label = { t: 'Cristal ×' + E.mult + ' +' + bonus, age: 0 }; G.flash = 0.55; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = Math.max(G.shake, 5);
-    ring(c.x, c.y, B.cs * 0.2, B.cs * 2.6, 0.6, [255, 255, 255], 0.05); A.mult(E.mult); A.star(1); vib([12, 50, 12, 50, 18]);
-  }
+  if (G.endless) {
+    E.lives--; E.mult = 1; G.label = { t: 'Cristal perdu', age: 0 }; G.flash = 0.7; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = 11;
+    A.breach(); vib([40, 30, 60]); updateLives(); if (E.lives <= 0) endOver();
+  } else { G.friendLost = true; G.flash = 0.7; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = 11; A.breach(); vib([40, 30, 60]); }
 }
 function wallFx(m) {
   const dx = Math.sign(m.tx - m.fx), dy = Math.sign(m.ty - m.fy), c = cc(m.tx, m.ty);
@@ -162,13 +161,16 @@ function tick() {
   if (G.sim.pending) { endChain(); return; }
   const r = step(G.st, G.sim);
   G.flying = r.mv;
-  for (const m of r.mv) { if (m.end === 2) G.fxNext.push(() => hitFx(m)); else if (m.end === 3) G.fxNext.push(() => wallFx(m)); }
+  for (const m of r.mv) { if (m.end === 2 || m.ph) G.fxNext.push(() => hitFx(m)); else if (m.end === 3) G.fxNext.push(() => wallFx(m)); }
   for (const b of r.boom) G.fxNext.push(() => applyBoom(b));
+  for (const a of r.arm) G.fxNext.push(() => armFx(a));
+  for (const k of r.kill) G.fxNext.push(() => friendKillFx(k));
   if (done(G.sim)) G.sim.pending = true;
 }
 function endChain() {
   G.flying = []; G.sim = null;
   if (G.attract) { G.phase = 'idle'; G.atT = 0; return; }
+  if (G.friendLost) return lose(-1);
   const left = remaining(G.st);
   if (left === 0) return win();
   if (G.used >= G.allowed) return lose(left);
@@ -184,10 +186,11 @@ function win() {
   ring(b.x, b.y, 10, Math.max(W, H) * 0.6, 0.7, [77, 243, 255], 0.05);
   G.flash = 1; G.shake = 16; G.energy = 1; G.hitstop = 0.09;
   A.win(); vib([30, 40, 60, 40, 90]);
-  if (G.lv.daily) { const o = S.daily[G.lv.daily]; if (!o || stars > o.stars || (stars === o.stars && G.used < o.taps)) S.daily[G.lv.daily] = { stars, taps: G.used, chain: G.maxChain }; }
+  if (G.lv.custom) ED.onResult(G.lv, stars, G.used, G.maxChain);
+  else if (G.lv.daily) { const o = S.daily[G.lv.daily]; if (!o || stars > o.stars || (stars === o.stars && G.used < o.taps)) S.daily[G.lv.daily] = { stars, taps: G.used, chain: G.maxChain }; }
   else S.stars[curIdx] = Math.max(starsOf(curIdx), stars);
   save();
-  { const wi = G.lv.daily ? -1 : (curIdx / PER_WORLD) | 0, full = wi >= 0 && Array.from({ length: PER_WORLD }, (_, k) => starsOf(wi * PER_WORLD + k)).every(Boolean); CH.onWin({ stars, daily: !!G.lv.daily, world: full ? wi : -1 }); }
+  if (!G.lv.custom) { const wi = G.lv.daily ? -1 : (curIdx / PER_WORLD) | 0, full = wi >= 0 && Array.from({ length: PER_WORLD }, (_, k) => starsOf(wi * PER_WORLD + k)).every(Boolean); CH.onWin({ stars, daily: !!G.lv.daily, world: full ? wi : -1 }); }
   setTimeout(() => showResult(true, stars), 1250);
 }
 function lose(left) {
@@ -291,7 +294,7 @@ function drawFriend(cx, cy, t, k) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.save(); ctx.translate(cx, by); ctx.rotate(Math.sin(t * 1.6 + cx) * 0.12);
   ctx.beginPath(); ctx.moveTo(0, -r * 1.2); ctx.lineTo(r * 0.88, 0); ctx.lineTo(0, r * 1.2); ctx.lineTo(-r * 0.88, 0); ctx.closePath();
-  const lg = ctx.createLinearGradient(-r, -r, r, r); lg.addColorStop(0, 'rgba(255,255,255,.95)'); lg.addColorStop(0.5, rgba(col, 0.75)); lg.addColorStop(1, 'rgba(255,160,60,.55)');
+  const lg = ctx.createLinearGradient(-r, -r, r, r); lg.addColorStop(0, 'rgba(255,255,255,.95)'); lg.addColorStop(0.5, rgba(col, 0.75)); lg.addColorStop(1, 'rgba(150,170,255,.55)');
   ctx.fillStyle = lg; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.6; ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r * 0.88, 0); ctx.lineTo(r * 0.88, 0); ctx.moveTo(0, -r * 1.2); ctx.lineTo(-r * 0.3, 0); ctx.lineTo(0, r * 1.2); ctx.stroke();
   ctx.restore();
@@ -351,7 +354,7 @@ function drawBoard(t, dt) {
       ctx.strokeStyle = rgba(col, 0.55); ctx.lineWidth = Math.max(2, cs * 0.05); ctx.beginPath();
       tr.pts.forEach((p, k) => { const q = cc(clamp(p[0], -0.42, B.w - 0.58), clamp(p[1], -0.42, B.h - 0.58)); k ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }); ctx.stroke();
       ctx.setLineDash([]);
-      if (tr.hit) { const q = cc(tr.hit[0], tr.hit[1]); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(q.x, q.y, cs * (0.4 + 0.04 * Math.sin(t * 9)), 0, 6.2832); ctx.stroke(); }
+      for (const hh of tr.hits) { const q = cc(hh[0], hh[1]); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(q.x, q.y, cs * (0.4 + 0.04 * Math.sin(t * 9)), 0, 6.2832); ctx.stroke(); }
     }
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -466,27 +469,13 @@ function spawnChunk() {
   E.queue.push(rows[2], rows[1], rows[0]); // la ligne du bas entre en premier, depuis hors écran
   E.sinceSpawn = 0; E.spawned++; E.empty = false; return true;
 }
-// Grâce : un réacteur de la ligne de sortie que la chaîne EN VOL va détruire dans les ~3 prochains ticks n'est pas une brèche.
-function exitSaved(ty, hp, w, h, sim) {
-  const saved = new Set(), last = (h - 1) * w;
-  if (!sim.shots.length) return saved;
-  let any = false; for (let x = 0; x < w; x++) if (isReactor(ty[last + x]) || ty[last + x] === 9) any = true;
-  if (!any) return saved;
-  const s2 = { w, h, type: ty.slice(), hp: hp.slice() };
-  const sm = { shots: sim.shots.map((q) => ({ ...q })), booms: 0, tick: 0, rec: false, cnt: { ...sim.cnt }, fuse: sim.fuse, kk: sim.kk };
-  for (let n = 0; n < 3 && sm.shots.length; n++) step(s2, sm);
-  for (let x = 0; x < w; x++) { const t = ty[last + x]; if ((isReactor(t) || t === 9) && !isReactor(s2.type[last + x]) && s2.type[last + x] !== 9) saved.add(x); }
-  return saved;
-}
 function shiftDown() {
   const { w, h } = G.st, ty = G.st.type, hp = G.st.hp, vt = G.vis.type, vh = G.vis.hp, yb = B.y + B.cs * B.h;
   let breach = 0;
-  const saved = exitSaved(ty, hp, w, h, E.sim);
   for (let x = 0; x < w; x++) { // dernière ligne = ligne de sortie
     const i = (h - 1) * w + x, t = ty[i], cx = B.x + (x + 0.5) * B.cs;
-    if ((isReactor(t) || t === 9) && saved.has(x)) { burst(cx, yb, 10, [120, 255, 200], B.cs * 2, 0.5, 2.2); }
-    else if (isReactor(t) || t === 9) { breach++; ring(cx, yb, B.cs * 0.2, B.cs * 1.7, 0.5, [255, 70, 90], 0.1); burst(cx, yb, 20, [255, 70, 90], B.cs * 3.2, 0.7, 2.6); }
-    else if (t === 11) { ring(cx, yb, B.cs * 0.2, B.cs * 1.2, 0.4, COL[11], 0.06); burst(cx, yb, 8, COL[11], B.cs * 2, 0.5, 2); } // bonus raté : aucun malus
+    if (isReactor(t) || t === 9) { breach++; ring(cx, yb, B.cs * 0.2, B.cs * 1.7, 0.5, [255, 70, 90], 0.1); burst(cx, yb, 20, [255, 70, 90], B.cs * 3.2, 0.7, 2.6); }
+    else if (t === 11) { const bonus = 300 * E.mult; E.score += bonus; G.label = { t: 'Cristal sauvé +' + bonus, age: 0 }; ring(cx, yb, B.cs * 0.2, B.cs * 1.4, 0.5, COL[11], 0.08); burst(cx, yb, 22, COL[11], B.cs * 3, 0.9, 2.4); A.star(1); vib(14); }
   }
   for (let y = h - 1; y > 0; y--) for (let x = 0; x < w; x++) { const a = y * w + x, b = a - w; ty[a] = ty[b]; hp[a] = hp[b]; vt[a] = vt[b]; vh[a] = vh[b]; }
   const row = E.queue.shift();
@@ -537,7 +526,7 @@ function updateEndless(dt) {
 }
 function pickNear(px, py) {
   let best = -1, bd = (B.cs * 0.62) ** 2; // rayon serré : il faut viser le réacteur
-  const top = B.y - B.cs * 0.1, bot = B.y + B.cs * B.h + B.cs * 0.8; // la ligne de sortie reste touchable jusqu'à la chute
+  const top = B.y - B.cs * 0.1, bot = B.y + B.cs * B.h + B.cs * 0.3;
   for (const i of reactors(G.st)) { const c = cc(i % G.st.w, (i / G.st.w) | 0); if (c.y < top || c.y > bot) continue; const d = (c.x - px) ** 2 + (c.y - py) ** 2; if (d < bd) { bd = d; best = i; } }
   return best;
 }
@@ -587,7 +576,7 @@ function showEndlessOver(record) {
   $('#r-taps').textContent = Math.round(E.score).toLocaleString('fr-FR'); $('#r-l1').textContent = 'points';
   $('#r-chain').textContent = E.maxChain; $('#r-l2').textContent = 'chaîne max';
   $('#r-stars').style.display = 'none'; $('#r-next').textContent = 'Rejouer';
-  $('#r-again').style.display = 'none'; $('#r-menu').style.flex = '1'; $('#r-share').hidden = false;
+  $('#r-again').style.display = 'none'; $('#r-menu').style.flex = '1'; $('#r-share').hidden = false; $('#r-share').textContent = 'Partager le score';
   m.classList.add('on');
 }
 function showInfo(title, text, ok, onOk, alt, onAlt) {
@@ -603,15 +592,15 @@ function pauseEndless() {
   showInfo('Pause', `Score ${Math.round(E.score).toLocaleString('fr-FR')} · ×${E.mult}`, 'Reprendre', () => { E.paused = false; }, 'Quitter', () => { saveEndless(); E.paused = false; show('title'); });
 }
 function playEndless() {
-  if (S.endless.helpV !== 3) {
-    S.endless.helpV = 3; S.endless.seen = true; save();
-    showInfo('Cascade', 'Les réacteurs descendent. Touche-les avant qu\'ils sortent en bas : 3 brèches et le cœur lâche.\n\nChaîne de 3 ou plus : multiplicateur +1. Taper dans le vide brise ta série.\n\nLaser vert : perce toute la ligne. Mèche orange : explose avec retard. Cristal doré : touche-le avec ta chaîne pour +1 au multiplicateur et des points bonus (il ne coûte jamais de vie).', 'C\'est parti', startEndless);
+  if (S.endless.helpV !== 2) {
+    S.endless.helpV = 2; S.endless.seen = true; save();
+    showInfo('Cascade', 'Les réacteurs descendent. Touche-les avant qu\'ils sortent en bas : 3 brèches et le cœur lâche.\n\nChaîne de 3 ou plus : multiplicateur +1. Taper dans le vide brise ta série.\n\nLaser vert : perce toute la ligne. Mèche orange : explose avec retard. Cristal blanc : ne le détruis pas, laisse-le passer !', 'C\'est parti', startEndless);
   } else startEndless();
 }
 
 function frame(now) {
   requestAnimationFrame(frame);
-  if (CH.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
+  if (CH.busy() || ED.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
   const dt = Math.min(0.05, (now - last) / 1000); last = now; G.clock += dt;
   CH.tick(dt);
   update(dt);
@@ -635,7 +624,7 @@ function pick(px, py) {
   return best;
 }
 cv.addEventListener('pointerdown', (e) => {
-  A.resume(); // pas d'init ici : sur iOS, pointerdown ne débloque pas l'audio (init se fait sur pointerup/click)
+  A.init(); A.resume();
   if (G.mode === 'play' && G.endless) {
     if (E.over || E.paused) return;
     const i = pickNear(e.clientX, e.clientY);
@@ -654,7 +643,7 @@ cv.addEventListener('pointermove', (e) => {
 const release = (e, go) => { if (G.ptr !== e.pointerId) return; G.ptr = null; const s = G.sel; G.sel = -1; if (go && s >= 0) fire(s); };
 cv.addEventListener('pointerup', (e) => release(e, true));
 cv.addEventListener('pointercancel', (e) => release(e, false));
-['pointerup', 'touchend', 'click'].forEach((ev) => document.addEventListener(ev, () => { A.init(); A.resume(); }, { passive: true }));
+['pointerdown', 'pointerup', 'click'].forEach((ev) => document.addEventListener(ev, () => { A.init(); A.resume(); }, { passive: true }));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) A.resume(); else pauseEndless(); });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -687,7 +676,7 @@ function refreshTitle() {
 }
 function updateHud() {
   const L = G.lv, w = L.daily ? null : WORLDS[L.world];
-  $('#h-lvl').textContent = L.daily ? 'Défi du jour' : `${w.name} · ${L.idx + 1}`;
+  $('#h-lvl').textContent = L.custom ? (L.name || 'Niveau perso') : L.daily ? 'Défi du jour' : `${w.name} · ${L.idx + 1}`;
   $('#h-goal').textContent = `Parfait en ${L.min} tap${L.min > 1 ? 's' : ''}`;
   document.documentElement.style.setProperty('--acc', L.daily ? '#c78bff' : w.col);
   updateTaps(false);
@@ -700,6 +689,7 @@ function updateTaps(pop) {
 function play(i) {
   curIdx = i; load(LEVELS[i], false); show('play'); updateHud();
 }
+function playCustom(lv) { curIdx = -1; load(lv, false); show('play'); updateHud(); }
 function playDaily() {
   const ds = todayStr(), def = dailyLevel(ds);
   if (!def) { toast('Impossible de générer le défi. Réessaie.'); return; }
@@ -730,13 +720,13 @@ function showResult(won, stars, left) {
   const m = $('#m-result'), L = G.lv;
   $('#r-l1').textContent = 'taps'; $('#r-l2').textContent = 'chaîne max'; $('#r-again').style.display = '';
   $('#r-title').textContent = won ? (stars === 3 ? 'Réaction parfaite' : 'Réaction complète') : 'Plus de taps';
-  $('#r-sub').textContent = won ? (stars === 3 ? 'Impossible de faire mieux.' : `Parfait en ${L.min} tap${L.min > 1 ? 's' : ''}. Tu peux encore optimiser.`) : `Il restait ${left} réacteur${left > 1 ? 's' : ''}.`;
+  $('#r-sub').textContent = won ? (stars === 3 ? 'Impossible de faire mieux.' : `Parfait en ${L.min} tap${L.min > 1 ? 's' : ''}. Tu peux encore optimiser.`) : left < 0 ? 'Un cristal a été détruit : c\'est perdu.' : `Il restait ${left} réacteur${left > 1 ? 's' : ''}.`;
   $('#r-taps').textContent = G.used; $('#r-chain').textContent = G.maxChain;
   const st = [...$('#r-stars').children]; st.forEach((s) => s.classList.remove('on'));
   $('#r-stars').style.display = won ? 'flex' : 'none';
-  $('#r-next').textContent = won ? (L.daily ? 'Menu' : 'Niveau suivant') : 'Réessayer';
+  $('#r-next').textContent = won ? (L.custom ? 'Retour à l\'atelier' : L.daily ? 'Menu' : 'Niveau suivant') : 'Réessayer';
   $('#r-again').style.display = won ? '' : 'none'; $('#r-menu').style.flex = won ? '' : '1';
-  $('#r-share').hidden = !(won && L.daily);
+  $('#r-share').hidden = !(won && (L.daily || L.custom)); $('#r-share').textContent = L.custom ? 'Partager le code' : 'Partager le score';
   m.classList.add('on');
   if (won) for (let i = 0; i < stars; i++) setTimeout(() => { st[i].classList.add('on'); A.star(i); vib(15); }, 350 + i * 330);
 }
@@ -745,12 +735,14 @@ $('#r-next').onclick = () => {
   A.ui(); closeResult();
   if (G.endless) return startEndless();
   if (G.phase === 'lost') return restart();
+  if (G.lv.custom) { show('title'); return ED.back(); }
   if (G.lv.daily || curIdx + 1 >= LEVELS.length) return show('title');
   play(curIdx + 1);
 };
 btn('#r-again', () => { closeResult(); restart(); });
 btn('#r-menu', () => { closeResult(); show('title'); });
 btn('#r-share', async () => {
+  if (G.lv && G.lv.custom && !G.endless) return ED.share(G.lv);
   const d = G.endless ? null : S.daily[G.lv.daily], url = location.href.split('#')[0];
   const text = G.endless ? `Critical · Cascade\n${Math.round(E.score).toLocaleString('fr-FR')} points · chaîne ×${E.maxChain} · palier ${E.stage}\nFais mieux : ${url}` : `Critical · Défi du ${G.lv.daily}\n${starStr(d.stars)} en ${d.taps} tap${d.taps > 1 ? 's' : ''} (chaîne ×${d.chain})\nFais mieux : ${url}`;
   try { if (navigator.share) await navigator.share({ text }); else { await navigator.clipboard.writeText(text); toast('Score copié'); } } catch (e) { /* annulé */ }
@@ -762,7 +754,7 @@ btn('#b-pause', pauseEndless);
 btn('#b-daily', playDaily);
 btn('#b-levels', () => show('levels'));
 btn('#b-lback', () => show('title'));
-btn('#b-back', () => { closeResult(); show('title'); });
+btn('#b-back', () => { closeResult(); const cu = G.lv && G.lv.custom && !G.endless; show('title'); if (cu) ED.back(); });
 btn('#b-restart', restart);
 btn('#b-hint', hint);
 
@@ -789,6 +781,7 @@ applyQuality(); resize();
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
+ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom });
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* hors-ligne indisponible */ });
