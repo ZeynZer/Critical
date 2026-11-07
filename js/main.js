@@ -6,6 +6,7 @@ import { WORLDS, PER_WORLD, dailyLevel } from './gen.js';
 import * as A from './audio.js';
 import * as CH from './chest.js';
 import * as ED from './editor.js';
+import * as HOME from './home.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -71,7 +72,7 @@ const cc = (x, y) => ({ x: B.x + (x + 0.5) * B.cs, y: B.y + (y + 0.5) * B.cs + F
 
 /* ============================== état du jeu ============================== */
 const TICK = 0.078;
-const COL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71], 7: [150, 255, 90], 8: [255, 125, 60], 9: [255, 85, 85], 11: [205, 220, 255] };
+const COL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71], 7: [150, 255, 90], 8: [255, 125, 60], 9: [255, 85, 85], 11: [255, 222, 100] };
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const G = {
   mode: 'title', lv: null, st: null, vis: null, sim: null, phase: 'idle', used: 0, allowed: 0,
@@ -135,9 +136,11 @@ function armFx(a) {
 function friendKillFx(k) {
   G.vis.type[k.i] = 0; G.vis.hp[k.i] = 0;
   const c = cc(k.x, k.y); ring(c.x, c.y, B.cs * 0.2, B.cs * 1.4, 0.45, COL[11], 0.09); burst(c.x, c.y, 26, COL[11], B.cs * 3.4, 0.9, 2.6);
-  if (G.endless) {
-    E.lives--; E.mult = 1; G.label = { t: 'Cristal perdu', age: 0 }; G.flash = 0.7; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = 11;
-    A.breach(); vib([40, 30, 60]); updateLives(); if (E.lives <= 0) endOver();
+  if (G.endless) { // cristal doré : bonus de multiplicateur + points (aucune vie perdue)
+    if (E.mult < 8) E.mult++;
+    const bonus = 200 * E.mult; E.score += bonus;
+    G.label = { t: 'Cristal ×' + E.mult + ' +' + bonus, age: 0 }; G.flash = 0.55; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = Math.max(G.shake, 5);
+    ring(c.x, c.y, B.cs * 0.2, B.cs * 2.6, 0.6, [255, 255, 255], 0.05); A.mult(E.mult); A.star(1); vib([12, 50, 12, 50, 18]);
   } else { G.friendLost = true; G.flash = 0.7; G.fpos = [c.x, c.y]; G.fcol = COL[11]; G.shake = 11; A.breach(); vib([40, 30, 60]); }
 }
 function wallFx(m) {
@@ -294,7 +297,7 @@ function drawFriend(cx, cy, t, k) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.save(); ctx.translate(cx, by); ctx.rotate(Math.sin(t * 1.6 + cx) * 0.12);
   ctx.beginPath(); ctx.moveTo(0, -r * 1.2); ctx.lineTo(r * 0.88, 0); ctx.lineTo(0, r * 1.2); ctx.lineTo(-r * 0.88, 0); ctx.closePath();
-  const lg = ctx.createLinearGradient(-r, -r, r, r); lg.addColorStop(0, 'rgba(255,255,255,.95)'); lg.addColorStop(0.5, rgba(col, 0.75)); lg.addColorStop(1, 'rgba(150,170,255,.55)');
+  const lg = ctx.createLinearGradient(-r, -r, r, r); lg.addColorStop(0, 'rgba(255,255,255,.95)'); lg.addColorStop(0.5, rgba(col, 0.75)); lg.addColorStop(1, 'rgba(255,160,60,.55)');
   ctx.fillStyle = lg; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.6; ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r * 0.88, 0); ctx.lineTo(r * 0.88, 0); ctx.moveTo(0, -r * 1.2); ctx.lineTo(-r * 0.3, 0); ctx.lineTo(0, r * 1.2); ctx.stroke();
   ctx.restore();
@@ -469,13 +472,27 @@ function spawnChunk() {
   E.queue.push(rows[2], rows[1], rows[0]); // la ligne du bas entre en premier, depuis hors écran
   E.sinceSpawn = 0; E.spawned++; E.empty = false; return true;
 }
+// Grâce : un réacteur de la ligne de sortie que la chaîne EN VOL va détruire dans les ~3 prochains ticks n'est pas une brèche.
+function exitSaved(ty, hp, w, h, sim) {
+  const saved = new Set(), last = (h - 1) * w;
+  if (!sim.shots.length) return saved;
+  let any = false; for (let x = 0; x < w; x++) if (isReactor(ty[last + x]) || ty[last + x] === 9) any = true;
+  if (!any) return saved;
+  const s2 = { w, h, type: ty.slice(), hp: hp.slice() };
+  const sm = { shots: sim.shots.map((q) => ({ ...q })), booms: 0, tick: 0, rec: false, cnt: { ...sim.cnt }, fuse: sim.fuse, kk: sim.kk };
+  for (let n = 0; n < 3 && sm.shots.length; n++) step(s2, sm);
+  for (let x = 0; x < w; x++) { const t = ty[last + x]; if ((isReactor(t) || t === 9) && !isReactor(s2.type[last + x]) && s2.type[last + x] !== 9) saved.add(x); }
+  return saved;
+}
 function shiftDown() {
   const { w, h } = G.st, ty = G.st.type, hp = G.st.hp, vt = G.vis.type, vh = G.vis.hp, yb = B.y + B.cs * B.h;
   let breach = 0;
+  const saved = exitSaved(ty, hp, w, h, E.sim);
   for (let x = 0; x < w; x++) { // dernière ligne = ligne de sortie
     const i = (h - 1) * w + x, t = ty[i], cx = B.x + (x + 0.5) * B.cs;
-    if (isReactor(t) || t === 9) { breach++; ring(cx, yb, B.cs * 0.2, B.cs * 1.7, 0.5, [255, 70, 90], 0.1); burst(cx, yb, 20, [255, 70, 90], B.cs * 3.2, 0.7, 2.6); }
-    else if (t === 11) { const bonus = 300 * E.mult; E.score += bonus; G.label = { t: 'Cristal sauvé +' + bonus, age: 0 }; ring(cx, yb, B.cs * 0.2, B.cs * 1.4, 0.5, COL[11], 0.08); burst(cx, yb, 22, COL[11], B.cs * 3, 0.9, 2.4); A.star(1); vib(14); }
+    if ((isReactor(t) || t === 9) && saved.has(x)) { burst(cx, yb, 10, [120, 255, 200], B.cs * 2, 0.5, 2.2); }
+    else if (isReactor(t) || t === 9) { breach++; ring(cx, yb, B.cs * 0.2, B.cs * 1.7, 0.5, [255, 70, 90], 0.1); burst(cx, yb, 20, [255, 70, 90], B.cs * 3.2, 0.7, 2.6); }
+    else if (t === 11) { ring(cx, yb, B.cs * 0.2, B.cs * 1.2, 0.4, COL[11], 0.06); burst(cx, yb, 8, COL[11], B.cs * 2, 0.5, 2); } // bonus raté : aucun malus
   }
   for (let y = h - 1; y > 0; y--) for (let x = 0; x < w; x++) { const a = y * w + x, b = a - w; ty[a] = ty[b]; hp[a] = hp[b]; vt[a] = vt[b]; vh[a] = vh[b]; }
   const row = E.queue.shift();
@@ -526,7 +543,7 @@ function updateEndless(dt) {
 }
 function pickNear(px, py) {
   let best = -1, bd = (B.cs * 0.62) ** 2; // rayon serré : il faut viser le réacteur
-  const top = B.y - B.cs * 0.1, bot = B.y + B.cs * B.h + B.cs * 0.3;
+  const top = B.y - B.cs * 0.1, bot = B.y + B.cs * B.h + B.cs * 0.8; // la ligne de sortie reste touchable jusqu'à la chute
   for (const i of reactors(G.st)) { const c = cc(i % G.st.w, (i / G.st.w) | 0); if (c.y < top || c.y > bot) continue; const d = (c.x - px) ** 2 + (c.y - py) ** 2; if (d < bd) { bd = d; best = i; } }
   return best;
 }
@@ -592,9 +609,9 @@ function pauseEndless() {
   showInfo('Pause', `Score ${Math.round(E.score).toLocaleString('fr-FR')} · ×${E.mult}`, 'Reprendre', () => { E.paused = false; }, 'Quitter', () => { saveEndless(); E.paused = false; show('title'); });
 }
 function playEndless() {
-  if (S.endless.helpV !== 2) {
-    S.endless.helpV = 2; S.endless.seen = true; save();
-    showInfo('Cascade', 'Les réacteurs descendent. Touche-les avant qu\'ils sortent en bas : 3 brèches et le cœur lâche.\n\nChaîne de 3 ou plus : multiplicateur +1. Taper dans le vide brise ta série.\n\nLaser vert : perce toute la ligne. Mèche orange : explose avec retard. Cristal blanc : ne le détruis pas, laisse-le passer !', 'C\'est parti', startEndless);
+  if (S.endless.helpV !== 3) {
+    S.endless.helpV = 3; S.endless.seen = true; save();
+    showInfo('Cascade', 'Les réacteurs descendent. Touche-les avant qu\'ils sortent en bas : 3 brèches et le cœur lâche.\n\nChaîne de 3 ou plus : multiplicateur +1. Taper dans le vide brise ta série.\n\nLaser vert : perce toute la ligne. Mèche orange : explose avec retard. Cristal doré : touche-le avec ta chaîne pour +1 au multiplicateur et des points bonus (il ne coûte jamais de vie).', 'C\'est parti', startEndless);
   } else startEndless();
 }
 
@@ -673,6 +690,7 @@ function refreshTitle() {
   $('#b-play-s').textContent = `${WORLDS[L.world].name} · niveau ${L.idx + 1}`;
   $('#b-daily-s').textContent = d ? `Fait · ${starStr(d.stars)}` : 'Le même pour tous';
   $('#t-stars').innerHTML = `<b>★ ${totalStars()}</b> / ${LEVELS.length * 3}`;
+  HOME.update({ pct: totalStars() / (LEVELS.length * 3), lvl: L.idx + 1, col: WORLDS[L.world].col });
 }
 function updateHud() {
   const L = G.lv, w = L.daily ? null : WORLDS[L.world];
@@ -782,6 +800,7 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
 ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom });
+HOME.init();
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* hors-ligne indisponible */ });
