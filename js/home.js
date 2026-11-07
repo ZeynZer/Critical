@@ -102,25 +102,71 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.hm-blob,.hm-gem,.hm-hero,.hm-hero::before,.hm-orb *,#s-title.hm .logo{animation:none!important}}
 `;
 
+
+// Liquid Glass global : les classes partagées (.glass .big .icon .pill .card .lv …) servent à TOUS les écrans
+// (niveaux, réglages, résultats, HUD, coffre, Atelier) : les restyler ici les met tous au même niveau.
+const GCSS = `
+@keyframes glow{50%{box-shadow:0 0 36px rgba(255,79,216,.45),0 0 70px rgba(77,243,255,.28),inset 0 1.5px 0 rgba(255,255,255,.6)}}
+.glass{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.34),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 95% 110%,rgba(255,255,255,.12),rgba(255,255,255,0) 60%),linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.05) 42%,rgba(255,255,255,.1));border:1px solid rgba(255,255,255,.2);-webkit-backdrop-filter:blur(20px) saturate(1.9) brightness(1.1);backdrop-filter:blur(20px) saturate(1.9) brightness(1.1);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.1),inset 1px 0 0 rgba(255,255,255,.18),inset 0 0 26px rgba(255,255,255,.07),0 14px 38px rgba(0,0,0,.42)}
+.icon{border-radius:23px;transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
+.pill{transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
+.big{border-radius:26px;transition:transform .55s cubic-bezier(.2,1.6,.4,1),filter .3s}
+.icon:active,.pill:active,.big:active{transform:scale(.95);filter:brightness(1.2)}
+.big.primary{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.4),rgba(255,255,255,0) 55%),linear-gradient(135deg,rgba(77,243,255,.4),rgba(255,79,216,.36));border:1px solid rgba(255,255,255,.45);box-shadow:0 0 26px rgba(77,243,255,.35),0 0 60px rgba(255,79,216,.22),inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 0 22px rgba(255,255,255,.1);-webkit-backdrop-filter:blur(16px) saturate(1.8);backdrop-filter:blur(16px) saturate(1.8)}
+.hud-title{border-radius:23px}.count{border-radius:23px}
+.bar h2,.card h2{text-shadow:0 0 18px rgba(77,243,255,.35)}
+.modal{background:rgba(3,4,12,.42);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4)}
+.card{border-radius:34px;box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.1),inset 0 0 40px rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.5),0 0 70px rgba(77,243,255,.16),0 0 100px rgba(255,79,216,.12);animation:rise .6s cubic-bezier(.2,1.3,.3,1)}
+.world{border-radius:28px}
+.lv{border-radius:18px;background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.3),rgba(255,255,255,0) 55%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 6px 16px rgba(0,0,0,.3);transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
+.lv:active{transform:scale(.9)}
+.lv.done{box-shadow:0 0 14px color-mix(in srgb,var(--acc) 40%,transparent),inset 0 0 14px color-mix(in srgb,var(--acc) 18%,transparent),inset 0 1.5px 0 rgba(255,255,255,.5)}
+.stats div{border-radius:20px;background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.24),rgba(255,255,255,0) 55%),rgba(255,255,255,.05);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4)}
+.sw i{background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.2));box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -6px 10px rgba(0,0,0,.22)}
+.sw i::after{background:radial-gradient(circle at 35% 26%,#fff,#e4edff 58%,#b4c2e2);box-shadow:0 2px 8px rgba(0,0,0,.45),inset 0 -2px 4px rgba(0,0,0,.12)}
+.sw input:checked+i{box-shadow:0 0 18px rgba(77,243,255,.55),inset 0 1px 0 rgba(255,255,255,.5)}
+.seg div{border-radius:16px;background:rgba(255,255,255,.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.seg button.on{box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+#toast{border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.06)),rgba(20,22,40,.6);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),0 14px 34px rgba(0,0,0,.4)}
+/* niveaux : même fond vivant que l'accueil */
+#s-levels.hm2{overflow:hidden}
+#s-levels.hm2>*{position:relative;z-index:1}
+#s-levels.hm2>.hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+/* coffre / collection */
+.ch-it{border-radius:20px;background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.2),rgba(255,255,255,0) 55%),rgba(255,255,255,.05);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.35)}
+#ch-banner{border-radius:24px}
+/* Atelier */
+.ed-tool,.ed-pill,.ed-hp{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.22),rgba(255,255,255,0) 55%),rgba(255,255,255,.06);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.35)}
+.ed-tool{border-radius:20px;transition:transform .5s cubic-bezier(.2,1.6,.4,1)}
+.ed-tool.on{box-shadow:0 0 18px color-mix(in srgb,var(--acc,#4df3ff) 50%,transparent),inset 0 1.5px 0 rgba(255,255,255,.5)}
+.ed-pill.on{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.35),rgba(255,255,255,0) 55%),linear-gradient(135deg,rgba(77,243,255,.4),rgba(255,79,216,.34))}
+.ed-card{border-radius:26px;transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
+.ed-dock{border-radius:32px 32px 0 0}
+.ed-code,.ed-name,.ed-prev{box-shadow:inset 0 2px 10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1)}
+@media (prefers-reduced-motion:reduce){.card{animation:none}}
+`;
+
 // Retire les classes de l'ancien style et pose les nouvelles
 const reskin = (e, add, drop = ['big', 'glass', 'half', 'primary', 'hero', 'icon']) => { e.classList.remove(...drop); e.classList.add(...add); };
 // Marque le premier <span> d'un bouton comme titre (hm-t)
 const titleOf = (b, sel) => { const t = sel ? $(sel, b) : b.querySelector('span:not(.ch-badge)'); if (t) t.classList.add('hm-t'); return t; };
 const grab = (...nodes) => nodes.filter(Boolean);
 
+const bgLayer = (full) => make('div', 'hm-bg', '<i class="hm-blob hm-b1"></i><i class="hm-blob hm-b2"></i><i class="hm-blob hm-b3"></i><i class="hm-blob hm-b4"></i>' +
+  '<i class="hm-gem" style="--c1:#7ff6ff;--c2:#1b9bff;--c3:#2a3fb8;width:38vmin;max-width:160px;aspect-ratio:1;left:-9%;top:11%"></i>' +
+  '<i class="hm-gem x" style="--c1:#ff9be8;--c2:#ff2fc8;--c3:#7a1a9a;width:30vmin;max-width:124px;aspect-ratio:1;right:-6%;top:42%;--d:-4s"></i>' +
+  (full ? '<i class="hm-gem" style="--c1:#ffe08a;--c2:#ffb02e;--c3:#b4531a;width:26vmin;max-width:108px;aspect-ratio:1;left:7%;bottom:21%;--d:-7s"></i><i class="hm-gem x" style="--c1:#c9bcff;--c2:#6a4dff;--c3:#2b1a8a;width:16vmin;max-width:68px;aspect-ratio:1;right:11%;top:17%;--d:-2s"></i>' : ''));
+
 let ring = null, live = null;
 export function init() {
   const scr = $('#s-title'); if (!scr || scr.classList.contains('hm')) return;
   const menu = $('.menu', scr), wrap = $('.title-wrap', scr); if (!menu || !wrap) return;
-  const st = make('style'); st.textContent = CSS; document.head.appendChild(st);
+  const st = make('style'); st.textContent = CSS + GCSS; document.head.appendChild(st);
   scr.classList.add('hm');
 
   // décor : taches de couleur + sphères de verre qui flottent derrière le verre
-  scr.prepend(make('div', 'hm-bg', '<i class="hm-blob hm-b1"></i><i class="hm-blob hm-b2"></i><i class="hm-blob hm-b3"></i><i class="hm-blob hm-b4"></i>' +
-    '<i class="hm-gem" style="--c1:#7ff6ff;--c2:#1b9bff;--c3:#2a3fb8;width:38vmin;max-width:160px;aspect-ratio:1;left:-9%;top:11%"></i>' +
-    '<i class="hm-gem x" style="--c1:#ff9be8;--c2:#ff2fc8;--c3:#7a1a9a;width:30vmin;max-width:124px;aspect-ratio:1;right:-6%;top:42%;--d:-4s"></i>' +
-    '<i class="hm-gem" style="--c1:#ffe08a;--c2:#ffb02e;--c3:#b4531a;width:26vmin;max-width:108px;aspect-ratio:1;left:7%;bottom:21%;--d:-7s"></i>' +
-    '<i class="hm-gem x" style="--c1:#c9bcff;--c2:#6a4dff;--c3:#2b1a8a;width:16vmin;max-width:68px;aspect-ratio:1;right:11%;top:17%;--d:-2s"></i>'));
+  scr.prepend(bgLayer(true));
+
 
   // logo + réglages + étoiles
   const logo = $('.logo', wrap); if (logo) { logo.textContent = 'CRITICAL'; }
@@ -170,6 +216,8 @@ export function init() {
   };
   di('#b-levels', ICONS.levels); di('#b-atelier', ICONS.atelier); di('#b-coll', ICONS.coll); di('#b-code', ICONS.code);
   scr.appendChild(dock);
+
+  const lv = $('#s-levels'); if (lv && !lv.classList.contains('hm2')) { lv.classList.add('hm2'); lv.prepend(bgLayer(false)); }
 
   // anciennes rangées vides
   menu.querySelectorAll('.row,.ch-row').forEach((r) => { if (!r.children.length) r.remove(); });
