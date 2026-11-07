@@ -3,7 +3,7 @@
 const VERSION = 'critical-v10';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/chest.js',
+  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js',
   'assets/fonts/orbitron-latin-700-normal.woff2', 'assets/fonts/orbitron-latin-900-normal.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
