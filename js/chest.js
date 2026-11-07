@@ -27,6 +27,12 @@ export const RAR = [
   { n: 'Légendaire', col: [255, 194, 71], w: 3, dust: 100, cost: 480 },
   { n: 'Critique', col: [255, 255, 255], w: 0.5, dust: 300, cost: 1400 },
 ];
+// Intensité lumineuse par rareté : un Commun reste discret, un Critique éblouit.
+import * as Skins from './skins.js';
+const GL = [0.34, 0.55, 0.78, 1, 1.25];          // halo (aura, sol, texte)
+const FLASH = [0.3, 0.45, 0.65, 0.85, 1];         // flash blanc plein écran à la révélation
+const RAYS = [0, 0.25, 0.5, 0.85, 1];             // rayons de lumière
+const BGA = [0.14, 0.22, 0.32, 0.44, 0.56];       // lueur de fond
 const rarCol = (r, t) => (r === 4 ? hsl(t * 90, 100, 66) : RAR[r].col);
 // c = couleurs noyau / pulsar / étoile · m = animation · b = style d'explosion · s = gamme sonore
 const RAW = [
@@ -36,22 +42,30 @@ const RAW = [
   ['toxic', 0, 'Toxique', ['#9dff3d', '#35e07a', '#e5ff5c']],
   ['sakura', 0, 'Sakura', ['#ff9ec7', '#ffd1e6', '#ffffff']],
   ['mono', 0, 'Argent', ['#ffffff', '#b9c3d6', '#8a96ad']],
-  ['glace', 1, 'Glace', ['#aef4ff', '#7fb8ff', '#e8fbff'], { m: 'shimmer' }],
-  ['plasma', 1, 'Plasma', ['#8a5bff', '#3d7bff', '#d36bff'], { m: 'shimmer' }],
-  ['rune', 1, 'Rune', ['#ffd24a', '#4dffb0', '#fff0a8'], { m: 'shimmer' }],
-  ['magma', 1, 'Magma', ['#ff5a1f', '#ffb01f', '#ff2e63'], { m: 'flicker' }],
-  ['anneaux', 2, 'Onde de choc', ['#4df3ff', '#7a6bff', '#ffffff'], { b: 'rings' }],
-  ['fleur', 2, 'Floraison', ['#ff6fb5', '#ffb36f', '#fff08a'], { b: 'flower' }],
-  ['glitch', 2, 'Glitch', ['#00ffd5', '#ff2bd6', '#fffb3d'], { b: 'glitch', m: 'shimmer' }],
-  ['foudre', 2, 'Foudre', ['#f2f6ff', '#6fa8ff', '#fff27a'], { b: 'rings', m: 'flicker' }],
-  ['prisme', 3, 'Prisme', ['#ffffff', '#ffffff', '#ffffff'], { m: 'prism', b: 'nova' }],
-  ['vide', 3, 'Trou noir', ['#7a3dff', '#c04dff', '#3d2bff'], { m: 'void', b: 'implode' }],
+  ['glace', 1, 'Glace', ['#aef4ff', '#7fb8ff', '#e8fbff'], { m: 'shimmer', v: 'crystal' }],
+  ['plasma', 1, 'Plasma', ['#8a5bff', '#3d7bff', '#d36bff'], { m: 'shimmer', v: 'plasma' }],
+  ['rune', 1, 'Rune', ['#ffd24a', '#4dffb0', '#fff0a8'], { m: 'shimmer', v: 'crystal' }],
+  ['magma', 1, 'Magma', ['#ff5a1f', '#ffb01f', '#ff2e63'], { m: 'flicker', v: 'obsidian' }],
+  ['miel', 1, 'Miel', ['#ffb300', '#ff7a00', '#ffe08a'], { v: 'honey' }],
+  ['saphir', 1, 'Saphir', ['#3d8bff', '#6fb6ff', '#bfe3ff'], { v: 'sapphire' }],
+  ['anneaux', 2, 'Onde de choc', ['#4df3ff', '#7a6bff', '#ffffff'], { b: 'rings', v: 'holo' }],
+  ['fleur', 2, 'Floraison', ['#ff6fb5', '#ffb36f', '#fff08a'], { b: 'flower', v: 'crystal' }],
+  ['rubis', 2, 'Rubis', ['#ff2e4d', '#ff6a86', '#ffb3c1'], { v: 'ruby' }],
+  ['neontube', 2, 'Néon tube', ['#00f0ff', '#ff2bd6', '#fff700'], { v: 'neon', m: 'flicker' }],
+  ['glitch', 2, 'Glitch', ['#00ffd5', '#ff2bd6', '#fffb3d'], { b: 'glitch', m: 'shimmer', v: 'holo' }],
+  ['foudre', 2, 'Foudre', ['#f2f6ff', '#6fa8ff', '#fff27a'], { b: 'rings', m: 'flicker', v: 'plasma' }],
+  ['prisme', 3, 'Prisme', ['#ffffff', '#ffffff', '#ffffff'], { m: 'prism', b: 'nova', v: 'diamond' }],
+  ['vide', 3, 'Trou noir', ['#7a3dff', '#c04dff', '#3d2bff'], { m: 'void', b: 'implode', v: 'void' }],
+  ['chrome', 3, 'Chrome liquide', ['#9fb8ff', '#ffb0d0', '#ffe0a0'], { v: 'chrome' }],
   ['arcenciel', 3, 'Arc-en-ciel', ['#ff4d4d', '#4dff88', '#4d8bff'], { m: 'rainbow', b: 'flower' }],
-  ['aurore', 4, 'Aurore boréale', ['#4dffb0', '#8a5bff', '#4df3ff'], { m: 'aurora', b: 'nova', s: [0, 2, 3, 7, 8] }],
-  ['supernova', 4, 'Supernova', ['#ffffff', '#ffd24a', '#ff6fb5'], { m: 'rainbow', b: 'nova', s: [0, 2, 4, 7, 9] }],
+  ['aurore', 4, 'Aurore boréale', ['#4dffb0', '#8a5bff', '#4df3ff'], { m: 'aurora', b: 'nova', s: [0, 2, 3, 7, 8], v: 'nebula' }],
+  ['supernova', 4, 'Supernova', ['#ffffff', '#ffd24a', '#ff6fb5'], { m: 'rainbow', b: 'nova', s: [0, 2, 4, 7, 9], v: 'plasma' }],
 ];
 export const ITEMS = RAW.map(([id, r, n, c, o]) => ({ id, r, n, c, rgb: c.map(hex), ...(o || {}) }));
 const item = (id) => ITEMS.find((i) => i.id === id) || ITEMS[0];
+// Matière (rendu) de la skin équipée et intensité de halo associée — utilisées par le jeu et l'éditeur.
+export const matOf = () => item(st.eq).v || 'glass';
+export const matGl = () => [0.85, 0.95, 1.05, 1.15, 1.3][Math.max(0, item(st.eq).r)];
 const DROPS = ITEMS.filter((i) => i.r >= 0);
 const DEF_SCALE = [0, 3, 5, 7, 10];
 
@@ -354,7 +368,7 @@ function phase(rd, dt) {
 }
 
 function startCrack() {
-  const o = O; o.ph = 'crack'; o.pt = 0; o.flash = 1; o.shake = 26; o.raysA = 1; o.tsT = 1;
+  const o = O; o.ph = 'crack'; o.pt = 0; o.flash = 0.4 + 0.15 * o.r; o.shake = 14 + o.r * 3; o.raysA = [0.3, 0.45, 0.65, 0.85, 1][o.r]; o.tsT = 1;
   A.chestCrack(); H.vib([34, 40, 34, 40, 60, 40, 100]);
   for (let k = 0; k < 26; k++) { // éclats de verre triangulaires
     const a = Math.random() * TAU, d = Math.random() * o.R * 0.9, sz = o.R * (0.12 + Math.random() * 0.22), sp = 160 + Math.random() * 520, ang = Math.random() * TAU;
@@ -384,9 +398,9 @@ function startSus() {
   A.chestRise(o.dur);
 }
 function reveal() {
-  const o = O, col = rarCol(o.r, o.T); o.ph = 'reveal'; o.pt = 0; o.freeze = 0.09; o.tsT = 1; o.flash = 1; o.shake = 18 + o.r * 5; o.raysA = o.r >= 3 ? 1 : 0.4; o.hidden = true; o.cardShown = false;
-  o.bg = col; o.bgA = 0.4;
-  [0, 0.08, 0.17, 0.27, 0.4].forEach((d, i) => setTimeout(() => { if (O === o) pRing(o.cx, o.cy, o.R * 0.3, Math.max(o.W, o.H) * (0.55 + i * 0.12), 0.9, i % 2 ? [255, 255, 255] : rarCol(o.r, o.T), 0.04); }, d * 1000));
+  const o = O, col = rarCol(o.r, o.T); o.ph = 'reveal'; o.pt = 0; o.freeze = 0.09; o.tsT = 1; o.flash = FLASH[o.r]; o.shake = 8 + o.r * 6; o.raysA = RAYS[o.r]; o.hidden = true; o.cardShown = false;
+  o.bg = col; o.bgA = BGA[o.r];
+  [0, 0.08, 0.17, 0.27, 0.4].slice(0, o.r + 1).forEach((d, i) => setTimeout(() => { if (O === o) pRing(o.cx, o.cy, o.R * 0.3, Math.max(o.W, o.H) * (0.55 + i * 0.12), 0.9, i % 2 ? [255, 255, 255] : rarCol(o.r, o.T), 0.04); }, d * 1000));
   pBurst(o.cx, o.cy, 160 + o.r * 50, o.r === 4 ? null : col, o.R * 8, 1.4, 3.2);
   pBurst(o.cx, o.cy, 60, [255, 255, 255], o.R * 6, 1, 2.4);
   A.chestReveal(o.r);
@@ -396,7 +410,7 @@ function reveal() {
 function showCard() {
   const o = O, card = $('.co-card'); o.cardShown = true;
   const col = rarCol(o.r, o.T), rc = rg(col, 1), more = st.cores.length;
-  card.innerHTML = `<p class="tag" style="color:${rc};text-shadow:0 0 14px ${rc}">${RAR[o.r].n}</p><h2 style="text-shadow:0 0 22px ${rc}">${o.it.n}</h2>
+  card.innerHTML = `<p class="tag" style="color:${rc};text-shadow:0 0 ${Math.round(3 + GL[o.r] * 11)}px ${rc}">${RAR[o.r].n}</p><h2 style="text-shadow:0 0 ${Math.round(5 + GL[o.r] * 17)}px ${rc}">${o.it.n}</h2>
     <p>${o.test ? 'Test d\'ouverture (rien n\'est ajouté)' : o.isNew ? '✦ Nouvelle skin !' : `Doublon · +${o.dust} ✦ de poussière`}</p>
     <div class="btns"><button class="big primary" id="co-eq">${o.test ? 'Fermer' : st.eq === o.it.id ? 'Équipée ✓' : 'Équiper'}</button>${!o.test && more ? `<button class="big glass" id="co-next">Ouvrir le suivant (${more})</button>` : ''}${o.test ? '' : '<button class="big glass" id="co-close">Fermer</button>'}</div>`;
   card.hidden = false; $('.co-x').style.display = '';
@@ -422,10 +436,11 @@ const makeBokeh = (W, Hh) => Array.from({ length: 16 }, () => ({ x: Math.random(
 
 // Une sphère de verre : corps teinté, lueur interne, reflets opale mouvants, caustique, reflets spéculaires, bord fresnel. Aucun contour sombre.
 function drawGem(x, y, r, col, type, t, o = {}) {
+  if (o.v && o.v !== 'glass') { ctx.save(); if (o.a != null) ctx.globalAlpha *= o.a; Skins.drawOrb(ctx, o.v, x, y, r, col, type, t, { gl: o.gl }); ctx.restore(); return; }
   const g = ctx, seed = o.seed || 0, h0 = hueOf(col), lum = (col[0] + col[1] + col[2]) / 765, L = (k) => lite(col, k * (1 - 0.55 * lum));
   g.save(); if (o.a != null) g.globalAlpha *= o.a;
   g.globalCompositeOperation = 'lighter';
-  let gr = g.createRadialGradient(x, y, r * 0.7, x, y, r * 2.5); gr.addColorStop(0, rg(col, 0.5)); gr.addColorStop(1, rg(col, 0));
+  let gr = g.createRadialGradient(x, y, r * 0.7, x, y, r * 2.5); gr.addColorStop(0, rg(col, 0.5 * (o.gl == null ? 1 : o.gl))); gr.addColorStop(1, rg(col, 0));
   g.fillStyle = gr; g.fillRect(x - r * 2.6, y - r * 2.6, r * 5.2, r * 5.2);
   g.globalCompositeOperation = 'source-over';
   g.save(); g.beginPath(); g.arc(x, y, r, 0, TAU); g.clip();
@@ -565,8 +580,8 @@ function draw() {
   // révélation : les trois sphères de la skin gagnée
   if (o.ph === 'reveal') {
     const k = clamp(o.pt / 0.5, 0, 1), e = 1 - (1 - k) ** 4, R = o.R * 0.8 * e, bob = Math.sin(o.T * 2) * 5, bumpP = o.T * 40, rc = rarCol(o.r, o.T);
-    floorGlow(o.cx, o.cy + R * 1.9, R * 1.3, rc, 0.5);
-    for (const [dx, dy, ty, sc] of [[0, 0, 1, 1.15], [-1, 0.9, 2, 0.8], [1, 0.9, 3, 0.8]]) drawGem(o.cx + dx * R * 1.5 * (ty === 1 ? 0 : 1), o.cy + dy * R * 1.1 + bob + Math.sin(o.T * 0.8 + ty) * 4, R * sc, colorOf(o.it, ty, o.T, bumpP), ty, o.T, { seed: ty * 2 });
+    floorGlow(o.cx, o.cy + R * 1.9, R * 1.3, rc, 0.5 * GL[o.r]);
+    for (const [dx, dy, ty, sc] of [[0, 0, 1, 1.15], [-1, 0.9, 2, 0.8], [1, 0.9, 3, 0.8]]) drawGem(o.cx + dx * R * 1.5 * (ty === 1 ? 0 : 1), o.cy + dy * R * 1.1 + bob + Math.sin(o.T * 0.8 + ty) * 4, R * sc, colorOf(o.it, ty, o.T, bumpP), ty, o.T, { seed: ty * 2, gl: GL[o.r], v: o.it.v });
     if (o.r >= 2) streak(o.cx, o.cy, o.W * 0.9, rc, 0.28 + 0.1 * Math.sin(o.T * 3));
   }
   g.restore();

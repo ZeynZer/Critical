@@ -1,6 +1,7 @@
 // Critical — Atelier : éditeur de niveaux, analyse en direct, bibliothèque locale, codes et liens de partage.
 // Module autonome (comme chest.js) : il injecte son propre HTML/CSS et sa propre sauvegarde (critical.editor.v1).
 import * as A from './audio.js';
+import * as Skins from './skins.js';
 import { decode, encode, clone, run, remaining, reactors, solve, solveTimedOut, isReactor } from './engine.js';
 import { encodeLevel, decodeLevel, group, difficulty, cleanName, LIMITS } from './levelcode.js';
 import { WORLDS, mulberry32, levelParams, generate } from './gen.js';
@@ -11,7 +12,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeOutBack = (t) => { const c = 1.9; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; };
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-const H = { vib: () => {}, toast: () => {}, COL: null, play: () => {} };
+const H = { vib: () => {}, toast: () => {}, COL: null, play: () => {}, mat: () => 'glass' };
 const FALL = { 1: [77, 243, 255], 2: [255, 79, 216], 3: [255, 194, 71], 7: [150, 255, 90], 8: [255, 125, 60], 9: [255, 85, 85], 11: [205, 220, 255] };
 const col = (t) => (H.COL && H.COL[t]) || FALL[t] || FALL[1];
 
@@ -170,21 +171,7 @@ function drawItem(c, ty, hp, cx, cy, cs, t, k = 1, alpha = 1) {
     c.save(); c.translate(cx, by); c.rotate(Math.sin(t * 1.6 + cx) * 0.12); c.beginPath(); c.moveTo(0, -r * 1.2); c.lineTo(r * 0.88, 0); c.lineTo(0, r * 1.2); c.lineTo(-r * 0.88, 0); c.closePath();
     g = c.createLinearGradient(-r, -r, r, r); g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(0.5, rgba(cc2, 0.75)); g.addColorStop(1, 'rgba(150,170,255,.55)'); c.fillStyle = g; c.fill(); c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 1.6; c.stroke(); c.restore();
   } else if (ty >= 1) {
-    const cl = col(ty), r = cs * 0.29 * k * (1 + 0.025 * Math.sin(t * 2.3 + cx));
-    c.globalCompositeOperation = 'lighter'; let g = c.createRadialGradient(cx, cy, r * 0.3, cx, cy, r * 2.4); g.addColorStop(0, rgba(cl, 0.36 * alpha)); g.addColorStop(1, rgba(cl, 0)); c.fillStyle = g; c.fillRect(cx - r * 2.5, cy - r * 2.5, r * 5, r * 5); c.globalCompositeOperation = 'source-over';
-    c.lineWidth = Math.max(1.5, cs * 0.034);
-    for (let q = 0; q < hp; q++) { const rad = r * (1.24 + 0.21 * q); c.strokeStyle = rgba(cl, 0.85 - q * 0.17); c.setLineDash([rad * 0.95, rad * 0.4]); c.lineDashOffset = -t * 22 * (q % 2 ? 1 : -1); c.beginPath(); c.arc(cx, cy, rad, 0, 6.2832); c.stroke(); }
-    c.setLineDash([]);
-    g = c.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.05, cx, cy, r); g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(0.3, rgba(cl.map((v) => Math.min(255, v + 40)), 0.95)); g.addColorStop(1, rgba(cl.map((v) => v * 0.42), 0.96));
-    c.fillStyle = g; c.beginPath(); c.arc(cx, cy, r, 0, 6.2832); c.fill(); c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = 1; c.stroke();
-    c.strokeStyle = 'rgba(255,255,255,.92)'; c.lineCap = 'round'; c.lineWidth = Math.max(2, cs * 0.045);
-    const L = r * (ty === 3 ? 0.5 : 0.46); c.beginPath();
-    if (ty === 7) { const q = L * 0.5; for (const sg of [-1, 1]) { c.moveTo(cx - L, cy + sg * q); c.lineTo(cx + L, cy + sg * q); c.moveTo(cx + sg * q, cy - L); c.lineTo(cx + sg * q, cy + L); } }
-    else if (ty === 8) { c.moveTo(cx + L * 0.55, cy); c.arc(cx, cy, L * 0.55, 0, 6.2832); }
-    else if (ty !== 2) { c.moveTo(cx - L, cy); c.lineTo(cx + L, cy); c.moveTo(cx, cy - L); c.lineTo(cx, cy + L); }
-    if (ty === 2 || ty === 3) { const d = L * 0.72; c.moveTo(cx - d, cy - d); c.lineTo(cx + d, cy + d); c.moveTo(cx + d, cy - d); c.lineTo(cx - d, cy + d); }
-    c.stroke();
-    c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.ellipse(cx - r * 0.34, cy - r * 0.5, r * 0.3, r * 0.15, -0.6, 0, 6.2832); c.fill();
+    Skins.drawOrb(c, H.mat(), cx, cy, cs * 0.29 * k * (1 + 0.025 * Math.sin(t * 2.3 + cx)), col(ty), ty, t, { hp, gl: 0.9 });
   }
   c.globalAlpha = 1;
 }

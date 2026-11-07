@@ -7,6 +7,7 @@ import * as A from './audio.js';
 import * as CH from './chest.js';
 import * as ED from './editor.js';
 import * as HOME from './home.js';
+import * as Skins from './skins.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -247,36 +248,13 @@ function rr(x, y, w, h, r) {
 }
 
 function drawReactor(i, type, hp, cx, cy, t, sc, sel) {
-  const cs = B.cs, col = COL[type], r = cs * 0.29 * sc * (1 + 0.025 * Math.sin(t * 2.3 + i * 1.7)) * (sel ? 1.13 : 1);
-  ctx.globalCompositeOperation = 'lighter';
-  let g = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r * 2.4);
-  g.addColorStop(0, rgba(col, sel ? 0.55 : 0.36)); g.addColorStop(1, rgba(col, 0));
-  ctx.fillStyle = g; ctx.fillRect(cx - r * 2.5, cy - r * 2.5, r * 5, r * 5);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.lineWidth = Math.max(1.5, cs * 0.034);
-  if (type === 9) { const f = clamp(hp / FUSE_TICKS, 0, 1); ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = Math.max(2, cs * 0.06); ctx.beginPath(); ctx.arc(cx, cy, r * 1.32, -1.5708, -1.5708 + 6.2832 * f); ctx.stroke(); ctx.lineWidth = Math.max(1.5, cs * 0.034); }
-  for (let k = 0; k < (type === 9 ? 0 : hp); k++) {
-    const rad = r * (1.24 + 0.21 * k);
-    ctx.strokeStyle = rgba(col, 0.85 - k * 0.17);
-    ctx.setLineDash([rad * 0.95, rad * 0.4]); ctx.lineDashOffset = -t * 22 * (k % 2 ? 1 : -1);
-    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 6.2832); ctx.stroke();
+  const cs = B.cs, r = cs * 0.29 * sc * (1 + 0.025 * Math.sin(t * 2.3 + i * 1.7)) * (sel ? 1.13 : 1);
+  Skins.drawOrb(ctx, CH.matOf(), cx, cy, r, COL[type], type, t, { hp: type === 9 ? 0 : hp, gl: CH.matGl() * (sel ? 1.4 : 1), fast: Q.fx < 0.6 });
+  if (type === 9) { // mèche amorcée : compte à rebours + clignotement
+    const f = clamp(hp / FUSE_TICKS, 0, 1);
+    ctx.fillStyle = `rgba(255,255,255,${0.12 + 0.5 * (0.5 + 0.5 * Math.sin(t * 28))})`; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = Math.max(2, cs * 0.06); ctx.beginPath(); ctx.arc(cx, cy, r * 1.32, -1.5708, -1.5708 + 6.2832 * f); ctx.stroke();
   }
-  ctx.setLineDash([]);
-  g = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.05, cx, cy, r);
-  g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(0.3, rgba(col.map((v) => Math.min(255, v + 40)), 0.95)); g.addColorStop(1, rgba(col.map((v) => v * 0.42), 0.96));
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.stroke();
-  if (type === 9) { ctx.fillStyle = `rgba(255,255,255,${0.12 + 0.5 * (0.5 + 0.5 * Math.sin(t * 28))})`; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fill(); }
-  // symbole : + noyau, × pulsar, ✳ étoile
-  ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(2, cs * 0.045);
-  const L = r * (type === 3 ? 0.5 : 0.46);
-  ctx.beginPath();
-  if (type === 7) { const q = L * 0.5; for (const sg of [-1, 1]) { ctx.moveTo(cx - L, cy + sg * q); ctx.lineTo(cx + L, cy + sg * q); ctx.moveTo(cx + sg * q, cy - L); ctx.lineTo(cx + sg * q, cy + L); } }
-  else if (type === 8 || type === 9) { ctx.moveTo(cx + L * 0.55, cy); ctx.arc(cx, cy, L * 0.55, 0, 6.2832); }
-  else if (type !== 2) { ctx.moveTo(cx - L, cy); ctx.lineTo(cx + L, cy); ctx.moveTo(cx, cy - L); ctx.lineTo(cx, cy + L); }
-  if (type === 2 || type === 3) { const d = L * 0.72; ctx.moveTo(cx - d, cy - d); ctx.lineTo(cx + d, cy + d); ctx.moveTo(cx + d, cy - d); ctx.lineTo(cx - d, cy + d); }
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(cx - r * 0.34, cy - r * 0.5, r * 0.3, r * 0.15, -0.6, 0, 6.2832); ctx.fill();
 }
 
 function drawDanger(t) {
@@ -799,7 +777,7 @@ applyQuality(); resize();
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
-ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom });
+ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom, mat: () => CH.matOf() });
 HOME.init();
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);
