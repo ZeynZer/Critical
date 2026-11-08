@@ -3,9 +3,9 @@
 const VERSION = 'critical-v13';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js', 'js/skins.js',
+  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js', 'js/skins.js', 'js/intro.js', 'js/daily.js', 'js/dailyworker.js',
   'assets/fonts/orbitron-latin-700-normal.woff2', 'assets/fonts/orbitron-latin-900-normal.woff2',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'js/intro.js', 'js/daily.js', 'js/dailyworker.js',
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
