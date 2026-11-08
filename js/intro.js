@@ -37,7 +37,7 @@ html.intro-on #s-title,html.intro-on #s-title *,html.intro-on #s-title *::before
 .in-tap{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);text-align:center;font:900 14px var(--disp,Orbitron,sans-serif);letter-spacing:.18em;color:#fff;text-shadow:0 0 16px #4df3ff,0 0 34px #ff4fd8;animation:in-pulse 1.3s ease-in-out infinite;pointer-events:none;opacity:0}
 .in-tap.on{opacity:1}
 @keyframes in-pulse{50%{opacity:.35;transform:scale(.98)}}
-.in-title{position:absolute;left:50%;top:42%;margin:0;transform:translate(-50%,-50%) scale(1.8);font:900 min(13vw,52px)/1 var(--disp,Orbitron,sans-serif);letter-spacing:.03em;white-space:nowrap;background:linear-gradient(100deg,#fff 0%,#7ff6ff 28%,#ff7be5 52%,#fff 76%,#7ff6ff 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 16px rgba(77,243,255,.7)) drop-shadow(0 0 40px rgba(255,79,216,.5));opacity:0;pointer-events:none}
+.in-title{position:absolute;left:50%;top:42%;margin:0;transform:translate(-50%,-50%) scale(var(--ts,1.2));font:900 min(11vw,46px)/1 var(--disp,Orbitron,sans-serif);letter-spacing:.03em;white-space:nowrap;background:linear-gradient(100deg,#fff 0%,#7ff6ff 28%,#ff7be5 52%,#fff 76%,#7ff6ff 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 16px rgba(77,243,255,.7)) drop-shadow(0 0 40px rgba(255,79,216,.5));opacity:0;pointer-events:none}
 .in-title.on{opacity:1;animation:in-shine 2.4s linear infinite}
 @keyframes in-shine{to{background-position:-250% 0}}
 .in-tag{position:absolute;left:0;right:0;top:calc(42% + 64px);text-align:center;font-size:14px;color:rgba(238,244,255,.75);opacity:0;transition:opacity .6s;pointer-events:none}
@@ -90,7 +90,7 @@ export function init(o) {
 export const busy = () => active;
 
 export function start(opts = {}) {
-  if (active) return; mount();
+  if (active) return; mount(); try { document.fonts.load('900 46px Orbitron'); } catch (e) { /* ignore */ }
   const seen = (() => { try { return !!localStorage.getItem(SEEN); } catch (e) { return false; } })();
   const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const mode = opts.force || (reduce || seen ? 'short' : 'long');
@@ -170,6 +170,9 @@ function explode(k) {
 }
 function showTitle() {
   const o = O; o.ph = 'title'; o.pt = 0; o.flash = 1; o.shake = 16; o.boost = 1;
+  // le titre ne dépasse jamais de l'écran : on mesure avec la VRAIE police (Orbitron Black), puis on re-mesure
+  const fit = () => { if (!O) return; const w0 = ui.title.offsetWidth || 1; ui.title.style.setProperty('--ts', Math.max(0.6, Math.min(1.25, (O.W * 0.86) / w0)).toFixed(3)); };
+  fit(); try { document.fonts.load('900 46px Orbitron').then(fit, () => {}); } catch (e) { /* ignore */ } setTimeout(fit, 250);
   ui.title.classList.add('on'); setTimeout(() => ui.tag.classList.add('on'), 450);
   ring(o.cx, o.cy, o.R * 0.3, Math.max(o.W, o.H) * 0.8, 0.9, [255, 255, 255], 0.04); ring(o.cx, o.cy, o.R * 0.3, Math.max(o.W, o.H) * 0.6, 0.8, MG, 0.05);
   burst(o.cx, o.cy, 140, null, o.R * 8, 1.3); A.chestReveal(2); H.vib([14, 60, 14, 60, 14, 60, 22]);
@@ -179,7 +182,7 @@ function exit() {
   document.documentElement.classList.remove('intro-on'); // l'accueil rejoue son entrée en cascade
   try {
     const lg = $('#s-title .logo'), a = ui.title.getBoundingClientRect();
-    if (lg && a.width) { const b = lg.getBoundingClientRect(); if (b.width) { const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2), s = b.width / a.width; const an = ui.title.animate([{ transform: 'translate(-50%,-50%) scale(1.8)' }, { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(${1.8 * s})` }], { duration: 750, easing: 'cubic-bezier(.3,0,.2,1)', fill: 'forwards', id: 'flip' }); } }
+    if (lg && a.width) { const b = lg.getBoundingClientRect(); if (b.width) { const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2), s = b.width / a.width, ts = parseFloat(getComputedStyle(ui.title).getPropertyValue('--ts')) || 1.2; const an = ui.title.animate([{ transform: `translate(-50%,-50%) scale(${ts})` }, { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(${ts * s})` }], { duration: 750, easing: 'cubic-bezier(.3,0,.2,1)', fill: 'forwards', id: 'flip' }); } }
   } catch (e) { /* ignore */ }
   ui.tag.classList.remove('on'); ui.root.classList.add('out');
   setTimeout(end, 800);
