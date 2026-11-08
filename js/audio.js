@@ -1,5 +1,5 @@
 // Critical — audio 100 % synthétisé (WebAudio) : aucun fichier son, aucune licence.
-let ctx = null, master, sfx, mus, verb;
+let ctx = null, master, sfx, mus, verb, AC = null;
 const on = { sfx: true, mus: true };
 let musTimer = null, chordI = 0, sess = null;
 const SCALE = [0, 3, 5, 7, 10]; // pentatonique mineure : toute chaîne sonne juste
@@ -11,39 +11,19 @@ function impulse(sec) {
   return b;
 }
 
-// iOS (surtout < 17) : le WebAudio est coupé par le switch silencieux. Une balise <audio> qui boucle
-// en silence force le canal "média" et débloque aussi le son en PWA.
-let lastTry = 0;
-let keep = null;
-function keepAlive() {
-  try {
-    if (!keep) {
-      const n = 8000, h = new Uint8Array(44 + n), d = new DataView(h.buffer);
-      const w = (o, t) => { for (let i = 0; i < t.length; i++) h[o + i] = t.charCodeAt(i); };
-      w(0, 'RIFF'); d.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
-      d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
-      d.setUint32(24, 8000, true); d.setUint32(28, 8000, true); d.setUint16(32, 1, true); d.setUint16(34, 8, true);
-      w(36, 'data'); d.setUint32(40, n, true); h.fill(128, 44);
-      let bin = ''; for (let i = 0; i < h.length; i++) bin += String.fromCharCode(h[i]);
-      keep = new Audio('data:audio/wav;base64,' + btoa(bin));
-      keep.loop = true; keep.setAttribute('playsinline', '');
-    }
-    if (keep.paused) { const p = keep.play(); if (p && p.catch) p.catch(() => {}); }
-  } catch (e) { /* ignore */ }
-}
+/* ---------- déblocage automatique du son (iPhone, PWA comprise) ----------
+   iOS ne laisse démarrer le son que dans un VRAI geste (touchend / click / pointerup, pas pointerdown).
+   Le contexte est donc créé et repris dans ces gestes ; s'il reste bloqué (bug WebKit des PWA, état
+   « suspended » / « interrupted » après la mise en arrière-plan), il est reconstruit au geste suivant.
+   Plus aucun bouton « activer le son » : le premier tap, n'importe où, suffit. */
+const GESTURES = ['touchend', 'pointerup', 'mouseup', 'click', 'keydown'];
+let armed = false, tries = 0, silentEl = null;
 
-export function init() {
-  if (ctx) return;
-  const AC = window.AudioContext || window.webkitAudioContext;
+function build() {
+  AC = AC || window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
-  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ } // iPhone : son même en mode silencieux
-  keepAlive();
-  ctx = new AC();
-  // iOS PWA : le contexte peut passer en suspended/interrupted (arrière-plan, appel, verrouillage).
-  // Dès qu'il repasse en "running", on relance la musique immédiatement.
-  ctx.onstatechange = () => {
-    if (ctx && ctx.state === 'running') { lastTry = 0; if (on.mus) { stopMusic(); startMusic(); } }
-  };
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ } // son même en mode silencieux
+  ctx = new AC({ latencyHint: 'interactive' });
   const comp = ctx.createDynamicsCompressor();
   master = ctx.createGain(); master.gain.value = 0.85;
   master.connect(comp); comp.connect(ctx.destination);
@@ -53,29 +33,49 @@ export function init() {
   const vg = ctx.createGain(); vg.gain.value = 0.38;
   verb.connect(vg); vg.connect(master);
   sfx.connect(verb); mus.connect(verb);
-  if (on.mus) startMusic();
-  resume();
+  ctx.onstatechange = () => {
+    if (!ctx) return;
+    if (ctx.state === 'running') { tries = 0; disarm(); if (on.mus) startMusic(); }
+    else { stopMusic(); arm(); }
+  };
 }
-// iOS PWA : un contexte créé hors geste valide peut rester "suspended" pour toujours.
-// Si un geste précédent n'a pas suffi, on détruit le contexte et on en recrée un NEUF, dans ce geste.
-function rebuild() {
-  const old = ctx;
-  try { stopMusic(); } catch (e) { /* ignore */ }
-  if (old) { old.onstatechange = null; try { old.close().catch(() => {}); } catch (e) { /* ignore */ } }
-  ctx = null; sess = null; musTimer = null;
-  init();
+function silentAudio() { // anciens iOS : un <audio> silencieux fait passer la session en « lecture »
+  if (navigator.audioSession || silentEl) return;
+  try {
+    const n = 800, u = new Uint8Array(44 + n), v = new DataView(u.buffer), w = (o, t) => [...t].forEach((c, i) => u[o + i] = c.charCodeAt(0));
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true); u.fill(128, 44);
+    silentEl = new Audio(URL.createObjectURL(new Blob([u], { type: 'audio/wav' }))); silentEl.setAttribute('playsinline', ''); silentEl.play().catch(() => {});
+  } catch (e) { /* ignore */ }
 }
-export function resume() {
-  if (!ctx) return;
-  if (ctx.state !== 'running') {
-    try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
+function unlock() { // appelé DANS un geste utilisateur
+  if (!(window.AudioContext || window.webkitAudioContext)) return;
+  if (ctx && ctx.state !== 'running' && tries >= 1) { // déjà essayé sans succès : on repart d'un contexte neuf
+    stopMusic(); try { ctx.onstatechange = null; ctx.close(); } catch (e) { /* ignore */ } ctx = null; tries = 0;
   }
+  if (!ctx) build();
+  if (!ctx) return;
+  if (ctx.state === 'running') { disarm(); return; }
+  tries++;
+  try { ctx.resume().then(() => { if (ctx && ctx.state === 'running') { disarm(); if (on.mus) startMusic(); } }).catch(() => {}); } catch (e) { /* ignore */ }
+  try { const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ }
+  silentAudio();
 }
-export function setSfx(v) { on.sfx = v; }
-export function setMusic(v) { on.mus = v; if (!ctx) return; if (v) { startMusic(); resume(); } else stopMusic(); }
+function arm() { if (armed) return; armed = true; for (const g of GESTURES) window.addEventListener(g, unlock, { capture: true, passive: true }); }
+function disarm() { if (!armed) return; armed = false; for (const g of GESTURES) window.removeEventListener(g, unlock, { capture: true }); }
+const recheck = () => { if (!document.hidden && (!ctx || ctx.state !== 'running')) arm(); };
+document.addEventListener('visibilitychange', recheck); window.addEventListener('pageshow', recheck); window.addEventListener('focus', recheck);
 
+export function init() { arm(); }                       // compatible avec l'ancien code : arme simplement le déblocage
+export function resume() { if (!ctx || ctx.state !== 'running') arm(); }
+export function setSfx(v) { on.sfx = v; }
+export function setMusic(v) { on.mus = v; if (!ctx) return; v ? startMusic() : stopMusic(); }
+export const isReady = () => !!ctx && ctx.state === 'running';
+arm();
+
+const live = () => ctx && ctx.state === 'running';
 function tone(f, type, dur, vol, o = {}) {
-  if (!ctx || !on.sfx) return;
+  if (!live() || !on.sfx) return;
   const t = ctx.currentTime + (o.at || 0), osc = ctx.createOscillator(), g = ctx.createGain();
   osc.type = type; osc.frequency.setValueAtTime(f, t);
   if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + dur);
@@ -86,7 +86,7 @@ function tone(f, type, dur, vol, o = {}) {
   osc.start(t); osc.stop(t + dur + 0.05);
 }
 function noise(dur, vol, f0, f1) {
-  if (!ctx || !on.sfx) return;
+  if (!live() || !on.sfx) return;
   const t = ctx.currentTime, len = (ctx.sampleRate * dur) | 0, b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   const s = ctx.createBufferSource(); s.buffer = b;
@@ -119,7 +119,7 @@ export function star(i) { tone(mtof(81 + i * 4), 'sine', 0.6, 0.22); tone(mtof(9
 // Musique : nappes lentes + notes éparses, très discrète.
 const CHORDS = [[57, 60, 64, 67], [53, 57, 60, 64], [48, 55, 59, 64], [55, 59, 62, 65]];
 function startMusic() {
-  if (musTimer || !ctx) return;
+  if (musTimer || !ctx || ctx.state !== 'running') return;
   sess = ctx.createGain(); sess.gain.value = 1; sess.connect(mus);
   const bus = sess;
   const play = () => {
@@ -163,36 +163,3 @@ export function chestReveal(r = 0) {
   for (let i = 0; i < n; i++) { const f = mtof(64 + base[i % base.length]); tone(f, 'sine', 0.9 + r * 0.15, 0.2, { at: i * 0.07 }); tone(f * 2, 'triangle', 0.5, 0.08, { at: i * 0.07 + 0.01 }); }
   if (r >= 3) [0, 7, 12, 16].forEach((s, i) => tone(mtof(48 + s), 'sawtooth', 1.8, 0.07, { at: 0.1 + i * 0.03 }));
 }
-
-// ---- Déblocage iOS / PWA ----
-// Listeners permanents (pas de { once: true }) : iOS recoupe le contexte à chaque passage en arrière-plan.
-// On utilise des événements "de fin de geste" (touchend / pointerup / click), seuls valides pour débloquer l'audio sur iOS.
-const unlock = () => {
-  const now = performance.now();
-  if (ctx && ctx.state !== 'running' && lastTry && now - lastTry > 400) { lastTry = now; rebuild(); }
-  else { init(); resume(); if (!lastTry) lastTry = now; }
-  keepAlive();
-  if (ctx) { try { const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ } }
-};
-['pointerup', 'touchend', 'click', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { resume(); if (keep) keepAlive(); } });
-window.addEventListener('pageshow', resume);
-window.addEventListener('focus', resume);
-
-// ---- Bouton de secours : visible tant que l'audio n'est pas réellement actif ----
-// Garantit un vrai geste utilisateur sur un élément dédié (iOS PWA) et sert de diagnostic (affiche l'état du contexte).
-function sosButton() {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:99999;display:none;padding:10px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(8,10,24,.85);color:#fff;font:700 14px system-ui,sans-serif;letter-spacing:.02em;-webkit-tap-highlight-color:transparent';
-  const refresh = () => {
-    const need = (on.mus || on.sfx) && (!ctx || ctx.state !== 'running');
-    b.style.display = need ? 'block' : 'none';
-    if (need) b.textContent = '🔊 Toucher pour activer le son (' + (ctx ? ctx.state : 'inactif') + ')';
-  };
-  b.addEventListener('click', (e) => { e.stopPropagation(); unlock(); setTimeout(refresh, 150); setTimeout(refresh, 800); });
-  document.body.appendChild(b);
-  setInterval(refresh, 700);
-  refresh();
-}
-if (document.body) sosButton(); else document.addEventListener('DOMContentLoaded', sosButton);
