@@ -1,11 +1,11 @@
 // Service worker : le jeu fonctionne hors-ligne après la première visite.
 // Pour publier une mise à jour, change simplement VERSION.
-const VERSION = 'critical-v12';
+const VERSION = 'critical-v13';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js', 'js/skins.js',
   'assets/fonts/orbitron-latin-700-normal.woff2', 'assets/fonts/orbitron-latin-900-normal.woff2',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'js/intro.js', 'js/daily.js', 'js/dailyworker.js',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
