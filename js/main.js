@@ -2,11 +2,13 @@
 import { decode, begin, newSim, addTap, step, done, remaining, reactors, solve, trace, isReactor, FUSE_TICKS } from './engine.js';
 import { chunk, stepInterval, spawnEvery, STAGE_SECONDS } from './endless.js';
 import { LEVELS } from './levels.js';
-import { WORLDS, PER_WORLD, dailyLevel } from './gen.js';
+import { WORLDS, PER_WORLD } from './gen.js';
 import * as A from './audio.js';
 import * as CH from './chest.js';
 import * as ED from './editor.js';
 import * as HOME from './home.js';
+import * as INTRO from './intro.js';
+import * as DAILY from './daily.js';
 import * as Skins from './skins.js';
 
 const $ = (s) => document.querySelector(s);
@@ -595,7 +597,7 @@ function playEndless() {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  if (CH.busy() || ED.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
+  if (CH.busy() || ED.busy() || INTRO.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
   const dt = Math.min(0.05, (now - last) / 1000); last = now; G.clock += dt;
   CH.tick(dt);
   update(dt);
@@ -687,7 +689,7 @@ function play(i) {
 }
 function playCustom(lv) { curIdx = -1; load(lv, false); show('play'); updateHud(); }
 function playDaily() {
-  const ds = todayStr(), def = dailyLevel(ds);
+  const ds = todayStr(), def = DAILY.get(ds); // calculé en arrière-plan pendant l'intro : instantané
   if (!def) { toast('Impossible de générer le défi. Réessaie.'); return; }
   curIdx = -1; load({ ...def, daily: ds, world: 5 }, false); show('play'); updateHud();
 }
@@ -779,7 +781,9 @@ window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
 ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom, mat: () => CH.matOf() });
 HOME.init();
+INTRO.init({ vib, today: () => todayStr() });
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);
+INTRO.start(); // intro cinématique + chargement (première fois ~8 s, ensuite ~4 s ; Réglages → Revoir l'intro)
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* hors-ligne indisponible */ });
 window.__critical = { G, E, getB: () => B }; // debug / tests

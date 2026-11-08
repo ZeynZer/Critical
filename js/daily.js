@@ -29,6 +29,7 @@ export function prepare(ds, timeout = 3500) {
       const w = new Worker(new URL('./dailyworker.js', import.meta.url), { type: 'module' });
       w.onmessage = (e) => { store(e.data.ds, e.data.def); try { w.terminate(); } catch (er) { /* ignore */ } fin(!!e.data.def); };
       w.onerror = () => fin(false);
+      w.postMessage(ds); // sans ce message, le worker ne calcule jamais rien
       setTimeout(() => fin(false), timeout);
     } catch (e) { fin(false); }
   });
