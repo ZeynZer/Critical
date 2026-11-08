@@ -49,17 +49,31 @@ function applyQuality() {
 /* ============================== canvas ============================== */
 const cv = $('#cv'), ctx = cv.getContext('2d');
 const OV = 3; // débordement du canvas hors écran
-let W = 0, H = 0, DPR = 1, SAT = 0, SAB = 0;
+let W = 0, H = 0, DPR = 1, SAT = 0, SAB = 0, BAND = 0; // BAND = bande système iOS au-dessus de la page (px)
 let B = { x: 0, y: 0, cs: 40, w: 1, h: 1 };
 function resize() {
   const standalone = window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
   DPR = Math.min(window.devicePixelRatio || 1, Q.dpr);
   W = Math.max(window.innerWidth, document.documentElement.clientWidth);
   H = Math.max(window.innerHeight, document.documentElement.clientHeight);
-  if (standalone && window.innerHeight > window.innerWidth) H = Math.max(H, screen.height || 0); // couvre toute la dalle, jusqu'en bas
+  // PWA iPhone en portrait : on compare la page à la dalle.
+  //  • écart ≤ 6 px : simple arrondi → on couvre toute la dalle (évite la ligne de pixels manquante en bas)
+  //  • écart > 6 px : iOS (bug WebKit 301994) dessine lui-même une bande opaque AU-DESSUS de la page : impossible d'y dessiner depuis le web.
+  //    On garde alors la vraie taille de la page (sinon le bas du jeu déborde) et on fond le haut vers le noir pour que la bande se fonde dans le décor.
+  let band = 0;
+  if (standalone && window.innerHeight > window.innerWidth) {
+    const gap = Math.max(screen.width || 0, screen.height || 0) - H;
+    if (gap > 0 && gap <= 6) H += gap; else if (gap > 6) band = gap;
+  }
+  BAND = band; document.documentElement.classList.toggle('has-band', band > 0);
   cv.style.width = (W + 2 * OV) + 'px'; cv.style.height = (H + 2 * OV) + 'px';
   cv.width = Math.round((W + 2 * OV) * DPR); cv.height = Math.round((H + 2 * OV) * DPR);
   SAT = $('#probe-t').offsetHeight || 0; SAB = $('#probe-b').offsetHeight || 0;
+  if (CH.ADMIN) { // (admin) affichage : utile pour diagnostiquer le plein écran sur iPhone
+    let dg = document.getElementById('diag'), card = document.querySelector('#m-settings .card');
+    if (!dg && card) { dg = document.createElement('p'); dg.id = 'diag'; dg.style.cssText = 'font-size:11px;opacity:.6;margin:0;text-align:center;line-height:1.4'; card.insertBefore(dg, card.children[1] || null); }
+    if (dg) dg.textContent = `Page ${W}×${H} · écran ${screen.width}×${screen.height} · bande système ${BAND}px · haut sûr ${SAT}px${standalone ? ' · PWA' : ''}`;
+  }
   layout();
 }
 function layout() {
@@ -404,6 +418,10 @@ function drawOverlay(t) {
   const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.8);
   vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)');
   ctx.fillStyle = vg; ctx.fillRect(-OV - 1, -OV - 1, W + 2 * OV + 2, H + 2 * OV + 2);
+  if (BAND > 0) { // la bande iOS du haut est noire : le haut du décor fond vers le noir pour s'y raccorder sans couture
+    const tf = ctx.createLinearGradient(0, -OV, 0, 90); tf.addColorStop(0, 'rgba(0,0,0,1)'); tf.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = tf; ctx.fillRect(-OV - 1, -OV - 1, W + 2 * OV + 2, 90 + OV + 1);
+  }
 }
 
 /* ============================== boucle ============================== */

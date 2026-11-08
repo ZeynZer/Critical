@@ -18,6 +18,8 @@ const CSS = `
 #s-title.hm{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 108px);overflow:hidden}
 #s-title.hm>*{z-index:1}
 #s-title.hm .hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.hm-bg::after{content:'';position:absolute;left:0;right:0;top:0;height:90px;background:linear-gradient(#000,rgba(0,0,0,0));opacity:0;pointer-events:none}
+html.has-band .hm-bg::after{opacity:1}
 .hm-blob{position:absolute;border-radius:50%;filter:blur(46px);opacity:.6;will-change:transform}
 .hm-b1{width:78vmax;height:78vmax;max-width:340px;max-height:340px;left:-14%;top:8%;background:#12c9ff;animation:hm-d1 19s ease-in-out infinite}
 .hm-b2{width:72vmax;height:72vmax;max-width:320px;max-height:320px;right:-18%;top:34%;background:#ff2fc8;animation:hm-d2 23s ease-in-out infinite}
