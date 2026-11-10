@@ -18,8 +18,6 @@ const CSS = `
 #s-title.hm{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 108px);overflow:hidden}
 #s-title.hm>*{z-index:1}
 #s-title.hm .hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.hm-bg::after{content:'';position:absolute;left:0;right:0;top:0;height:90px;background:linear-gradient(#000,rgba(0,0,0,0));opacity:0;pointer-events:none}
-html.has-band .hm-bg::after{opacity:1}
 .hm-blob{position:absolute;border-radius:50%;filter:blur(46px);opacity:.6;will-change:transform}
 .hm-b1{width:78vmax;height:78vmax;max-width:340px;max-height:340px;left:-14%;top:8%;background:#12c9ff;animation:hm-d1 19s ease-in-out infinite}
 .hm-b2{width:72vmax;height:72vmax;max-width:320px;max-height:320px;right:-18%;top:34%;background:#ff2fc8;animation:hm-d2 23s ease-in-out infinite}
@@ -176,13 +174,13 @@ export function init() {
   const stars = $('#t-stars'); if (stars) { reskin(stars, ['gl', 'hm-pill', 'hm-in'], ['foot']); stars.style.setProperty('--e', '.05s'); scr.appendChild(stars); }
   for (const e of [logo, $('.tag', wrap)]) if (e) { e.classList.add('hm-in'); e.style.setProperty('--e', '.1s'); }
 
-  // Cascade (bouton principal)
-  const hero = $('#b-endless');
+  // Forage (mode principal ; Cascade devient un lien discret plus bas)
+  const hero = $('#b-mine') || $('#b-endless');
   if (hero) {
     reskin(hero, ['hm-hero']);
-    const t = titleOf(hero), s = $('#b-endless-s', hero), hi = make('span', 'gl hm-hi'), tx = make('span', 'hm-tx');
+    const t = titleOf(hero), s = $('#b-mine-s', hero) || $('#b-endless-s', hero), hi = make('span', 'gl hm-hi'), tx = make('span', 'hm-tx');
     hi.style.setProperty('--d', '.5s');
-    tx.append(make('span', 'hm-chip', 'SANS FIN'), ...grab(t, s));
+    tx.append(make('span', 'hm-chip', hero.id === 'b-mine' ? 'MODE PRINCIPAL' : 'SANS FIN'), ...grab(t, s));
     hi.insertAdjacentHTML('afterbegin', ORB); hi.append(tx); hi.insertAdjacentHTML('beforeend', CHEV);
     hero.textContent = ''; hero.appendChild(hi);
   }
@@ -208,6 +206,8 @@ export function init() {
   if (daily) { tile(daily, ico(ICONS.cal), '.42s', '3s'); live = make('span', 'hm-live'); daily.appendChild(live); row.appendChild(daily); }
   if (chest) { tile(chest, '<span class="hm-core"></span>', '.5s', '4s'); row.appendChild(chest); }
   menu.appendChild(row);
+  const casc = $('#b-endless'); // Cascade : lien discret sous les tuiles
+  if (casc && casc !== hero) { const cs = $('#b-endless-s', casc) || make('small'); cs.id = 'b-endless-s'; casc.className = 'hm-casc'; casc.textContent = ''; casc.append(make('span', '', 'Cascade · mode sans fin'), cs); menu.appendChild(casc); }
 
   // dock flottant : Niveaux · Atelier · Collection · Code
   const dock = make('nav', 'gl hm-dock hm-in'); dock.style.setProperty('--e', '.6s'); dock.style.setProperty('--d', '5s'); dock.setAttribute('aria-label', 'Navigation');

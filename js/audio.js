@@ -109,6 +109,9 @@ export function boom(n) {
   noise(0.16, 0.16 + Math.min(n, 10) * 0.012, 3200, 180);
   if (n < 3) tone(90, 'sine', 0.18, 0.3, { to: 45 });
 }
+export const crack = () => { noise(0.07, 0.22, 4200, 900); tone(140 + Math.random() * 60, 'square', 0.05, 0.08); };
+export const rumble = () => { noise(0.7, 0.3, 500, 60); tone(55, 'sawtooth', 0.7, 0.18, { to: 32 }); };
+export const land = () => tone(80, 'sine', 0.09, 0.14, { to: 50 });
 export const step = (d = 0) => tone(95 + d * 7, 'sine', 0.07, 0.09);
 export const breach = () => { tone(130, 'sawtooth', 0.45, 0.25, { to: 38 }); noise(0.35, 0.3, 2200, 90); };
 export const mult = (m) => { const f = mtof(72 + [0, 2, 4, 7, 9, 12, 14, 16][Math.min(8, m) - 1]); tone(f, 'sine', 0.4, 0.22); tone(f * 2, 'triangle', 0.22, 0.08); };
