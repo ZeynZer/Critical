@@ -3,7 +3,7 @@
 const VERSION = 'critical-v15';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js', 'js/skins.js', 'js/intro.js', 'js/daily.js', 'js/dailyworker.js',
+  'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js', 'js/skins.js', 'js/forage.js', 'js/mine.js', 'js/intro.js', 'js/daily.js', 'js/dailyworker.js',
   'assets/fonts/orbitron-latin-700-normal.woff2', 'assets/fonts/orbitron-latin-900-normal.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
