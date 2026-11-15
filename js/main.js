@@ -598,9 +598,11 @@ function playEndless() {
   } else startEndless();
 }
 
+let fN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  if (CH.busy() || ED.busy() || INTRO.busy() || MINE.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
+  if (CH.busy() || ED.busy() || INTRO.busy() || MINE.busy()) { last = now; return; }
+  if (G.mode === 'title' && (fN++ & 1)) return; // derrière l'accueil, la démo tourne à demi-cadence : moitié moins de rendu, même aspect // ouverture d'un noyau : on économise le rendu du jeu
   const dt = Math.min(0.05, (now - last) / 1000); last = now; G.clock += dt;
   CH.tick(dt);
   update(dt);

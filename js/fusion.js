@@ -13,7 +13,7 @@ export const RARE = { 3: 1 / 120, 4: 1 / 150, 5: 1 / 150, 7: 1 / 120, 10: 1 / 40
 // Une galaxie tire toujours sa rareté : spirale, barrée dorée, émeraude, annulaire, prismatique, critique
 export const GALAXY = [0.62, 0.25, 0.09, 0.03, 0.009, 0.001];
 const SLOP = 0.012; // chevauchement toléré : sans lui, la correction de position fait trembler et ramper les piles
-const STEP = 1 / 120, GRAV = 34, REST = 0.12, CHAIN_WINDOW = 1.0, DANGER_TIME = 2.6, COOLDOWN = 0.42;
+const STEP = 1 / 120, GRAV = 34, REST = 0.12, CHAIN_WINDOW = 1.0, DANGER_TIME = 2.6, COOLDOWN = 0.3;
 const RAD = [0.3, 0.42, 0.55, 0.68, 0.88, 1.08, 1.28, 1.5, 1.72, 1.94, 2.18, 2.42, 2.7];
 export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
 export const R_RUBBLE = 0.5, R_SPECIAL = 0.6;
@@ -185,10 +185,13 @@ function walls(G, b) {
 }
 
 // Accélération subie par un point : gravité du secteur, vent, attraction des étoiles plus massives (tier = rang du corps, -1 sinon)
+// Seuls l'étoile à neutrons et le trou noir courbent l'espace : on les liste une fois par pas au lieu de parcourir tous les astres pour chaque astre
+const ATT = [];
+function attractors(G) { ATT.length = 0; for (const a of G.bodies) if (a.k === 'c' && (a.tier === NEUTRON || a.tier === HOLE)) ATT.push(a); }
 function accel(G, x, y, tier, self, out, rad) {
   const M = G.mod; let ax = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1), ay = GRAV * M.g;
-  for (const a of G.bodies) {
-    if (a === self || a.dead || a.k !== 'c' || (a.tier !== NEUTRON && a.tier !== HOLE) || a.tier <= tier) continue; // seuls les astres extrêmes courbent l'espace
+  for (const a of ATT) {
+    if (a === self || a.dead || a.tier <= tier) continue;
     const dx = a.x - x, dy = a.y - y, d = Math.hypot(dx, dy), R = a.r * 3.5 + 2;
     if (d >= R || d < 1e-3) continue;
     const f = (a.tier === HOLE ? 80 : 50) * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
@@ -199,7 +202,7 @@ function accel(G, x, y, tier, self, out, rad) {
 const ACC = [0, 0];
 // Trajectoire prévue du prochain lâcher (pour la visée) : la gravité des étoiles la courbe
 export function trace(G, x0) {
-  const it = G.cur, r = itemR(it), pts = []; let x = clampX(it, x0, G.inset), y = DROP_Y, vx = 0, vy = 0;
+  attractors(G); const it = G.cur, r = itemR(it), pts = []; let x = clampX(it, x0, G.inset), y = DROP_Y, vx = 0, vy = 0;
   for (let i = 0; i < 150; i++) {
     accel(G, x, y, it.tier, null, ACC, r); vx += ACC[0] / 60; vy += ACC[1] / 60; x += vx / 60; y += vy / 60;
     if (x < G.inset + r) { x = G.inset + r; vx = 0; } else if (x > W - G.inset - r) { x = W - G.inset - r; vx = 0; }
@@ -221,6 +224,7 @@ function sub(G) {
     G.pend.splice(i, 1);
     if (p.t === 'pierce') pierce(G); else { const r = add(G, 'r', -1, p.x, -R_RUBBLE); r.vy = 4; G.ev.push({ t: 'rubble', x: p.x }); }
   }
+  attractors(G);
   for (const b of G.bodies) {
     b.px = b.x; b.py = b.y; b.age += dt; accel(G, b.x, b.y, b.k === 'c' ? b.tier : -1, b, ACC, b.r); b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
     if (b.k === 'c' && b.tier === GIANT) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
