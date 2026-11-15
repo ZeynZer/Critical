@@ -5,21 +5,28 @@
 // Unités : largeur du puits = 10, y vers le bas, sol à y = HT.
 import { mulberry32 } from './gen.js';
 
-export const W = 10, HT = 14.5, LINE = 2.7, DROP_Y = 1.35, MAX_TIER = 9;
+export const W = 10, HT = 14.5, LINE = 2.7, DROP_Y = 1.35, MAX_TIER = 12;
+// Rangs : 0 poussière · 1 orbe · 2 astéroïde · 3 lune · 4 planète · 5 géante gazeuse · 6 naine orange · 7 soleil · 8 géante rouge · 9 étoile à neutrons · 10 trou noir · 11 quasar · 12 galaxie
+export const NEUTRON = 9, HOLE = 10, GIANT = 8, SUN = 7;
+// Variantes rares : chance, à chaque création d'un astre de ce rang, d'obtenir sa version rare
+export const RARE = { 3: 1 / 120, 4: 1 / 150, 5: 1 / 150, 7: 1 / 120, 10: 1 / 40, 11: 1 / 25 };
+// Une galaxie tire toujours sa rareté : spirale, barrée dorée, émeraude, annulaire, prismatique, critique
+export const GALAXY = [0.62, 0.25, 0.09, 0.03, 0.009, 0.001];
+const SLOP = 0.012; // chevauchement toléré : sans lui, la correction de position fait trembler et ramper les piles
 const STEP = 1 / 120, GRAV = 34, REST = 0.12, CHAIN_WINDOW = 1.0, DANGER_TIME = 2.6, COOLDOWN = 0.42;
-const RAD = [0.44, 0.58, 0.74, 0.92, 1.12, 1.34, 1.58, 1.84, 2.12, 2.42];
+const RAD = [0.3, 0.42, 0.55, 0.68, 0.88, 1.08, 1.28, 1.5, 1.72, 1.94, 2.18, 2.42, 2.7];
 export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
 export const R_RUBBLE = 0.5, R_SPECIAL = 0.6;
 export const STRATA = ['Ceinture', 'Nébuleuse', 'Amas stellaire', 'Pulsar', 'Supergéante', 'Quasar', 'Grand Vide', 'Horizon', 'Origine']; // secteurs traversés
 export const need = (depth) => Math.min(260, 30 + depth * 24);
 // Chaque secteur change une règle : g = gravité, pull = attraction des étoiles, wind = vent latéral (alt : il s'inverse), inset = parois resserrées
-const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { pull: 2, n: 'Attraction des étoiles doublée' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
+const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { pull: 2, n: 'Attraction doublée' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
   { wind: 4, n: 'Vent du quasar' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, wind: 4, alt: 1, n: 'Chaos originel' }];
 export const mod = (d) => ({ g: 1, pull: 1, wind: 0, alt: 0, inset: 0, n: '', ...MODS[d % MODS.length] });
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : b.k === 'r' ? R_RUBBLE : R_SPECIAL);
 
 function nextItem(G) {
-  const w = G.depth < 3 ? [5, 4, 3, 1] : G.depth < 6 ? [4, 4, 3, 2] : [4, 4, 3, 2, 1];
+  const w = G.depth < 3 ? [5, 5, 3, 2] : G.depth < 6 ? [4, 5, 4, 2, 1] : [3, 4, 4, 3, 2];
   let tot = 0; for (const v of w) tot += v;
   let x = G.rnd() * tot;
   for (let i = 0; i < w.length; i++) if ((x -= w[i]) < 0) return { k: 'c', tier: i };
@@ -91,9 +98,11 @@ function fuse(G, a, b) {
   }
   const n = add(G, 'c', tier + 1, x, y, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2);
   n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(HT - n.r, n.y); n.hit = true; n.age = 0.5;
-  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8); // multiplicateur plafonné : le score reste lisible G.score += pts;
+  if (tier + 1 === MAX_TIER) { let x0 = G.rnd(), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
+  else if (RARE[tier + 1] && G.rnd() < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
+  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v ? 3 : 1); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
-  if (tier === 6 && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
+  if (tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
   clearRubble(G, x, y, n.r + 0.45);
   G.ev.push({ t: 'merge', x, y, tier: tier + 1, chain: G.chain, pts, id: n.id });
@@ -106,7 +115,7 @@ function explode(G, b) {
   for (const o of G.bodies) {
     if (o.dead || o === b) continue;
     const d = Math.hypot(o.x - b.x, o.y - b.y);
-    if (o.k === 'c' && o.tier <= 2 && d < 2.3 + o.r) { o.dead = true; G.score += TIERS[o.tier].pts; G.ev.push({ t: 'vapor', x: o.x, y: o.y, tier: o.tier }); }
+    if (o.k === 'c' && o.tier <= 3 && d < 2.3 + o.r) { o.dead = true; G.score += TIERS[o.tier].pts; G.ev.push({ t: 'vapor', x: o.x, y: o.y, tier: o.tier }); }
   }
   clearRubble(G, b.x, b.y, 3);
   kick(G, b.x, b.y, 5, 13);
@@ -118,7 +127,7 @@ function pierce(G) {
   let n = 0;
   for (const b of G.bodies) {
     if (b.dead) continue;
-    if (b.k === 'r' || (b.k === 'c' && b.tier <= 1)) { b.dead = true; n++; G.score += b.k === 'c' ? TIERS[b.tier].pts * 2 : 15; G.ev.push({ t: 'vapor', x: b.x, y: b.y, tier: b.k === 'c' ? b.tier : -1 }); }
+    if (b.k === 'r' || (b.k === 'c' && b.tier <= 2)) { b.dead = true; n++; G.score += b.k === 'c' ? TIERS[b.tier].pts * 2 : 15; G.ev.push({ t: 'vapor', x: b.x, y: b.y, tier: b.k === 'c' ? b.tier : -1 }); }
     else b.vy -= 7 + G.rnd() * 3; // le souffle soulève tout : nouvelles rencontres possibles
   }
   G.score += 500 * G.depth;
@@ -143,18 +152,18 @@ function collide(G) {
       if (a.k === 'b' || b.k === 'b') { (a.k === 'b' ? a : b).fuse = true; }
       if (a.k === 'j' && b.k === 'c') { a.k = 'c'; a.tier = b.tier; a.r = b.r; G.ev.push({ t: 'morph', x: a.x, y: a.y, tier: b.tier }); }
       else if (b.k === 'j' && a.k === 'c') { b.k = 'c'; b.tier = a.tier; b.r = a.r; G.ev.push({ t: 'morph', x: b.x, y: b.y, tier: a.tier }); }
-      const hole = a.k === 'c' && a.tier === MAX_TIER ? a : b.k === 'c' && b.tier === MAX_TIER ? b : null, o = hole === a ? b : a;
+      const hole = a.k === 'c' && a.tier === HOLE ? a : b.k === 'c' && b.tier === HOLE ? b : null, o = hole === a ? b : a;
       if (hole && !(hole.et > 0) && (o.k === 'r' || (o.k === 'c' && o.tier <= 1))) { // le trou noir avale un petit voisin de temps en temps
         o.dead = true; hole.et = 3; G.score += 50; G.eaten++; G.ev.push({ t: 'swallow', x: o.x, y: o.y, hx: hole.x, hy: hole.y });
         if (G.eaten === 5) G.ev.push({ t: 'secret', id: 'festin', x: hole.x, y: hole.y });
         continue;
       }
       if (!merge && a.k === 'c' && b.k === 'c' && a.tier === b.tier) { merge = [a, b]; continue; }
-      const ma = a.r * a.r, mb = b.r * b.r, ia = mb / (ma + mb), ib = ma / (ma + mb), pen = (rr - d) * 0.8;
+      const ma = a.r * a.r, mb = b.r * b.r, ia = mb / (ma + mb), ib = ma / (ma + mb), pen = Math.max(0, rr - d - SLOP) * 0.6; a.touch = b.touch = true;
       a.x -= nx * pen * ia; a.y -= ny * pen * ia; b.x += nx * pen * ib; b.y += ny * pen * ib;
       const rvx = b.vx - a.vx, rvy = b.vy - a.vy, vn = rvx * nx + rvy * ny;
       if (vn < 0) {
-        const jn = -(1 + REST) * vn, tx = -ny, ty = nx, vt = rvx * tx + rvy * ty, jt = -vt * 0.12;
+        const jn = -(1 + REST) * vn, tx = -ny, ty = nx, vt = rvx * tx + rvy * ty, jt = -vt * 0.3;
         a.vx -= (nx * jn + tx * jt) * ia; a.vy -= (ny * jn + ty * jt) * ia; b.vx += (nx * jn + tx * jt) * ib; b.vy += (ny * jn + ty * jt) * ib;
         a.av += vt * 0.06 / a.r; b.av += vt * 0.06 / b.r;
       }
@@ -168,7 +177,7 @@ function walls(G, b) {
   if (b.x < L) { b.x = L; if (b.vx < 0) b.vx *= -REST; }
   else if (b.x > R) { b.x = R; if (b.vx > 0) b.vx *= -REST; }
   if (b.y > HT - b.r) {
-    b.y = HT - b.r;
+    b.y = HT - b.r; b.touch = true;
     if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: HT, v: b.vy }); if (b.k === 'b') b.fuse = true; }
     if (b.vy > 0) b.vy *= -REST;
     b.vx *= 0.985; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; // roule au sol
@@ -179,10 +188,10 @@ function walls(G, b) {
 function accel(G, x, y, tier, self, out, rad) {
   const M = G.mod; let ax = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1), ay = GRAV * M.g;
   for (const a of G.bodies) {
-    if (a === self || a.dead || a.k !== 'c' || a.tier < 5 || a.tier <= tier) continue;
+    if (a === self || a.dead || a.k !== 'c' || (a.tier !== NEUTRON && a.tier !== HOLE) || a.tier <= tier) continue; // seuls les astres extrêmes courbent l'espace
     const dx = a.x - x, dy = a.y - y, d = Math.hypot(dx, dy), R = a.r * 3.5 + 2;
     if (d >= R || d < 1e-3) continue;
-    const f = [20, 30, 40, 55, 80][a.tier - 5] * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
+    const f = (a.tier === HOLE ? 80 : 50) * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
     ax += (dx / d) * f; ay += (dy / d) * f;
   }
   out[0] = ax; out[1] = ay;
@@ -213,17 +222,25 @@ function sub(G) {
     if (p.t === 'pierce') pierce(G); else { const r = add(G, 'r', -1, p.x, -R_RUBBLE); r.vy = 4; G.ev.push({ t: 'rubble', x: p.x }); }
   }
   for (const b of G.bodies) {
-    b.age += dt; accel(G, b.x, b.y, b.k === 'c' ? b.tier : -1, b, ACC, b.r); b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
-    if (b.k === 'c' && b.tier === 7) b.r = RAD[7] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
-    else if (b.k === 'c' && b.tier === 8) { b.pt = (b.pt || 0) + dt; if (b.pt >= 4) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.7, 8); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r }); } } // l'étoile à neutrons repousse par impulsions
+    b.px = b.x; b.py = b.y; b.age += dt; accel(G, b.x, b.y, b.k === 'c' ? b.tier : -1, b, ACC, b.r); b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
+    if (b.k === 'c' && b.tier === GIANT) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
+    else if (b.k === 'c' && b.tier === NEUTRON) { b.pt = (b.pt || 0) + dt; if (b.pt >= 4) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.7, 8); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r }); } } // l'étoile à neutrons repousse par impulsions
     else if (b.et > 0) b.et -= dt;
     const sp = Math.hypot(b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
     b.x += b.vx * dt; b.y += b.vy * dt; b.vx *= 0.9992; b.ang += b.av * dt; b.av *= 0.985;
   }
-  for (let it = 0; it < 3; it++) {
+  for (const b of G.bodies) { b.touch = false; }
+  for (let it = 0; it < 6; it++) {
     const m = collide(G);
     for (const b of G.bodies) if (!b.dead) walls(G, b);
     if (m) fuse(G, m[0], m[1]);
+  }
+  // frottement de repos : un astre en contact et presque immobile s'arrête, au lieu de glisser lentement sous la pression
+  // … et frottement statique : un déplacement infime (< 0,05 unité/s) d'un astre en contact est annulé, sinon les piles rampent
+  for (const b of G.bodies) if (b.touch) {
+    b.av *= 0.96;
+    const dx = b.x - b.px, dy = b.y - b.py;
+    if (dx * dx + dy * dy < 1.6e-7) { b.x = b.px; b.y = b.py; b.vx = b.vy = 0; b.av *= 0.8; }
   }
   for (const b of G.bodies) if (b.fuse && !b.dead) explode(G, b);
   if (G.bodies.some((b) => b.dead)) G.bodies = G.bodies.filter((b) => !b.dead);

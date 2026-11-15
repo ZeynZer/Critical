@@ -159,6 +159,26 @@ function stopMusic() {
   setTimeout(() => { try { old.disconnect(); } catch (e) { /* ignore */ } }, 300);
 }
 
+// ---- Genèse : un timbre par famille d'astres, légèrement désaccordé à chaque fois pour ne jamais sonner pareil ----
+const jit = () => 1 + (Math.random() - 0.5) * 0.05;
+export function fuse(fam, n) { // fam : 0 roche · 1 planète · 2 étoile · 3 astre extrême · 4 galactique ; n = maillon de la chaîne (monte la gamme)
+  const f = mtof(noteOf(Math.max(0, n - 1)) + 12) * jit();
+  if (fam === 0) { tone(f * 2, 'triangle', 0.09, 0.2, { to: f }); noise(0.05, 0.14, 5200, 1200); } // choc sec de cailloux
+  else if (fam === 1) { tone(f, 'sine', 0.7, 0.26); tone(f * 2.76, 'sine', 0.35, 0.07); tone(f * 5.4, 'sine', 0.15, 0.03); } // cloche de verre
+  else if (fam === 2) { tone(f / 2, 'sawtooth', 0.5, 0.1, { to: f, atk: 0.08 }); tone(f * 1.5, 'sine', 0.6, 0.16, { at: 0.05 }); tone(f, 'sine', 0.7, 0.2); noise(0.4, 0.12, 600, 4200); } // embrasement
+  else if (fam === 3) { tone(f / 2, 'sine', 0.9, 0.34, { to: f / 8 }); tone(f * 2, 'square', 0.12, 0.05, { to: f * 4 }); noise(0.6, 0.2, 3000, 80); } // effondrement grave
+  else { [0, 4, 7, 11, 14, 19].forEach((st, i) => { tone(f * 2 ** (st / 12), 'sine', 0.9, 0.16, { at: i * 0.07 }); tone(f * 2 ** (st / 12) * 2.01, 'triangle', 0.5, 0.05, { at: i * 0.07 }); }); noise(1.2, 0.14, 300, 6000); } // arpège scintillant
+}
+export const release = () => tone(520 * jit(), 'sine', 0.12, 0.13, { to: 260 });
+export const thud = (size) => { tone((150 - size * 90) * jit(), 'sine', 0.1 + size * 0.1, 0.1 + size * 0.14, { to: 45 }); if (size > 0.5) noise(0.08, 0.06, 500, 120); };
+export const gulp = () => tone(300 * jit(), 'sine', 0.25, 0.2, { to: 50 });
+export const ping = () => { tone(1900 * jit(), 'sine', 0.3, 0.1); tone(2850, 'sine', 0.2, 0.04, { at: 0.03 }); };
+export function rare(r) { // fanfare d'autant plus longue et haute que la rareté monte
+  const st = [0, 4, 7, 12, 16, 19, 24, 28, 31, 36, 40, 43, 48, 52, 55];
+  for (let i = 0; i < 5 + r * 2; i++) { tone(mtof(60 + r + st[i]), 'sine', 1.2, 0.2, { at: i * 0.09 }); tone(mtof(72 + r + st[i]), 'triangle', 0.6, 0.06, { at: i * 0.09 + 0.02 }); }
+  noise(1.5, 0.16, 200, 7000); tone(55, 'sine', 1.6, 0.3, { to: 30 });
+}
+
 // ---- Coffres / noyaux scellés ----
 export const setScale = (a) => { SCALE.splice(0, SCALE.length, ...a); }; // gamme de la skin équipée
 export const chestBeat = (p = 0) => { tone(62 + p * 40, 'sine', 0.2, 0.5, { to: 38 }); tone(240 + p * 900, 'triangle', 0.05, 0.1 + p * 0.1); };

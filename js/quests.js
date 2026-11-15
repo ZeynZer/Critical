@@ -13,7 +13,7 @@ const POOL = [
   ['depth', 4, 25, 'Atteins le secteur 4'], ['depth', 7, 40, 'Atteins le secteur 7'],
   ['chain', 4, 20, 'Déclenche une chaîne ×4'], ['chain', 6, 35, 'Déclenche une chaîne ×6'],
   ['score', 15000, 25, 'Marque 15 000 points en une partie'], ['score', 40000, 40, 'Marque 40 000 points en une partie'],
-  ['tier', 8, 25, 'Crée une Géante rouge'], ['tier', 10, 45, 'Crée un Trou noir'],
+  ['tier', 9, 25, 'Crée une Géante rouge'], ['tier', 11, 45, 'Crée un Trou noir'],
   ['runs', 3, 20, 'Termine 3 parties de Genèse'], ['stars', 3, 25, 'Gagne 3 étoiles en campagne'], ['daily', 1, 30, 'Termine le défi du jour'],
 ];
 const st = { day: '', q: [], bonus: false, gift: false, streak: 0 };
