@@ -260,8 +260,6 @@ const CSS = `
 .fg-btn{display:block;width:100%;min-height:54px;margin-top:10px;font-family:var(--disp);font-weight:900;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;color:#17141a;background:#ffb238;border-radius:6px;box-shadow:0 5px 0 #a8651a;transition:transform .08s,box-shadow .08s}
 .fg-btn:active{transform:translateY(4px);box-shadow:0 1px 0 #a8651a}.fg-btn.alt{background:#2a252e;color:#fff;box-shadow:0 5px 0 #0c0a0e}.fg-btn.alt:active{box-shadow:0 1px 0 #0c0a0e}
 .fg-lad{display:flex;flex-wrap:wrap;gap:6px 4px;align-items:center;margin:0 0 14px;font-size:11px;color:rgba(255,255,255,.4)}.fg-lad i{width:16px;height:16px;border-radius:50%;display:block}
-#s-title .hm-casc{align-self:center;display:flex;gap:8px;align-items:baseline;height:34px;padding:0 16px;border-radius:17px;font-size:13px;font-weight:600;color:var(--dim);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);margin-top:2px}
-#s-title .hm-casc small{font-size:12px;font-weight:500;opacity:.8}
 `;
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
@@ -302,7 +300,7 @@ function newRun() {
   G = F.newGame(); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; shake = flash = scroll = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
 }
-function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · strate ${sv.depth}` : 'Fusionne. Perce. Descends.'; }
+function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · strate ${sv.depth}` : 'Mode principal · touche pour jouer'; }
 export const busy = () => isOpen;
 export const stats = () => ({ ...sv });
 export function open() {

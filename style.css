@@ -127,3 +127,22 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 #hud.endless #b-pause{display:flex}
 #hud.endless #b-hint{display:none}
 #hud.endless .hud-title b{font-size:19px}
+
+/* ---------- direction artistique « forage » : surcharge du verre d'origine ----------
+   Roche mate, arêtes franches, un seul accent ambre. Plus de flou ni de halo décoratif : la lumière est réservée au jeu. */
+:root{--acc:#ffb238;--am:#ffb238}
+.glass{background:#1b181e;border:1.5px solid rgba(255,255,255,.16);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none}
+#hud .glass,.screen .glass{background:rgba(16,13,18,.82)}
+.icon,.pill,.big,.card,.hud-title{border-radius:6px!important}
+.big{font-family:var(--disp);font-size:14px;letter-spacing:1.3px;text-transform:uppercase}
+.big small{font-family:var(--font);text-transform:none;letter-spacing:0}
+.big.glass{background:#2a252e;border:0;box-shadow:0 5px 0 #0c0a0e}
+.big.primary{background:#ffb238;color:#1b140a;border:0;box-shadow:0 5px 0 #a8651a;animation:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.big.primary small{color:rgba(27,20,10,.72)}
+.big:active{transform:translateY(4px);box-shadow:0 1px 0 #0c0a0e}.big.primary:active{box-shadow:0 1px 0 #a8651a}
+.big.danger{color:#ff8aa0}
+.modal{background:rgba(5,4,6,.76);-webkit-backdrop-filter:none;backdrop-filter:none}
+.card{border-top:3px solid #ffb238}
+.ch-bar b{background:#ffb238!important;box-shadow:none!important;border-radius:0!important}.ch-bar{border-radius:0!important}
+#ch-banner{border-radius:6px!important;border-left:3px solid #ffb238}
+#toast{border-radius:6px!important}
