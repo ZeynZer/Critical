@@ -94,76 +94,98 @@ function makeTex(depth) {
   for (let i = 0; i < 150; i++) { x.fillStyle = `rgba(255,255,255,${0.15 + rnd(s0 + i * 1.7) * 0.6})`; const s = rnd(i * 3.3) > 0.9 ? 1.6 : 0.8; x.fillRect(rnd(s0 + i) * w, rnd(s0 + i * 2.1) * h, s, s); }
   return c;
 }
-const ball = (x, c, r, a, b, d) => { const g = x.createRadialGradient(c - r * 0.35, c - r * 0.4, r * 0.05, c, c, r); g.addColorStop(0, a); g.addColorStop(0.55, b); g.addColorStop(1, d); x.fillStyle = g; x.beginPath(); x.arc(c, c, r, 0, TAU); x.fill(); };
-const halo = (x, c, r, col, a = 0.6) => { const g = x.createRadialGradient(c, c, r * 0.75, c, c, r * 1.3); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(c - r * 1.3, c - r * 1.3, r * 2.6, r * 2.6); };
-const clipC = (x, c, r) => { x.save(); x.beginPath(); x.arc(c, c, r, 0, TAU); x.clip(); };
+// Chaque astre est un petit montage de calques pré-rendus, animé à chaque image :
+//   back  : halo, couronne, jets, moitié arrière des anneaux (peut tourner et pulser)
+//   strip : bande de surface répétable qui défile dans un cercle (la rotation de l'astre) ; strip2 = seconde couche (nuages, plasma)
+//   over  : lumière fixe (ombre, reflet, liseré, moitié avant des anneaux) : l'éclairage ne tourne pas avec l'astre
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.ceil(w * DPR); c.height = Math.ceil(h * DPR); const x = c.getContext('2d'); x.scale(DPR, DPR); return [c, x]; };
 const blob = (x, px, py, rx, ry, rot, col) => { x.fillStyle = col; x.beginPath(); x.ellipse(px, py, rx, ry, rot, 0, TAU); x.fill(); };
-const shadeC = (x, c, r) => { const g = x.createRadialGradient(c - r * 0.3, c - r * 0.35, r * 0.5, c, c, r * 1.05); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,10,.55)'); x.fillStyle = g; x.fillRect(c - r, c - r, 2 * r, 2 * r); };
-const gloss = (x, c, r) => blob(x, c - r * 0.36, c - r * 0.5, r * 0.28, r * 0.12, -0.6, 'rgba(255,255,255,.5)');
+function strip(r, base, n, seed, f) { // n motifs placés au hasard, dessinés 3 fois pour boucler sans couture
+  const w = r * 4, h = r * 2, [c, x] = mk(w, h);
+  if (typeof base === 'function') base(x, w, h); else if (base) { x.fillStyle = base; x.fillRect(0, 0, w, h); }
+  for (let i = 0; i < n; i++) { const px = rnd(seed + i * 1.7) * w, py = rnd(seed + i * 3.1) * h; for (const d of [-w, 0, w]) f(x, px + d, py, i); }
+  return c;
+}
+function halo(r, col, a, rays) {
+  const s = r * 1.3, [c, x] = mk(s * 2, s * 2), g = x.createRadialGradient(s, s, r * 0.7, s, s, s); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(0, 0, s * 2, s * 2);
+  if (rays) { x.fillStyle = rgba(col, 0.5); for (let i = 0; i < rays; i++) { const t = (i / rays) * TAU, l = r * (1.12 + rnd(i * 2.2) * 0.16); x.beginPath(); x.moveTo(s + Math.cos(t - 0.1) * r * 0.9, s + Math.sin(t - 0.1) * r * 0.9); x.lineTo(s + Math.cos(t) * l, s + Math.sin(t) * l); x.lineTo(s + Math.cos(t + 0.1) * r * 0.9, s + Math.sin(t + 0.1) * r * 0.9); x.fill(); } }
+  return c;
+}
+// lumière d'une planète (ombre portée + reflet + atmosphère) ou d'une étoile (cœur brûlant + bord assombri)
+function light(r, R, star, rim) {
+  const s = r * 1.3, [c, x] = mk(s * 2, s * 2); x.save(); x.beginPath(); x.arc(s, s, R, 0, TAU); x.clip();
+  if (star) { x.globalCompositeOperation = 'lighter'; let g = x.createRadialGradient(s, s, 0, s, s, R * 0.75); g.addColorStop(0, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, s * 2, s * 2); x.globalCompositeOperation = 'source-over'; g = x.createRadialGradient(s, s, R * 0.6, s, s, R); g.addColorStop(0, rgba(star, 0)); g.addColorStop(1, rgba(star, 0.6)); x.fillStyle = g; x.fillRect(0, 0, s * 2, s * 2); }
+  else { const g = x.createRadialGradient(s - R * 0.4, s - R * 0.45, R * 0.35, s - R * 0.1, s - R * 0.1, R * 1.2); g.addColorStop(0, 'rgba(0,0,14,0)'); g.addColorStop(1, 'rgba(0,0,14,.8)'); x.fillStyle = g; x.fillRect(0, 0, s * 2, s * 2); blob(x, s - R * 0.38, s - R * 0.5, R * 0.26, R * 0.11, -0.6, 'rgba(255,255,255,.4)'); }
+  x.restore();
+  if (rim) { x.strokeStyle = rim; x.lineWidth = Math.max(1.5, R * 0.05); x.beginPath(); x.arc(s, s, R - 0.5, 0, TAU); x.stroke(); }
+  return [c, x, s];
+}
+const soft = (x, px, py, rad, col, a) => { const g = x.createRadialGradient(px, py, 0, px, py, rad); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.fillRect(px - rad, py - rad, rad * 2, rad * 2); };
+// plasma : taches douces claires et sombres (granulation), jamais de bord net
+const starStrip = (r, base, lite, dark, seed) => strip(r, base, 70, seed, (x, px, py, i) => soft(x, px, py, r * (0.16 + rnd(seed + i * 5) * 0.3), i % 3 ? lite : dark, i % 3 ? 0.5 : 0.42));
 
-function paint(x, tier, c, r) {
-  if (tier === 0) { Skins.drawOrb(x, H.mat(), c, c, r, CY, 0, 1.3, { gl: 0 }); return; } // l'orbe de départ porte la matière équipée
-  if (tier === 1) { // astéroïde
-    const g = x.createLinearGradient(c - r, c - r, c + r, c + r); g.addColorStop(0, '#d9c4a8'); g.addColorStop(1, '#4e4138'); x.fillStyle = g;
-    x.beginPath(); for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU, rr = r * (0.82 + rnd(i * 2.7) * 0.18); x.lineTo(c + Math.cos(a) * rr, c + Math.sin(a) * rr); } x.closePath(); x.fill();
-    for (let i = 0; i < 4; i++) blob(x, c + (rnd(i * 3) - 0.5) * r, c + (rnd(i * 5) - 0.5) * r, r * 0.16, r * 0.13, i, 'rgba(40,30,25,.4)');
-  } else if (tier === 2) { // lune
-    ball(x, c, r, '#ffffff', '#b4bccd', '#565d70'); clipC(x, c, r);
-    for (let i = 0; i < 6; i++) { const px = c + (rnd(i * 3.1) - 0.5) * r * 1.4, py = c + (rnd(i * 5.3) - 0.5) * r * 1.4, cr = r * (0.1 + rnd(i * 7) * 0.14); blob(x, px, py, cr, cr, 0, 'rgba(70,76,96,.4)'); x.strokeStyle = 'rgba(255,255,255,.3)'; x.lineWidth = 1; x.beginPath(); x.arc(px, py, cr, 0.5, 2.6); x.stroke(); }
-    shadeC(x, c, r); x.restore();
-  } else if (tier === 3) { // planète habitable
-    ball(x, c, r, '#bff0ff', '#2f7bff', '#0a1c66'); clipC(x, c, r);
-    for (let i = 0; i < 5; i++) blob(x, c + (rnd(i * 2.3) - 0.5) * r * 1.5, c + (rnd(i * 4.7) - 0.5) * r * 1.5, r * (0.2 + rnd(i) * 0.25), r * (0.14 + rnd(i * 9) * 0.16), rnd(i * 6) * 3, 'rgba(70,214,130,.85)');
-    for (let i = 0; i < 4; i++) blob(x, c + (rnd(i * 8.1) - 0.5) * r * 1.4, c + (rnd(i * 3.9) - 0.5) * r * 1.4, r * 0.42, r * 0.07, 0.25, 'rgba(255,255,255,.55)');
-    shadeC(x, c, r); x.restore(); x.strokeStyle = 'rgba(150,225,255,.7)'; x.lineWidth = Math.max(1.5, r * 0.05); x.beginPath(); x.arc(c, c, r - 1, 0, TAU); x.stroke(); gloss(x, c, r);
-  } else if (tier === 4) { // géante gazeuse et son anneau
-    const rg = () => { x.strokeStyle = 'rgba(255,232,190,.8)'; x.lineWidth = r * 0.08; };
-    rg(); x.beginPath(); x.ellipse(c, c, r * 1.22, r * 0.3, -0.35, Math.PI, TAU); x.stroke();
-    ball(x, c, r * 0.94, '#fff0cf', '#eaa055', '#6e3216'); clipC(x, c, r * 0.94);
-    for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? 'rgba(255,244,215,.3)' : 'rgba(120,52,20,.3)'; x.fillRect(c - r, c - r + i * r * 0.26 + rnd(i) * r * 0.06, 2 * r, r * (0.08 + rnd(i * 3) * 0.1)); }
-    blob(x, c + r * 0.3, c + r * 0.25, r * 0.2, r * 0.11, 0, 'rgba(200,60,40,.7)'); shadeC(x, c, r); x.restore();
-    rg(); x.beginPath(); x.ellipse(c, c, r * 1.22, r * 0.3, -0.35, 0, Math.PI); x.stroke();
-  } else if (tier === 5) { halo(x, c, r, [255, 140, 60]); ball(x, c, r, '#fff8dc', '#ff9a3d', '#b52c14'); }
-  else if (tier === 6) { // soleil : couronne
-    halo(x, c, r, [255, 220, 90], 0.75); x.fillStyle = 'rgba(255,236,150,.5)';
-    for (let i = 0; i < 14; i++) { const a = (i / 14) * TAU, l = r * (1.14 + rnd(i * 2.2) * 0.14); x.beginPath(); x.moveTo(c + Math.cos(a - 0.09) * r * 0.9, c + Math.sin(a - 0.09) * r * 0.9); x.lineTo(c + Math.cos(a) * l, c + Math.sin(a) * l); x.lineTo(c + Math.cos(a + 0.09) * r * 0.9, c + Math.sin(a + 0.09) * r * 0.9); x.fill(); }
-    ball(x, c, r, '#ffffff', '#ffe36a', '#ff971c');
-  } else if (tier === 7) { // géante rouge
-    halo(x, c, r, [255, 70, 60], 0.65); ball(x, c, r, '#ffd9b4', '#ff4a3a', '#6e0a16'); clipC(x, c, r);
-    for (let i = 0; i < 16; i++) blob(x, c + (rnd(i * 2.9) - 0.5) * r * 1.7, c + (rnd(i * 6.1) - 0.5) * r * 1.7, r * (0.1 + rnd(i) * 0.2), r * (0.08 + rnd(i * 4) * 0.14), rnd(i * 8) * 3, i % 2 ? 'rgba(255,200,120,.2)' : 'rgba(90,0,10,.22)');
-    x.restore();
-  } else if (tier === 8) { // étoile à neutrons : jets et anneaux
-    halo(x, c, r, [150, 200, 255], 0.85);
-    const g = x.createLinearGradient(c - r * 1.3, c - r * 1.3, c + r * 1.3, c + r * 1.3); g.addColorStop(0, 'rgba(180,220,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,.95)'); g.addColorStop(1, 'rgba(180,220,255,0)');
-    x.strokeStyle = g; x.lineWidth = r * 0.14; x.lineCap = 'round'; x.beginPath(); x.moveTo(c - r * 0.9, c - r * 0.9); x.lineTo(c + r * 0.9, c + r * 0.9); x.stroke();
-    ball(x, c, r * 0.86, '#ffffff', '#cfe8ff', '#4d7bff');
-    x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = Math.max(1.2, r * 0.035); x.beginPath(); x.ellipse(c, c, r * 1.12, r * 0.22, -0.78, 0, TAU); x.stroke();
-  } else { // trou noir : disque d'accrétion, horizon, lentille
-    halo(x, c, r, [170, 90, 255], 0.75);
-    const g = x.createRadialGradient(c, c, r * 0.55, c, c, r); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.2, 'rgba(255,214,120,1)'); g.addColorStop(0.55, 'rgba(255,79,216,.9)'); g.addColorStop(1, 'rgba(90,40,200,.15)');
-    x.fillStyle = g; x.beginPath(); x.arc(c, c, r, 0, TAU); x.fill();
-    x.fillStyle = '#000'; x.beginPath(); x.arc(c, c, r * 0.6, 0, TAU); x.fill();
-    x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = Math.max(1.5, r * 0.03); x.beginPath(); x.arc(c, c, r * 0.61, 0, TAU); x.stroke();
-    x.strokeStyle = 'rgba(255,200,120,.85)'; x.lineWidth = r * 0.07; x.beginPath(); x.ellipse(c, c, r * 1.2, r * 0.2, -0.3, 0, TAU); x.stroke();
+function build(tier, r) {
+  if (tier === 0) { const s = r * 1.3, [c, x] = mk(s * 2, s * 2); Skins.drawOrb(x, H.mat(), s, s, r, CY, 0, 1.3, { gl: 0 }); return { spr: c, spin: 0 }; } // l'orbe de départ porte la matière équipée
+  if (tier === 1) { // astéroïde : un caillou qui culbute
+    const s = r * 1.3, [c, x] = mk(s * 2, s * 2), g = x.createLinearGradient(s - r, s - r, s + r, s + r); g.addColorStop(0, '#dcc8ac'); g.addColorStop(1, '#473b33'); x.fillStyle = g;
+    x.beginPath(); for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU, rr = r * (0.8 + rnd(i * 2.7) * 0.2); x.lineTo(s + Math.cos(a) * rr, s + Math.sin(a) * rr); } x.closePath(); x.fill();
+    for (let i = 0; i < 4; i++) blob(x, s + (rnd(i * 3) - 0.5) * r, s + (rnd(i * 5) - 0.5) * r, r * 0.16, r * 0.13, i, 'rgba(40,30,25,.42)');
+    return { spr: c, spin: 0.5 };
   }
+  if (tier === 2) { const [o] = light(r, r); return { R: r, sp: 0.16, over: o, strip: strip(r, '#aab2c4', 16, 3, (x, px, py, i) => { const cr = r * (0.09 + rnd(i * 7) * 0.17); blob(x, px, py, cr, cr, 0, 'rgba(66,72,92,.5)'); blob(x, px - cr * 0.2, py - cr * 0.2, cr * 0.7, cr * 0.7, 0, 'rgba(120,128,148,.5)'); }) }; }
+  if (tier === 3) { // planète : continents lents, nuages plus rapides
+    const [o] = light(r, r, null, 'rgba(150,225,255,.75)');
+    return { R: r, sp: 0.2, sp2: 0.38, over: o, back: halo(r, [90, 170, 255], 0.3),
+      strip: strip(r, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e9f6ff'); g.addColorStop(0.14, '#2f86ff'); g.addColorStop(0.86, '#1d5fe0'); g.addColorStop(1, '#e9f6ff'); x.fillStyle = g; x.fillRect(0, 0, w, h); }, 15, 11, (x, px, py, i) => { py = r * 0.3 + (py / (r * 2)) * r * 1.4; blob(x, px, py, r * (0.2 + rnd(i) * 0.3), r * (0.13 + rnd(i * 9) * 0.17), rnd(i * 6) * 3, i % 4 ? '#3fcf7c' : '#d9c47a'); }),
+      strip2: strip(r, null, 12, 23, (x, px, py, i) => blob(x, px, py, r * (0.3 + rnd(i * 2) * 0.35), r * 0.07, 0.15, 'rgba(255,255,255,.6)')) };
+  }
+  if (tier === 4) { // géante gazeuse : bandes, tempêtes, anneau fixe
+    const R = r * 0.92, ring = (x, s, a0, a1) => { for (const [k, al, lw] of [[1.26, 0.85, 0.07], [1.12, 0.45, 0.04]]) { x.strokeStyle = `rgba(255,232,190,${al})`; x.lineWidth = r * lw; x.beginPath(); x.ellipse(s, s, r * k, r * k * 0.25, -0.35, a0, a1); x.stroke(); } };
+    const s = r * 1.3, [b, bx] = mk(s * 2, s * 2); ring(bx, s, Math.PI, TAU); const [o, ox] = light(r, R); ring(ox, s, 0, Math.PI);
+    return { R, sp: 0.5, over: o, back: b, still: true, strip: strip(r, (x, w, h) => { for (let i = 0; i < 9; i++) { x.fillStyle = ['#f6d9a8', '#d98a48', '#f0c088', '#b9642e', '#f8e4c0', '#cf7d3e', '#eec489', '#a9562a', '#e9b877'][i]; x.fillRect(0, (i / 9) * h, w, h / 9 + 1); } }, 22, 31, (x, px, py, i) => { py = (Math.floor((py / (r * 2)) * 9) + 0.5) * r * 2 / 9; blob(x, px, py, r * (0.2 + rnd(i * 3) * 0.3), r * 0.045, 0, i % 2 ? 'rgba(255,246,220,.5)' : 'rgba(110,46,18,.4)'); if (i === 0) blob(x, px, r * 1.25, r * 0.22, r * 0.12, 0, '#c8442c'); }) };
+  }
+  if (tier <= 7) { // étoiles : deux couches de plasma qui se croisent, halo qui respire
+    const P = { 5: ['#ff8a34', [255, 224, 150], [150, 30, 10], [150, 30, 10], [255, 140, 60], 0], 6: ['#ffcf40', [255, 255, 225], [255, 120, 20], [230, 110, 10], [255, 220, 90], 16], 7: ['#ee3d2c', [255, 180, 120], [80, 0, 12], [90, 0, 14], [255, 70, 60], 0] }[tier];
+    const [o] = light(r, r, P[3]);
+    return { R: r, sp: 0.22, sp2: -0.3, add: true, over: o, back: halo(r, P[4], 0.7, P[5]), spinB: P[5] ? 0.12 : 0, pulse: 0.045, strip: starStrip(r, P[0], P[1], P[2], tier * 7), strip2: starStrip(r, null, P[1], [255, 255, 255], tier * 13) };
+  }
+  if (tier === 8) { // étoile à neutrons : jets qui balayent, surface très rapide
+    const R = r * 0.84, s = r * 1.3, [j, jx] = mk(s * 2, s * 2), g = jx.createLinearGradient(0, s, s * 2, s); g.addColorStop(0, 'rgba(160,210,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(160,210,255,0)');
+    jx.fillStyle = g; jx.beginPath(); jx.moveTo(0, s - r * 0.02); jx.lineTo(s, s - r * 0.16); jx.lineTo(s * 2, s - r * 0.02); jx.lineTo(s * 2, s + r * 0.02); jx.lineTo(s, s + r * 0.16); jx.lineTo(0, s + r * 0.02); jx.fill();
+    const [o, ox] = light(r, R, [40, 80, 220]); ox.strokeStyle = 'rgba(255,255,255,.65)'; ox.lineWidth = Math.max(1.2, r * 0.035); ox.beginPath(); ox.ellipse(s, s, r * 1.1, r * 0.2, 0.5, 0, TAU); ox.stroke();
+    return { R, sp: 1.6, sp2: -1.1, add: true, over: o, back: halo(r, [150, 200, 255], 0.85), pulse: 0.07, disc: j, spinD: 2.4, strip: starStrip(r, '#a9d0ff', [255, 255, 255], [60, 100, 255], 71), strip2: starStrip(r, null, [255, 255, 255], [140, 180, 255], 83) };
+  }
+  // trou noir : le disque d'accrétion tourne autour d'un horizon immobile
+  const s = r * 1.3, [d, dx] = mk(s * 2, s * 2), g = dx.createRadialGradient(s, s, r * 0.55, s, s, r); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.2, 'rgba(255,214,120,1)'); g.addColorStop(0.55, 'rgba(255,79,216,.9)'); g.addColorStop(1, 'rgba(90,40,200,.1)');
+  dx.fillStyle = g; dx.beginPath(); dx.arc(s, s, r, 0, TAU); dx.fill(); dx.lineCap = 'round';
+  for (let i = 0; i < 34; i++) { const a = rnd(i * 3.7) * TAU, rad = r * (0.64 + rnd(i * 5.3) * 0.34); dx.strokeStyle = i % 3 ? `rgba(255,255,255,${0.2 + rnd(i) * 0.45})` : `rgba(60,10,90,${0.3 + rnd(i) * 0.3})`; dx.lineWidth = r * (0.012 + rnd(i * 2) * 0.03); dx.beginPath(); dx.arc(s, s, rad, a, a + 0.4 + rnd(i * 8) * 1.3); dx.stroke(); }
+  const [o, ox] = mk(s * 2, s * 2); ox.fillStyle = '#000'; ox.beginPath(); ox.arc(s, s, r * 0.6, 0, TAU); ox.fill();
+  ox.strokeStyle = 'rgba(255,255,255,.95)'; ox.lineWidth = Math.max(1.5, r * 0.03); ox.beginPath(); ox.arc(s, s, r * 0.61, 0, TAU); ox.stroke();
+  ox.strokeStyle = 'rgba(255,210,140,.9)'; ox.lineWidth = r * 0.06; ox.beginPath(); ox.ellipse(s, s, r * 1.14, r * 0.16, -0.3, 0, Math.PI); ox.stroke();
+  return { over: o, back: halo(r, [170, 90, 255], 0.8), pulse: 0.06, disc: d, spinD: 0.9 };
 }
 function sprite(tier) {
   const key = H.mat() + ':' + B.u.toFixed(2) + ':' + DPR;
   if (key !== spriteKey) { sprites.clear(); spriteKey = key; }
   let s = sprites.get(tier);
-  if (!s) {
-    const r = F.TIERS[tier].r * B.u, half = Math.ceil(r * 1.3 * DPR);
-    s = document.createElement('canvas'); s.width = s.height = half * 2;
-    const x = s.getContext('2d'); x.scale(DPR, DPR); paint(x, tier, half / DPR, r);
-    s.half = half / DPR; sprites.set(tier, s);
-  }
+  if (!s) { const r = F.TIERS[tier].r * B.u; s = build(tier, r); s.h = r * 1.3; sprites.set(tier, s); }
   return s;
 }
 function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
   if (it.k === 'c') {
-    const s = sprite(it.tier), star = it.tier >= 5, k = sc * (u / B.u) * (star ? 1 + 0.018 * Math.sin(T * 3 + it.tier) : 1), h = s.half * k;
-    if (it.tier === F.MAX_TIER) ang += T * 0.7; // le disque d'accrétion tourne
-    if (ang) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.drawImage(s, -h, -h, h * 2, h * 2); ctx.restore(); } else ctx.drawImage(s, x - h, y - h, h * 2, h * 2);
+    const s = sprite(it.tier), h = s.h, img = (c) => ctx.drawImage(c, -h, -h, h * 2, h * 2);
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc * u / B.u, sc * u / B.u);
+    if (s.spr) { ctx.rotate(ang + T * s.spin); img(s.spr); ctx.restore(); return; }
+    if (s.back) { const p = 1 + (s.pulse || 0) * Math.sin(T * 2.3 + it.tier); ctx.save(); if (s.spinB) ctx.rotate(T * s.spinB); if (!s.still) ctx.scale(p, p); img(s.back); ctx.restore(); }
+    if (s.disc) { ctx.save(); ctx.rotate(T * s.spinD + ang); img(s.disc); ctx.restore(); }
+    if (s.strip) {
+      const R = s.R, w = (h / 1.3) * 4, lay = (c, sp) => { const o = (((T * sp + ang) * R) % w + w) % w; ctx.drawImage(c, -R - o, -w / 4, w, w / 2); ctx.drawImage(c, -R - o + w, -w / 4, w, w / 2); };
+      ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.clip(); lay(s.strip, s.sp);
+      if (s.strip2) { if (s.add) ctx.globalCompositeOperation = 'lighter'; lay(s.strip2, s.sp2); }
+      ctx.restore();
+    }
+    if (s.over) img(s.over);
+    ctx.restore();
   } else if (it.k === 'r') { // débris
     const r = F.R_RUBBLE * u * sc; ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
     ctx.fillStyle = '#4b4f63'; ctx.beginPath(); for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU, rr = r * (0.82 + rnd(i * 3.3) * 0.26); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill();
@@ -298,8 +320,6 @@ const CSS = `
 .fg-q .q i{flex:none;width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}.fg-q .q i::after{content:"";position:absolute;inset:0;width:var(--p);border-radius:3px;background:linear-gradient(90deg,#4df3ff,#ff4fd8)}
 .fg-q .q.ok{color:#5dffc0}.fg-q .q.ok i::after{background:#5dffc0}.fg-q .q span{flex:1}.fg-q .q em{font-style:normal;color:rgba(255,255,255,.55);font-size:12px;white-space:nowrap}
 #mn-lad{font-size:11.5px;line-height:1.6;color:rgba(255,255,255,.6)}
-#s-title .hm-casc{align-self:center;display:flex;gap:8px;align-items:baseline;height:34px;padding:0 16px;border-radius:17px;font-size:13px;font-weight:600;color:var(--dim);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);margin-top:2px}
-#s-title .hm-casc small{font-size:12px;font-weight:500;opacity:.8}
 `;
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>

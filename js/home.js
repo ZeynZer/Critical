@@ -9,6 +9,7 @@ const ICONS = {
   levels: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/>',
   atelier: '<path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 013 3L8 18.5z"/><path d="M14.5 6l3.5 3.5"/>',
   coll: '<path d="M7 4h10l3.5 5L12 20.5 3.5 9z"/><path d="M3.5 9h17M9.5 9L12 20.5M14.5 9L12 20.5M7 4l2.5 5M17 4l-2.5 5"/>',
+  casc: '<path d="M6 3v6M12 3v11M18 3v4"/><circle cx="6" cy="13" r="3"/><circle cx="12" cy="18.5" r="3"/><circle cx="18" cy="11" r="3"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
 };
 const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
@@ -76,6 +77,8 @@ const CSS = `
 .hm-ring{flex:none;position:relative;width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--c,#9b8cff) 0 var(--p,0%),rgba(255,255,255,.14) 0);display:grid;place-items:center;filter:drop-shadow(0 0 10px var(--c,#9b8cff))}
 .hm-ring::before{content:'';position:absolute;inset:5px;border-radius:50%;background:rgba(14,16,40,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
 .hm-ring b{position:relative;font:900 17px/1 var(--disp)}
+.hm-core,.hm-tile .hm-ic{flex:none}
+.hm-cascb{height:68px;background:linear-gradient(145deg,rgba(255,194,71,.3),rgba(255,255,255,.06) 45%,rgba(255,79,216,.2));border-color:rgba(255,220,150,.42)}.hm-cascb .hm-ic{flex:none;margin-left:6px;filter:drop-shadow(0 0 8px rgba(255,194,71,.8))}
 .hm-row{display:flex;gap:14px;width:100%}
 .hm-tile{flex:1;min-width:0;height:112px;border-radius:28px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start}
 .hm-tile .hm-t{display:block;font:800 14px/1.1 var(--disp);letter-spacing:.03em;text-transform:uppercase}
@@ -98,6 +101,7 @@ const CSS = `
 .hm-di small{display:none}
 .hm-di:active{background:rgba(255,255,255,.26);transform:scale(.9)}
 @media (hover:hover){.hm-di:hover{background:rgba(255,255,255,.14)}}
+@media (max-height:700px){.hm-hero{height:96px!important}.hm-tile{height:86px!important}.hm-camp{height:62px!important}.hm-cascb{height:56px!important}#s-title.hm .tag{display:none}#s-title.hm .logo{margin-bottom:8px}#s-title.hm .menu{gap:9px!important}#b-quests{height:40px!important}}
 @media (max-height:700px){.hm-hero{height:112px}.hm-tile{height:98px;padding:13px}.hm-camp{height:74px}#s-title.hm .menu{gap:11px}#s-title.hm .tag{margin-bottom:8px}.hm-orb{width:80px;height:80px}}
 @media (prefers-reduced-motion:reduce){.hm-blob,.hm-gem,.hm-hero,.hm-hero::before,.hm-orb *,#s-title.hm .logo{animation:none!important}}
 `;
@@ -206,8 +210,12 @@ export function init() {
   if (daily) { tile(daily, ico(ICONS.cal), '.42s', '3s'); live = make('span', 'hm-live'); daily.appendChild(live); row.appendChild(daily); }
   if (chest) { tile(chest, '<span class="hm-core"></span>', '.5s', '4s'); row.appendChild(chest); }
   menu.appendChild(row);
-  const casc = $('#b-endless'); // Cascade : lien discret sous les tuiles
-  if (casc && casc !== hero) { const cs = $('#b-endless-s', casc) || make('small'); cs.id = 'b-endless-s'; casc.className = 'hm-casc'; casc.textContent = ''; casc.append(make('span', '', 'Cascade · mode sans fin'), cs); menu.appendChild(casc); }
+  const casc = $('#b-endless'); // Cascade : un vrai bouton, sous les tuiles
+  if (casc && casc !== hero) {
+    reskin(casc, ['gl', 'hm-camp', 'hm-cascb', 'hm-in']); casc.style.setProperty('--e', '.56s'); casc.style.setProperty('--d', '2.5s');
+    const t = titleOf(casc), cs = $('#b-endless-s', casc), tx = make('span', 'hm-tx');
+    tx.append(...grab(t, cs)); casc.textContent = ''; casc.insertAdjacentHTML('afterbegin', ico(ICONS.casc)); casc.append(tx); casc.insertAdjacentHTML('beforeend', CHEV); menu.appendChild(casc);
+  }
 
   // dock flottant : Niveaux · Atelier · Collection · Code
   const dock = make('nav', 'gl hm-dock hm-in'); dock.style.setProperty('--e', '.6s'); dock.style.setProperty('--d', '5s'); dock.setAttribute('aria-label', 'Navigation');
