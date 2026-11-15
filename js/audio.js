@@ -121,6 +121,9 @@ export function star(i) { tone(mtof(81 + i * 4), 'sine', 0.6, 0.22); tone(mtof(9
 
 // Musique : nappes lentes + notes éparses, très discrète.
 const CHORDS = [[57, 60, 64, 67], [53, 57, 60, 64], [48, 55, 59, 64], [55, 59, 62, 65]];
+// Intensité de la musique (0 calme → 1 plein) : nappes plus brillantes, notes plus denses, basse qui pulse
+let mood = 0;
+export const setMood = (v) => { mood = Math.max(0, Math.min(1, v)); };
 function startMusic() {
   if (musTimer || !ctx || ctx.state !== 'running') return;
   sess = ctx.createGain(); sess.gain.value = 1; sess.connect(mus);
@@ -132,12 +135,13 @@ function startMusic() {
       for (const det of [-7, 7]) {
         const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
         o.type = 'sawtooth'; o.frequency.value = mtof(m - 12); o.detune.value = det;
-        f.type = 'lowpass'; f.frequency.value = 520 + k * 80;
+        f.type = 'lowpass'; f.frequency.value = 520 + k * 80 + mood * 900;
         g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.018, t + 2.2); g.gain.linearRampToValueAtTime(0.0001, t + 7.6);
         o.connect(f); f.connect(g); g.connect(bus); o.start(t); o.stop(t + 8);
       }
     });
-    for (let k = 0; k < 3; k++) {
+    if (mood > 0.3) for (let k = 0; k < 8; k++) { const o = ctx.createOscillator(), g = ctx.createGain(), at = t + k * 0.875; o.type = 'sine'; o.frequency.value = mtof(ch[0] - 24); g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.09 * mood, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.6); o.connect(g); g.connect(bus); o.start(at); o.stop(at + 0.7); }
+    for (let k = 0, n = 3 + Math.round(mood * 6); k < n; k++) {
       const m = ch[(Math.random() * ch.length) | 0] + 12, at = t + 1 + Math.random() * 5;
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = 'sine'; o.frequency.value = mtof(m);

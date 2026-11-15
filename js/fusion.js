@@ -12,6 +12,10 @@ export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
 export const R_RUBBLE = 0.5, R_SPECIAL = 0.6;
 export const STRATA = ['Ceinture', 'Nébuleuse', 'Amas stellaire', 'Pulsar', 'Supergéante', 'Quasar', 'Grand Vide', 'Horizon', 'Origine']; // secteurs traversés
 export const need = (depth) => Math.min(260, 30 + depth * 24);
+// Chaque secteur change une règle : g = gravité, pull = attraction des étoiles, wind = vent latéral (alt : il s'inverse), inset = parois resserrées
+const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { pull: 2, n: 'Attraction des étoiles doublée' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
+  { wind: 4, n: 'Vent du quasar' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, wind: 4, alt: 1, n: 'Chaos originel' }];
+export const mod = (d) => ({ g: 1, pull: 1, wind: 0, alt: 0, inset: 0, n: '', ...MODS[d % MODS.length] });
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : b.k === 'r' ? R_RUBBLE : R_SPECIAL);
 
 function nextItem(G) {
@@ -26,14 +30,14 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0) {
   const G = {
     seed, rnd: mulberry32(seed), bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [],
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0,
   };
   G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
 }
 
 const itemR = (it) => (it.k === 'c' ? RAD[it.tier] : R_SPECIAL);
-export const clampX = (it, x) => Math.max(itemR(it) + 0.02, Math.min(W - itemR(it) - 0.02, x));
+export const clampX = (it, x, inset = 0) => Math.max(inset + itemR(it) + 0.02, Math.min(W - inset - itemR(it) - 0.02, x));
 
 function add(G, k, tier, x, y, vx = 0, vy = 0) {
   const b = { id: G.nid++, k, tier, x, y, vx, vy, r: 0, ang: 0, av: 0, age: 0, hit: false, dead: false };
@@ -43,7 +47,7 @@ function add(G, k, tier, x, y, vx = 0, vy = 0) {
 export function drop(G, x) {
   if (G.over || G.cool > 0) return false;
   const it = G.cur;
-  add(G, it.k, it.tier, clampX(it, x), DROP_Y).fresh = true;
+  add(G, it.k, it.tier, clampX(it, x, G.inset), DROP_Y).fresh = true;
   G.cur = G.queue.shift(); G.queue.push(nextItem(G));
   G.cool = COOLDOWN; G.swapped = false; G.drops++;
   return true;
@@ -89,6 +93,7 @@ function fuse(G, a, b) {
   n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(HT - n.r, n.y); n.hit = true; n.age = 0.5;
   const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8); // multiplicateur plafonné : le score reste lisible G.score += pts;
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
+  if (tier === 6 && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
   clearRubble(G, x, y, n.r + 0.45);
   G.ev.push({ t: 'merge', x, y, tier: tier + 1, chain: G.chain, pts, id: n.id });
@@ -109,7 +114,7 @@ function explode(G, b) {
 }
 
 function pierce(G) {
-  G.drill = 0; G.depth++;
+  G.drill = 0; G.depth++; G.mod = mod(G.depth);
   let n = 0;
   for (const b of G.bodies) {
     if (b.dead) continue;
@@ -138,6 +143,12 @@ function collide(G) {
       if (a.k === 'b' || b.k === 'b') { (a.k === 'b' ? a : b).fuse = true; }
       if (a.k === 'j' && b.k === 'c') { a.k = 'c'; a.tier = b.tier; a.r = b.r; G.ev.push({ t: 'morph', x: a.x, y: a.y, tier: b.tier }); }
       else if (b.k === 'j' && a.k === 'c') { b.k = 'c'; b.tier = a.tier; b.r = a.r; G.ev.push({ t: 'morph', x: b.x, y: b.y, tier: a.tier }); }
+      const hole = a.k === 'c' && a.tier === MAX_TIER ? a : b.k === 'c' && b.tier === MAX_TIER ? b : null, o = hole === a ? b : a;
+      if (hole && !(hole.et > 0) && (o.k === 'r' || (o.k === 'c' && o.tier <= 1))) { // le trou noir avale un petit voisin de temps en temps
+        o.dead = true; hole.et = 3; G.score += 50; G.eaten++; G.ev.push({ t: 'swallow', x: o.x, y: o.y, hx: hole.x, hy: hole.y });
+        if (G.eaten === 5) G.ev.push({ t: 'secret', id: 'festin', x: hole.x, y: hole.y });
+        continue;
+      }
       if (!merge && a.k === 'c' && b.k === 'c' && a.tier === b.tier) { merge = [a, b]; continue; }
       const ma = a.r * a.r, mb = b.r * b.r, ia = mb / (ma + mb), ib = ma / (ma + mb), pen = (rr - d) * 0.8;
       a.x -= nx * pen * ia; a.y -= ny * pen * ia; b.x += nx * pen * ib; b.y += ny * pen * ib;
@@ -153,8 +164,9 @@ function collide(G) {
 }
 
 function walls(G, b) {
-  if (b.x < b.r) { b.x = b.r; if (b.vx < 0) b.vx *= -REST; }
-  else if (b.x > W - b.r) { b.x = W - b.r; if (b.vx > 0) b.vx *= -REST; }
+  const L = G.inset + b.r, R = W - G.inset - b.r;
+  if (b.x < L) { b.x = L; if (b.vx < 0) b.vx *= -REST; }
+  else if (b.x > R) { b.x = R; if (b.vx > 0) b.vx *= -REST; }
   if (b.y > HT - b.r) {
     b.y = HT - b.r;
     if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: HT, v: b.vy }); if (b.k === 'b') b.fuse = true; }
@@ -163,9 +175,37 @@ function walls(G, b) {
   }
 }
 
+// Accélération subie par un point : gravité du secteur, vent, attraction des étoiles plus massives (tier = rang du corps, -1 sinon)
+function accel(G, x, y, tier, self, out, rad) {
+  const M = G.mod; let ax = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1), ay = GRAV * M.g;
+  for (const a of G.bodies) {
+    if (a === self || a.dead || a.k !== 'c' || a.tier < 5 || a.tier <= tier) continue;
+    const dx = a.x - x, dy = a.y - y, d = Math.hypot(dx, dy), R = a.r * 3.5 + 2;
+    if (d >= R || d < 1e-3) continue;
+    const f = [20, 30, 40, 55, 80][a.tier - 5] * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
+    ax += (dx / d) * f; ay += (dy / d) * f;
+  }
+  out[0] = ax; out[1] = ay;
+}
+const ACC = [0, 0];
+// Trajectoire prévue du prochain lâcher (pour la visée) : la gravité des étoiles la courbe
+export function trace(G, x0) {
+  const it = G.cur, r = itemR(it), pts = []; let x = clampX(it, x0, G.inset), y = DROP_Y, vx = 0, vy = 0;
+  for (let i = 0; i < 150; i++) {
+    accel(G, x, y, it.tier, null, ACC, r); vx += ACC[0] / 60; vy += ACC[1] / 60; x += vx / 60; y += vy / 60;
+    if (x < G.inset + r) { x = G.inset + r; vx = 0; } else if (x > W - G.inset - r) { x = W - G.inset - r; vx = 0; }
+    if (i % 2 === 0) pts.push(x, y);
+    if (y > HT - r) break;
+    let hit = false; for (const b of G.bodies) if (Math.hypot(b.x - x, b.y - y) < b.r + r) { hit = true; break; }
+    if (hit) break;
+  }
+  return pts;
+}
+
 function sub(G) {
   const dt = STEP; G.t += dt;
   if (G.cool > 0) G.cool -= dt;
+  G.inset += (G.mod.inset - G.inset) * Math.min(1, dt * 1.5);
   if (G.chainT > 0) { G.chainT -= dt; if (G.chainT <= 0) { if (G.chain >= 3) G.ev.push({ t: 'chainEnd', chain: G.chain }); G.chain = 0; } }
   for (let i = G.pend.length - 1; i >= 0; i--) {
     const p = G.pend[i]; if (p.at > G.t) continue;
@@ -173,7 +213,10 @@ function sub(G) {
     if (p.t === 'pierce') pierce(G); else { const r = add(G, 'r', -1, p.x, -R_RUBBLE); r.vy = 4; G.ev.push({ t: 'rubble', x: p.x }); }
   }
   for (const b of G.bodies) {
-    b.age += dt; b.vy += GRAV * dt;
+    b.age += dt; accel(G, b.x, b.y, b.k === 'c' ? b.tier : -1, b, ACC, b.r); b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
+    if (b.k === 'c' && b.tier === 7) b.r = RAD[7] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
+    else if (b.k === 'c' && b.tier === 8) { b.pt = (b.pt || 0) + dt; if (b.pt >= 4) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.7, 8); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r }); } } // l'étoile à neutrons repousse par impulsions
+    else if (b.et > 0) b.et -= dt;
     const sp = Math.hypot(b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
     b.x += b.vx * dt; b.y += b.vy * dt; b.vx *= 0.9992; b.ang += b.av * dt; b.av *= 0.985;
   }
