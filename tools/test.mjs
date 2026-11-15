@@ -80,3 +80,12 @@ import { mulberry32 } from '../js/gen.js';
   assert.ok(Math.abs(F.GALAXY.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'probabilités des galaxies = 100 %');
   console.log('physique sous pression OK (déplacement max', mv.toFixed(4) + ')');
 }
+{ // sauvegarde/reprise et rejeu : une partie sérialisée en JSON continue à l'identique, et son journal redonne le même score
+  const r = mulberry32(77), a = F.newGame(123); let b = null;
+  for (let i = 0; i < 120 && !a.over; i++) { if (i % 9 === 4) F.swapHold(a); F.drop(a, r() * F.W); for (let k = 0; k < 30; k++) F.tick(a, 1 / 60 + (k % 3) * 0.004); a.ev.length = 0; if (i === 60) b = JSON.parse(JSON.stringify(a)); }
+  const r2 = mulberry32(77); for (let i = 0; i < 61; i++) r2(); // même suite de positions pour la copie
+  for (let i = 61; i < 120 && !b.over; i++) { if (i % 9 === 4) F.swapHold(b); F.drop(b, r2() * F.W); for (let k = 0; k < 30; k++) F.tick(b, 1 / 60 + (k % 3) * 0.004); b.ev.length = 0; }
+  assert.equal(b.score, a.score, 'la partie reprise diverge'); assert.equal(b.n, a.n);
+  const c = F.replay(123, a.log, a.n); assert.equal(c.score, a.score, 'le rejeu ne redonne pas le score'); assert.equal(c.depth, a.depth);
+  console.log('reprise et rejeu OK (score', a.score + ',', a.log.length / 2, 'actions)');
+}

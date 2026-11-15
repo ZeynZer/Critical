@@ -11,6 +11,7 @@ import * as INTRO from './intro.js';
 import * as DAILY from './daily.js';
 import * as MINE from './mine.js';
 import * as QS from './quests.js';
+import * as RANK from './rank.js';
 import * as Skins from './skins.js';
 
 const $ = (s) => document.querySelector(s);
@@ -598,11 +599,10 @@ function playEndless() {
   } else startEndless();
 }
 
-let fN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   if (CH.busy() || ED.busy() || INTRO.busy() || MINE.busy()) { last = now; return; }
-  if (G.mode === 'title' && (fN++ & 1)) return; // derrière l'accueil, la démo tourne à demi-cadence : moitié moins de rendu, même aspect // ouverture d'un noyau : on économise le rendu du jeu
+  if (G.mode === 'title' || G.mode === 'levels') { last = now; return; } // l'accueil et les niveaux ont leur propre décor opaque : inutile de dessiner le jeu derrière // ouverture d'un noyau : on économise le rendu du jeu
   const dt = Math.min(0.05, (now - last) / 1000); last = now; G.clock += dt;
   CH.tick(dt);
   update(dt);
@@ -785,7 +785,9 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
 ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom, mat: () => CH.matOf() });
-MINE.init({ vib, toast: (m) => toast(m), mat: () => CH.matOf(), col: () => COL[1], boom: (n, api, x, y, col, cs) => CH.boom(n, api, x, y, col, cs), today: () => todayStr(), grant: (g) => CH.grant(g), track: QS.track, quests: QS.html });
+MINE.init({ vib, toast: (m) => toast(m), mat: () => CH.matOf(), col: () => COL[1], boom: (n, api, x, y, col, cs) => CH.boom(n, api, x, y, col, cs), today: () => todayStr(), submit: RANK.submit, rank: RANK.open, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready, grant: (g) => CH.grant(g), track: QS.track, quests: QS.html });
+RANK.init({ toast: (m) => toast(m), vib, today: todayStr });
+RANK.whenNamed(MINE.rankLine);
 HOME.init();
 QS.init({ today: todayStr, grant: CH.grant, toast: (m) => toast(m), vib });
 INTRO.init({ vib, today: () => todayStr() });

@@ -3,7 +3,6 @@
 // (orbe → astéroïde → lune → planète → … → trou noir). Chaque fusion charge la jauge de saut ; jauge pleine = saut
 // vers le secteur suivant : l'onde vaporise les petits astres et les débris, puis de nouveaux débris arrivent.
 // Unités : largeur du puits = 10, y vers le bas, sol à y = HT.
-import { mulberry32 } from './gen.js';
 
 export const W = 10, HT = 14.5, LINE = 2.7, DROP_Y = 1.35, MAX_TIER = 12;
 // Rangs : 0 poussière · 1 orbe · 2 astéroïde · 3 lune · 4 planète · 5 géante gazeuse · 6 naine orange · 7 soleil · 8 géante rouge · 9 étoile à neutrons · 10 trou noir · 11 quasar · 12 galaxie
@@ -16,26 +15,28 @@ const SLOP = 0.012; // chevauchement toléré : sans lui, la correction de posit
 const STEP = 1 / 120, GRAV = 34, REST = 0.12, CHAIN_WINDOW = 1.0, DANGER_TIME = 2.6, COOLDOWN = 0.3;
 const RAD = [0.3, 0.42, 0.55, 0.68, 0.88, 1.08, 1.28, 1.5, 1.72, 1.94, 2.18, 2.42, 2.7];
 export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
-export const R_RUBBLE = 0.5, R_SPECIAL = 0.6;
+export const R_SPECIAL = 0.6;
 export const STRATA = ['Ceinture', 'Nébuleuse', 'Amas stellaire', 'Pulsar', 'Supergéante', 'Quasar', 'Grand Vide', 'Horizon', 'Origine']; // secteurs traversés
 export const need = (depth) => Math.min(260, 30 + depth * 24);
 // Chaque secteur change une règle : g = gravité, pull = attraction des étoiles, wind = vent latéral (alt : il s'inverse), inset = parois resserrées
 const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { pull: 2, n: 'Attraction doublée' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
   { wind: 4, n: 'Vent du quasar' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, wind: 4, alt: 1, n: 'Chaos originel' }];
 export const mod = (d) => ({ g: 1, pull: 1, wind: 0, alt: 0, inset: 0, n: '', ...MODS[d % MODS.length] });
-export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : b.k === 'r' ? R_RUBBLE : R_SPECIAL);
+export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
+// mulberry32 dont l'état vit dans G.rs : la partie entière tient dans un objet JSON (sauvegarde, reprise, rejeu)
+function rnd(G) { let t = (G.rs = (G.rs + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
 function nextItem(G) {
   const w = G.depth < 3 ? [5, 5, 3, 2] : G.depth < 6 ? [4, 5, 4, 2, 1] : [3, 4, 4, 3, 2];
   let tot = 0; for (const v of w) tot += v;
-  let x = G.rnd() * tot;
+  let x = rnd(G) * tot;
   for (let i = 0; i < w.length; i++) if ((x -= w[i]) < 0) return { k: 'c', tier: i };
   return { k: 'c', tier: 0 };
 }
 
 export function newGame(seed = (Math.random() * 2 ** 32) >>> 0) {
   const G = {
-    seed, rnd: mulberry32(seed), bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
+    seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, cool: 0, over: false,
     cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0,
   };
@@ -54,15 +55,16 @@ function add(G, k, tier, x, y, vx = 0, vy = 0) {
 export function drop(G, x) {
   if (G.over || G.cool > 0) return false;
   const it = G.cur;
-  add(G, it.k, it.tier, clampX(it, x, G.inset), DROP_Y).fresh = true;
+  const dx = Math.round(clampX(it, x, G.inset) * 1000) / 1000; // position arrondie au millième : c'est exactement ce que le journal enregistre
+  add(G, it.k, it.tier, dx, DROP_Y).fresh = true;
   G.cur = G.queue.shift(); G.queue.push(nextItem(G));
-  G.cool = COOLDOWN; G.swapped = false; G.drops++;
+  G.cool = COOLDOWN; G.swapped = false; G.drops++; G.log.push(G.n, Math.round(dx * 1000)); // journal (pas de calcul, position) : permet de rejouer la partie à l'identique
   return true;
 }
 export function swapHold(G) {
   if (G.over || G.swapped) return false;
   if (G.hold) { const h = G.hold; G.hold = G.cur; G.cur = h; } else { G.hold = G.cur; G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
-  G.swapped = true; return true;
+  G.swapped = true; G.log.push(G.n, -1); return true;
 }
 
 const gift = (G, k) => { G.queue.unshift({ k, tier: -1 }); G.queue.length = 2; G.ev.push({ t: 'gift', k }); };
@@ -73,9 +75,6 @@ function kick(G, x, y, rad, force) {
     const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy) || 1e-6;
     if (d < rad) { const f = force * (1 - d / rad); b.vx += (dx / d) * f; b.vy += (dy / d) * f; }
   }
-}
-function clearRubble(G, x, y, rad) {
-  for (const b of G.bodies) if (!b.dead && b.k === 'r' && Math.hypot(b.x - x, b.y - y) < rad + b.r) { b.dead = true; G.score += 15; G.ev.push({ t: 'crumble', x: b.x, y: b.y }); }
 }
 function charge(G, n) {
   G.drill += n;
@@ -91,20 +90,19 @@ function fuse(G, a, b) {
   const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2, tier = a.tier;
   if (tier >= MAX_TIER) { // deux noyaux ultimes : supernova
     const pts = 5000 * Math.min(G.chain, 8); G.score += pts;
-    kick(G, x, y, 7, 16); clearRubble(G, x, y, 99);
+    kick(G, x, y, 7, 16);
     G.ev.push({ t: 'nova', x, y, chain: G.chain, pts });
     charge(G, need(G.depth));
     return;
   }
   const n = add(G, 'c', tier + 1, x, y, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2);
   n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(HT - n.r, n.y); n.hit = true; n.age = 0.5;
-  if (tier + 1 === MAX_TIER) { let x0 = G.rnd(), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
-  else if (RARE[tier + 1] && G.rnd() < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
+  if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
+  else if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
   const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v ? 3 : 1); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
   if (tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
-  clearRubble(G, x, y, n.r + 0.45);
   G.ev.push({ t: 'merge', x, y, tier: tier + 1, chain: G.chain, pts, id: n.id });
   charge(G, tier + 1 + (G.chain - 1));
   if (G.chain === 5) gift(G, 'b'); // belle chaîne : une charge explosive offerte
@@ -117,7 +115,6 @@ function explode(G, b) {
     const d = Math.hypot(o.x - b.x, o.y - b.y);
     if (o.k === 'c' && o.tier <= 3 && d < 2.3 + o.r) { o.dead = true; G.score += TIERS[o.tier].pts; G.ev.push({ t: 'vapor', x: o.x, y: o.y, tier: o.tier }); }
   }
-  clearRubble(G, b.x, b.y, 3);
   kick(G, b.x, b.y, 5, 13);
   G.ev.push({ t: 'boom', x: b.x, y: b.y });
 }
@@ -127,14 +124,12 @@ function pierce(G) {
   let n = 0;
   for (const b of G.bodies) {
     if (b.dead) continue;
-    if (b.k === 'r' || (b.k === 'c' && b.tier <= 2)) { b.dead = true; n++; G.score += b.k === 'c' ? TIERS[b.tier].pts * 2 : 15; G.ev.push({ t: 'vapor', x: b.x, y: b.y, tier: b.k === 'c' ? b.tier : -1 }); }
-    else b.vy -= 7 + G.rnd() * 3; // le souffle soulève tout : nouvelles rencontres possibles
+    if (b.k === 'c' && b.tier <= 2) { b.dead = true; n++; G.score += TIERS[b.tier].pts * 2; G.ev.push({ t: 'vapor', x: b.x, y: b.y, tier: b.tier }); }
+    else b.vy -= 7 + rnd(G) * 3; // le souffle soulève tout : nouvelles rencontres possibles
   }
   G.score += 500 * G.depth;
   G.ev.push({ t: 'pierce', depth: G.depth, cleared: n, pts: 500 * G.depth });
   gift(G, 'j');
-  const k = Math.min(6, G.depth);
-  for (let i = 0; i < k; i++) G.pend.push({ t: 'rubble', at: G.t + 1.5 + i * 0.28, x: R_RUBBLE + G.rnd() * (W - 2 * R_RUBBLE) });
 }
 
 function collide(G) {
@@ -153,7 +148,7 @@ function collide(G) {
       if (a.k === 'j' && b.k === 'c') { a.k = 'c'; a.tier = b.tier; a.r = b.r; G.ev.push({ t: 'morph', x: a.x, y: a.y, tier: b.tier }); }
       else if (b.k === 'j' && a.k === 'c') { b.k = 'c'; b.tier = a.tier; b.r = a.r; G.ev.push({ t: 'morph', x: b.x, y: b.y, tier: a.tier }); }
       const hole = a.k === 'c' && a.tier === HOLE ? a : b.k === 'c' && b.tier === HOLE ? b : null, o = hole === a ? b : a;
-      if (hole && !(hole.et > 0) && (o.k === 'r' || (o.k === 'c' && o.tier <= 1))) { // le trou noir avale un petit voisin de temps en temps
+      if (hole && !(hole.et > 0) && o.k === 'c' && o.tier <= 1) { // le trou noir avale un petit voisin de temps en temps
         o.dead = true; hole.et = 3; G.score += 50; G.eaten++; G.ev.push({ t: 'swallow', x: o.x, y: o.y, hx: hole.x, hy: hole.y });
         if (G.eaten === 5) G.ev.push({ t: 'secret', id: 'festin', x: hole.x, y: hole.y });
         continue;
@@ -185,16 +180,16 @@ function walls(G, b) {
 }
 
 // Accélération subie par un point : gravité du secteur, vent, attraction des étoiles plus massives (tier = rang du corps, -1 sinon)
-// Seuls l'étoile à neutrons et le trou noir courbent l'espace : on les liste une fois par pas au lieu de parcourir tous les astres pour chaque astre
+// Seuls le trou noir et les rangs au-dessus (quasar, galaxie) courbent l'espace : on les liste une fois par pas au lieu de parcourir tous les astres pour chaque astre
 const ATT = [];
-function attractors(G) { ATT.length = 0; for (const a of G.bodies) if (a.k === 'c' && (a.tier === NEUTRON || a.tier === HOLE)) ATT.push(a); }
+function attractors(G) { ATT.length = 0; for (const a of G.bodies) if (a.k === 'c' && a.tier >= HOLE) ATT.push(a); }
 function accel(G, x, y, tier, self, out, rad) {
   const M = G.mod; let ax = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1), ay = GRAV * M.g;
   for (const a of ATT) {
     if (a === self || a.dead || a.tier <= tier) continue;
     const dx = a.x - x, dy = a.y - y, d = Math.hypot(dx, dy), R = a.r * 3.5 + 2;
     if (d >= R || d < 1e-3) continue;
-    const f = (a.tier === HOLE ? 80 : 50) * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
+    const f = 80 * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
     ax += (dx / d) * f; ay += (dy / d) * f;
   }
   out[0] = ax; out[1] = ay;
@@ -215,14 +210,14 @@ export function trace(G, x0) {
 }
 
 function sub(G) {
-  const dt = STEP; G.t += dt;
+  const dt = STEP; G.t += dt; G.n++;
   if (G.cool > 0) G.cool -= dt;
   G.inset += (G.mod.inset - G.inset) * Math.min(1, dt * 1.5);
   if (G.chainT > 0) { G.chainT -= dt; if (G.chainT <= 0) { if (G.chain >= 3) G.ev.push({ t: 'chainEnd', chain: G.chain }); G.chain = 0; } }
   for (let i = G.pend.length - 1; i >= 0; i--) {
     const p = G.pend[i]; if (p.at > G.t) continue;
     G.pend.splice(i, 1);
-    if (p.t === 'pierce') pierce(G); else { const r = add(G, 'r', -1, p.x, -R_RUBBLE); r.vy = 4; G.ev.push({ t: 'rubble', x: p.x }); }
+    pierce(G);
   }
   attractors(G);
   for (const b of G.bodies) {
@@ -259,4 +254,16 @@ export function tick(G, dt) {
   if (G.over) return;
   G.acc += Math.min(dt, 0.05);
   while (G.acc >= STEP && !G.over) { G.acc -= STEP; sub(G); }
+}
+
+// Rejoue une partie depuis sa graine et son journal jusqu'au pas `end` : même moteur, même résultat.
+// Sert à vérifier un score (côté serveur plus tard) : un score qui ne se rejoue pas à l'identique est faux.
+export function replay(seed, log, end) {
+  const G = newGame(seed);
+  for (let i = 0; i < log.length && !G.over; i += 2) {
+    while (G.n < log[i] && !G.over) sub(G);
+    if (log[i + 1] < 0) swapHold(G); else drop(G, log[i + 1] / 1000);
+  }
+  while (G.n < end && !G.over) sub(G);
+  return G;
 }

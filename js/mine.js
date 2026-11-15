@@ -14,7 +14,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, mat: () => 'glass', col: () => [77, 243, 255], boom: () => {}, today: () => '', grant: () => {}, track: () => {}, quests: () => '' };
+const H = { vib: () => {}, toast: () => {}, mat: () => 'glass', col: () => [77, 243, 255], boom: () => {}, today: () => '', grant: () => {}, track: () => {}, quests: () => '', submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
+const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin du trou noir', 'Un trou noir avale 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux trous noirs'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
 const hash = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return h >>> 0; };
@@ -66,12 +67,10 @@ function onEvents() {
       else if (e.chain >= 2) say('×' + Math.min(8, e.chain), e.chain >= 3 ? 'CHAÎNE' : '', e.chain >= 5 ? AM : [255, 255, 255]);
       H.track('fusions', 1); H.track('tier', e.tier + 1, true); H.track('chain', e.chain, true);
     } else if (e.t === 'land') { if (T - landT > 0.07) { landT = T; A.thud(Math.min(1, e.v / 30)); if (e.v > 9) burst(x, y, 3, [200, 220, 255], B.u * 2, 0.3, 1.6); } }
-    else if (e.t === 'vapor') { const col = e.tier >= 0 ? BODIES[e.tier][1] : [150, 150, 170]; burst(x, y, 7, col, B.u * 5, 0.6); ring(x, y, 2, B.u * 0.9, 0.3, col, 2); }
-    else if (e.t === 'crumble') { burst(x, y, 9, [170, 170, 190], B.u * 4, 0.5, 3); A.crack(); }
+    else if (e.t === 'vapor') { const col = BODIES[e.tier][1]; burst(x, y, 7, col, B.u * 5, 0.6); ring(x, y, 2, B.u * 0.9, 0.3, col, 2); }
     else if (e.t === 'boom') { ring(x, y, 4, B.u * 3.4, 0.45, CY, 7); burst(x, y, 40, [200, 240, 255], B.u * 13, 0.8, 3.5); shake = 14; flash = 0.3; flashC = CY; A.breach(); H.vib([20, 30, 40]); }
     else if (e.t === 'morph') { ring(x, y, 2, B.u * 1.4, 0.3, MG, 3); A.star(2); }
     else if (e.t === 'gift') { giftT = T; A.star(e.k === 'j' ? 1 : 0); H.toast(e.k === 'j' ? 'Matière exotique : elle copie l\'astre qu\'elle touche' : 'Belle chaîne ! Comète explosive offerte'); }
-    else if (e.t === 'rubble') A.step(2);
     else if (e.t === 'pierce') {
       // saut : l'espace se contracte (implosion), bang, puis le nouveau secteur se déploie — voir draw() et bang()
       texA = texB; texB = makeTex(e.depth); warp = 1; shake = 6; callout = null;
@@ -271,10 +270,6 @@ function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
       ctx.drawImage(s.comp, x - h, y - h, h * 2, h * 2);
     }
     if (v) { ctx.fillStyle = '#fff'; const R = (h / 1.3) * 1.1; for (let i = 0; i < 4; i++) { const a = T * 1.5 + i * 1.57, tw = 2 + 1.5 * Math.sin(T * 6 + i), px = x + Math.cos(a) * R, py = y + Math.sin(a) * R * 0.85; ctx.fillRect(px - tw, py - 0.6, tw * 2, 1.2); ctx.fillRect(px - 0.6, py - tw, 1.2, tw * 2); } } // les astres rares scintillent
-  } else if (it.k === 'r') { // débris
-    const r = F.R_RUBBLE * u * sc; ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-    ctx.fillStyle = '#4b4f63'; ctx.beginPath(); for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU, rr = r * (0.82 + rnd(i * 3.3) * 0.26); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.beginPath(); ctx.moveTo(-r * 0.6, -r * 0.3); ctx.lineTo(-r * 0.1, -r * 0.75); ctx.lineTo(r * 0.35, -r * 0.4); ctx.lineTo(-r * 0.2, -r * 0.1); ctx.fill(); ctx.restore();
   } else { // comète (explose) / matière exotique (copie)
     const r = F.R_SPECIAL * u * sc, bomb = it.k === 'b', p = 0.5 + 0.5 * Math.sin(T * (bomb ? 9 : 4)), col = bomb ? [140 + p * 115, 245, 255] : [255, 79 + p * 120, 216];
     const g = ctx.createRadialGradient(x, y, 0, x, y, r * 1.5); g.addColorStop(0, '#fff'); g.addColorStop(0.45, rgba(col, 0.95)); g.addColorStop(1, rgba(col, 0)); ctx.fillStyle = g; ctx.fillRect(x - r * 1.5, y - r * 1.5, r * 3, r * 3);
@@ -422,7 +417,7 @@ function update(dt) {
   if (callout && (callout.l += dt) > 1.2) callout = null;
   if (reveal && (reveal.l += dt) > reveal.d) reveal = null;
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
-  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); if (sv.seen < 2 && G.depth > 0) { sv.seen = 2; save(); } } } // un relâché pendant le temps de recharge est mémorisé
+  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); if (sv.seen < 2 && G.depth > 0) { sv.seen = 2; save(); } saveRun(); } } // un relâché pendant le temps de recharge est mémorisé
 }
 function bang() { // milieu du saut : le nouveau secteur naît
   const m = warpMsg || ['', '', 0], cx = W / 2, cy = B.y + B.h * 0.5;
@@ -465,6 +460,7 @@ const CSS = `
 .fg-q .q{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.1);text-align:left}.fg-q .q:last-child{border:0}
 .fg-q .q i{flex:none;width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}.fg-q .q i::after{content:"";position:absolute;inset:0;width:var(--p);border-radius:3px;background:linear-gradient(90deg,#4df3ff,#ff4fd8)}
 .fg-q .q.ok{color:#5dffc0}.fg-q .q.ok i::after{background:#5dffc0}.fg-q .q span{flex:1}.fg-q .q em{font-style:normal;color:rgba(255,255,255,.55);font-size:12px;white-space:nowrap}
+#mn-rk{font-size:13px;color:#5dffc0;min-height:0}#mn-rk:empty{display:none}
 #mn-lad{font-size:11.5px;line-height:1.6;color:rgba(255,255,255,.6)}
 `;
 const HTML = `
@@ -474,17 +470,17 @@ const HTML = `
 <button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
-<div class="fg-q" id="mn-q"></div>
-<div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
-<div class="modal" id="mn-m-help"><div class="card glass"><h2>Genèse</h2><p class="multi" id="mn-ht"></p><p id="mn-lad"></p><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
+<p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
+<div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
+<div class="modal" id="mn-m-help"><div class="card glass"><h2>Genèse</h2><p class="multi" id="mn-ht"></p><p id="mn-lad"></p><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
 const HTML2 = `<div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 const HELP = `Lâche les astres dans le puits. Deux identiques qui se touchent fusionnent en un astre plus gros.
 
 Un seul lâcher qui déclenche plusieurs fusions, c'est une chaîne : chaque maillon multiplie les points. À ×5, tu gagnes une comète explosive.
 
-Chaque fusion charge la jauge de saut. Pleine, tu passes au secteur suivant : l'onde vaporise les petits astres et les débris, et tu reçois de la matière exotique qui copie l'astre qu'elle touche.
+Chaque fusion charge la jauge de saut. Pleine, tu passes au secteur suivant : l'onde vaporise les petits astres, et tu reçois de la matière exotique qui copie l'astre qu'elle touche.
 
-L'étoile à neutrons et le trou noir attirent les astres plus petits : la visée montre la trajectoire courbée. L'étoile à neutrons repousse aussi par impulsions, la géante rouge enfle tant qu'on ne la fusionne pas, le trou noir avale les petits astres voisins.
+À partir du trou noir, les astres attirent les plus petits : la visée montre la trajectoire courbée. L'étoile à neutrons repousse par impulsions, la géante rouge enfle tant qu'on ne la fusionne pas, le trou noir avale les petits astres voisins.
 
 Certains astres ont une variante rare, et chaque galaxie tire sa rareté : les probabilités sont dans le codex.
 
@@ -517,8 +513,12 @@ function share() {
   if (navigator.share) navigator.share({ text: t }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => H.toast('Score copié'), () => {});
 }
 
+function saveRun() { try { if (G && !ended && !G.over && G.drops > 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
+const dropRun = () => { try { localStorage.removeItem(RUN); } catch (e) { /* ignore */ } };
+function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `Classement mondial : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
 function endRun() {
-  if (ended || !G) return; ended = true;
+  if (ended || !G) return; ended = true; dropRun();
+  rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n, daily: G.daily || '' }).then(rankLine, () => {});
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; sv.seen = Math.max(sv.seen, 1); if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
   H.track('score', G.score, true); H.track('runs', 1);
@@ -537,15 +537,19 @@ function endRun() {
   refreshTitle();
 }
 function newRun(seed) {
-  G = F.newGame(seed); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  dropRun(); G = F.newGame(seed); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; shake = flash = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
 }
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'De l\'orbe au trou noir'; }
 export const busy = () => isOpen;
+export { rankLine };
 export const stats = () => ({ ...sv });
 export function open() {
   isOpen = true; sprites.clear(); $('#mn').classList.add('on'); document.documentElement.classList.add('mn-open'); lowFx = (navigator.hardwareConcurrency || 4) <= 4;
-  G = null; resize(); newRun(); last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
+  G = null; let old = null; try { old = JSON.parse(localStorage.getItem(RUN) || 'null'); } catch (e) { /* ignore */ }
+  resize(); newRun();
+  if (old && Array.isArray(old.bodies) && Array.isArray(old.log) && !old.over) { G = old; G.ev = []; shown = G.score; texB = makeTex(G.depth); localStorage.setItem(RUN, JSON.stringify(G)); H.toast('Partie reprise'); } // newRun() efface la sauvegarde : on la remet
+  last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
 function close() { A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
@@ -555,9 +559,11 @@ export function init(opts) {
   cv = $('#mn-cv'); ctx = cv.getContext('2d');
   cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove); cv.addEventListener('pointerup', onUp); cv.addEventListener('pointercancel', () => { aiming = false; });
   window.addEventListener('resize', () => { if (isOpen) resize(); });
-  document.addEventListener('visibilitychange', () => { last = performance.now(); });
+  document.addEventListener('visibilitychange', () => { last = performance.now(); if (document.hidden && isOpen) saveRun(); }); window.addEventListener('pagehide', () => { if (isOpen) saveRun(); });
   const click = (el, f) => $(el).addEventListener('click', () => { A.ui(); H.vib(9); f(); });
-  click('#mn-back', () => { if (G && !ended && G.drops > 8) { endRun(); return; } close(); }); // partie entamée : on la comptabilise
+  click('#mn-back', () => { saveRun(); close(); }); // la partie est gardée : on la reprend en revenant
+  click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !ended && G.drops > 0) endRun(); else close(); });
+  click('#mn-rkb', () => (H.online() && !H.named() ? H.askName() : H.rank()));
   click('#mn-help', () => { $('#mn-ht').textContent = HELP; $('#mn-lad').textContent = BODIES.map((b) => b[0]).join(' › '); $('#mn-m-help').classList.add('on'); paused = true; });
   click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => newRun()); click('#mn-day', startDaily); click('#mn-share', share); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
   // bouton principal de l'accueil (home.js le transforme en héros) ; Cascade devient un lien discret
