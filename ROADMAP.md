@@ -18,14 +18,19 @@ Trace d'avancement de la refonte « jeu mobile ». La version d'avant refonte re
 - **Sons** : un timbre par famille d'astres (roche, planète, étoile, astre extrême, galactique), légèrement désaccordé à chaque fois.
 - **Performances** : chaque rang d'astre animé est assemblé une fois toutes les 2 images puis copié (au lieu d'une découpe et de 3 à 5 dessins par astre), plus de `shadowBlur` par image, accueil masqué et figé pendant une partie, démo de l'accueil à demi-cadence. Mesuré sur la scène de test : 24 → 56 images/s en rendu logiciel.
 - **Toucher** : on vise dans la cuve, même pendant qu'un astre tombe ; sortir de la cuve annule.
+- **Classement mondial** (`js/rank.js`, `supabase/schema.sql`) : pseudo demandé une fois, tableau mondial et tableau de l'univers du jour, défilement infini, mon rang, scores mis en attente hors connexion. Testé de bout en bout sur un Postgres local ; à activer en remplissant `js/config.js`.
+- **Reprise de partie** : la partie en cours est sauvegardée à chaque lâcher et reprise à l'ouverture ; « Abandonner » dans l'aide.
+- **Débris retirés** ; gravité à partir du trou noir seulement.
+- **Accueil** : fond spatial avec trou noir animé, verre sans flou d'arrière-plan (bien plus léger), Cascade / Niveaux / Atelier / Code rangés dans « Plus ».
 - **Missions du jour + cadeau quotidien** (`js/quests.js`), branchés sur Genèse, la campagne et le défi du jour.
 - **Économie** : Genèse paie en énergie selon le secteur et le score ; probabilités des noyaux et seuils de garantie affichés ; panneau admin retiré de l'écran titre (`?admin=1`).
 - **Thème** : le verre liquide d'origine est conservé partout (accueil, fenêtres, missions, Genèse) ; Cascade a un vrai bouton sur l'accueil.
-- **Technique** : la boucle de Genèse s'arrête à la fermeture ; cache du service worker en v21.
+- **Technique** : la boucle de Genèse s'arrête à la fermeture ; cache du service worker en v22.
 
 ## À faire, par priorité
 1. **Réglage de Genèse sur de vrais joueurs** : tailles, rythme des sauts, fréquence des débris, seuils des missions. Les valeurs actuelles sont calées sur un joueur aléatoire simulé (`tools/test.mjs`), pas sur des humains.
-2. **Backend (Supabase)** : le dépôt ne contient aucun code Supabase aujourd'hui, tout est en `localStorage` (modifiable par le joueur). À créer : comptes anonymes, sauvegarde cloud, classement hebdomadaire de Genèse, tables avec RLS, et validation serveur des scores (le moteur étant déterministe, on peut rejouer graine + liste des lâchers côté serveur).
+2. **Vérification serveur des scores** : aujourd'hui des garde-fous de plausibilité en SQL ; le journal de chaque partie est stocké, il reste à le rejouer dans une Edge Function avec `replay()`. Sauvegarde cloud de la progression et filtre de pseudos injurieux à faire aussi.
+3. **Pas encore faits** : thèmes d'univers complets comme récompense des noyaux, objectifs en cours de partie, mode zen, première partie guidée, rythme des 13 rangs.
 3. **Thèmes d'univers complets** : les skins teintent l'orbe et les effets de fusion, mais les autres astres gardent leur dessin ; des thèmes entiers (glace, lave, néon) restent à faire.
 5. **Succès et statistiques** : records déjà stockés (`critical.forage.v2`), écran dédié à faire.
 6. **Stores** : emballage Capacitor (le projet est du JS statique sans build, donc compatible tel quel), icônes et écrans de lancement natifs, retours haptiques natifs, mentions légales et affichage des probabilités exigés par les stores.

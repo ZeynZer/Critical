@@ -16,6 +16,15 @@ node tools/test.mjs              # vérifie les 60 niveaux et le moteur de Genè
 # panneau de test des noyaux : ajoute ?admin=1 à l'adresse
 ```
 
+## Classement en ligne (Supabase)
+Le jeu fonctionne sans ; le classement s'active dès que `js/config.js` est rempli.
+1. Crée un projet sur supabase.com.
+2. Dans **SQL Editor → New query**, colle tout le contenu de `supabase/schema.sql`, puis **Run**.
+3. Dans **Project Settings → API**, copie l'**URL du projet** et la clé **publique** (`anon` / `publishable`) dans `js/config.js`. Jamais la clé `service_role`.
+4. Change `VERSION` dans `sw.js` et publie.
+
+Les tables sont fermées (RLS sans policy) : la clé publique ne peut appeler que 4 fonctions (`register`, `submit_score`, `leaderboard`, `my_rank`) qui valident leurs entrées. Chaque score est stocké avec sa graine et son journal de lâchers : `replay()` dans `js/fusion.js` rejoue la partie à l'identique, ce qui permettra une vérification complète côté serveur (Edge Function) si la triche apparaît.
+
 ## Tes assets (tous facultatifs, le jeu tourne sans)
 | Fichier | Rôle |
 |---|---|

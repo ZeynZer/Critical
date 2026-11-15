@@ -10,6 +10,8 @@ const ICONS = {
   atelier: '<path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 013 3L8 18.5z"/><path d="M14.5 6l3.5 3.5"/>',
   coll: '<path d="M7 4h10l3.5 5L12 20.5 3.5 9z"/><path d="M3.5 9h17M9.5 9L12 20.5M14.5 9L12 20.5M7 4l2.5 5M17 4l-2.5 5"/>',
   casc: '<path d="M6 3v6M12 3v11M18 3v4"/><circle cx="6" cy="13" r="3"/><circle cx="12" cy="18.5" r="3"/><circle cx="18" cy="11" r="3"/>',
+  rank: '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4"/>',
+  more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
 };
 const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
@@ -19,25 +21,13 @@ const CSS = `
 #s-title.hm{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 108px);overflow:hidden}
 #s-title.hm>*{z-index:1}
 #s-title.hm .hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.hm-blob{position:absolute;border-radius:50%;filter:blur(46px);opacity:.6;will-change:transform}
-.hm-b1{width:78vmax;height:78vmax;max-width:340px;max-height:340px;left:-14%;top:8%;background:#12c9ff;animation:hm-d1 19s ease-in-out infinite}
-.hm-b2{width:72vmax;height:72vmax;max-width:320px;max-height:320px;right:-18%;top:34%;background:#ff2fc8;animation:hm-d2 23s ease-in-out infinite}
-.hm-b3{width:62vmax;height:62vmax;max-width:280px;max-height:280px;left:8%;bottom:-8%;background:#ffb02e;opacity:.45;animation:hm-d3 21s ease-in-out infinite}
-.hm-b4{width:66vmax;height:66vmax;max-width:300px;max-height:300px;right:-14%;top:-8%;background:#6a4dff;animation:hm-d4 26s ease-in-out infinite}
-@keyframes hm-d1{50%{transform:translate(120px,170px) scale(1.15)}}
-@keyframes hm-d2{50%{transform:translate(-150px,-120px) scale(.9)}}
-@keyframes hm-d3{50%{transform:translate(150px,-90px) scale(1.2)}}
-@keyframes hm-d4{50%{transform:translate(-160px,140px) scale(1.1)}}
-.hm-gem{position:absolute;border-radius:50%;animation:hm-fl 11s ease-in-out infinite;animation-delay:var(--d,0s);will-change:transform}
-.hm-gem::before{content:'';position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 30% 26%,#fff 0 5%,rgba(255,255,255,0) 6%),radial-gradient(ellipse 38% 22% at 34% 24%,rgba(255,255,255,.85),rgba(255,255,255,0)),radial-gradient(circle at 50% 108%,rgba(255,255,255,.6),rgba(255,255,255,0) 45%),radial-gradient(circle at 50% 50%,var(--c1),var(--c2) 70%,var(--c3));box-shadow:inset 0 0 0 2px rgba(255,255,255,.22),inset -10px -14px 30px rgba(0,0,0,.18),0 0 70px var(--c1)}
-.hm-gem::after{content:'';position:absolute;inset:0;border-radius:50%;background:linear-gradient(#fff,#fff) center/44% 8% no-repeat,linear-gradient(#fff,#fff) center/8% 44% no-repeat;filter:drop-shadow(0 0 7px #fff)}
-.hm-gem.x::after{transform:rotate(45deg)}
+.hm-space{position:absolute;inset:0;width:100%;height:100%;display:block}
 @keyframes hm-fl{0%,100%{transform:translate(0,0) rotate(0deg)}50%{transform:translate(14px,-28px) rotate(14deg)}}
 @keyframes hm-in{from{opacity:0;transform:translateY(28px) scale(.94);filter:blur(12px)}}
 .hm-in{animation:hm-in .95s cubic-bezier(.2,.9,.2,1) backwards;animation-delay:var(--e,0s)}
 
 /* verre liquide */
-.gl{position:relative;display:block;border-radius:30px;background:linear-gradient(145deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 42%,rgba(255,255,255,.12));border:1px solid rgba(255,255,255,.2);-webkit-backdrop-filter:blur(20px) saturate(1.9) brightness(1.1);backdrop-filter:blur(20px) saturate(1.9) brightness(1.1);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(255,255,255,.1),inset 1px 0 0 rgba(255,255,255,.2),inset 0 0 26px rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.42);overflow:hidden;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:transform .55s cubic-bezier(.2,1.6,.4,1),filter .3s}
+.gl{position:relative;display:block;border-radius:30px;background:linear-gradient(145deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 42%,rgba(255,255,255,.12));border:1px solid rgba(255,255,255,.2);background-color:rgba(14,16,46,.5);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(255,255,255,.1),inset 1px 0 0 rgba(255,255,255,.2),inset 0 0 26px rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.42);overflow:hidden;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:transform .55s cubic-bezier(.2,1.6,.4,1),filter .3s}
 .gl::before{content:'';position:absolute;inset:0;border-radius:inherit;background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.42),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 95% 110%,rgba(255,255,255,.16),rgba(255,255,255,0) 60%);pointer-events:none}
 .gl::after{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(112deg,rgba(255,255,255,0) 36%,rgba(255,255,255,.34) 50%,rgba(255,255,255,0) 64%) 160% 0/260% 100% no-repeat;animation:hm-sh 7s ease-in-out infinite;animation-delay:var(--d,0s);pointer-events:none}
 @keyframes hm-sh{0%,55%{background-position:160% 0}100%{background-position:-60% 0}}
@@ -111,15 +101,15 @@ const CSS = `
 // (niveaux, réglages, résultats, HUD, coffre, Atelier) : les restyler ici les met tous au même niveau.
 const GCSS = `
 @keyframes glow{50%{box-shadow:0 0 36px rgba(255,79,216,.45),0 0 70px rgba(77,243,255,.28),inset 0 1.5px 0 rgba(255,255,255,.6)}}
-.glass{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.34),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 95% 110%,rgba(255,255,255,.12),rgba(255,255,255,0) 60%),linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.05) 42%,rgba(255,255,255,.1));border:1px solid rgba(255,255,255,.2);-webkit-backdrop-filter:blur(20px) saturate(1.9) brightness(1.1);backdrop-filter:blur(20px) saturate(1.9) brightness(1.1);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.1),inset 1px 0 0 rgba(255,255,255,.18),inset 0 0 26px rgba(255,255,255,.07),0 14px 38px rgba(0,0,0,.42)}
+.glass{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.34),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 95% 110%,rgba(255,255,255,.12),rgba(255,255,255,0) 60%),linear-gradient(145deg,rgba(255,255,255,.2),rgba(255,255,255,.05) 42%,rgba(255,255,255,.1));border:1px solid rgba(255,255,255,.2);background-color:rgba(14,16,46,.5);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.1),inset 1px 0 0 rgba(255,255,255,.18),inset 0 0 26px rgba(255,255,255,.07),0 14px 38px rgba(0,0,0,.42)}
 .icon{border-radius:23px;transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
 .pill{transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
 .big{border-radius:26px;transition:transform .55s cubic-bezier(.2,1.6,.4,1),filter .3s}
 .icon:active,.pill:active,.big:active{transform:scale(.95);filter:brightness(1.2)}
-.big.primary{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.4),rgba(255,255,255,0) 55%),linear-gradient(135deg,rgba(77,243,255,.4),rgba(255,79,216,.36));border:1px solid rgba(255,255,255,.45);box-shadow:0 0 26px rgba(77,243,255,.35),0 0 60px rgba(255,79,216,.22),inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 0 22px rgba(255,255,255,.1);-webkit-backdrop-filter:blur(16px) saturate(1.8);backdrop-filter:blur(16px) saturate(1.8)}
+.big.primary{background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.4),rgba(255,255,255,0) 55%),linear-gradient(135deg,rgba(77,243,255,.4),rgba(255,79,216,.36));border:1px solid rgba(255,255,255,.45);box-shadow:0 0 26px rgba(77,243,255,.35),0 0 60px rgba(255,79,216,.22),inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 0 22px rgba(255,255,255,.1);background-color:rgba(14,16,46,.5)}
 .hud-title{border-radius:23px}.count{border-radius:23px}
 .bar h2,.card h2{text-shadow:0 0 18px rgba(77,243,255,.35)}
-.modal{background:rgba(3,4,12,.42);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4)}
+.modal{background:rgba(3,4,12,.42);background-color:rgba(14,16,46,.5)}
 .card{border-radius:34px;box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.1),inset 0 0 40px rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.5),0 0 70px rgba(77,243,255,.16),0 0 100px rgba(255,79,216,.12);animation:rise .6s cubic-bezier(.2,1.3,.3,1)}
 .world{border-radius:28px}
 .lv{border-radius:18px;background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.3),rgba(255,255,255,0) 55%),linear-gradient(145deg,rgba(255,255,255,.14),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 6px 16px rgba(0,0,0,.3);transition:transform .55s cubic-bezier(.2,1.6,.4,1)}
@@ -156,10 +146,41 @@ const reskin = (e, add, drop = ['big', 'glass', 'half', 'primary', 'hero', 'icon
 const titleOf = (b, sel) => { const t = sel ? $(sel, b) : b.querySelector('span:not(.ch-badge)'); if (t) t.classList.add('hm-t'); return t; };
 const grab = (...nodes) => nodes.filter(Boolean);
 
-const bgLayer = (full) => make('div', 'hm-bg', '<i class="hm-blob hm-b1"></i><i class="hm-blob hm-b2"></i><i class="hm-blob hm-b3"></i><i class="hm-blob hm-b4"></i>' +
-  '<i class="hm-gem" style="--c1:#7ff6ff;--c2:#1b9bff;--c3:#2a3fb8;width:38vmin;max-width:160px;aspect-ratio:1;left:-9%;top:11%"></i>' +
-  '<i class="hm-gem x" style="--c1:#ff9be8;--c2:#ff2fc8;--c3:#7a1a9a;width:30vmin;max-width:124px;aspect-ratio:1;right:-6%;top:42%;--d:-4s"></i>' +
-  (full ? '<i class="hm-gem" style="--c1:#ffe08a;--c2:#ffb02e;--c3:#b4531a;width:26vmin;max-width:108px;aspect-ratio:1;left:7%;bottom:21%;--d:-7s"></i><i class="hm-gem x" style="--c1:#c9bcff;--c2:#6a4dff;--c3:#2b1a8a;width:16vmin;max-width:68px;aspect-ratio:1;right:11%;top:17%;--d:-2s"></i>' : ''));
+const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+// Décor : un trou noir en haut de l'écran, son disque d'accrétion, et un champ d'étoiles qui spirale vers lui (elles s'étirent en arcs
+// en s'approchant : la lumière est courbée). Un seul canvas, 30 images/s, à l'arrêt dès que l'écran n'est pas visible.
+function space(cv, scr) {
+  const x = cv.getContext('2d'), TAU = Math.PI * 2; let W = 0, H = 0, n = 0, last = 0;
+  const S = Array.from({ length: 230 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
+  const fit = () => { const k = Math.min(1.5, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = Math.round(W * k); cv.height = Math.round(H * k); x.setTransform(k, 0, 0, k, 0, 0); };
+  window.addEventListener('resize', () => { W = 0; });
+  const glow = (px, py, r, col) => { const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); };
+  const frame = (t) => {
+    requestAnimationFrame(frame);
+    if ((n++ & 1) || !scr.classList.contains('on') || document.hidden || document.documentElement.classList.contains('mn-open')) return;
+    if (!W) fit(); if (!W) return;
+    const dt = Math.min(0.1, (t - last) / 1000) || 0.033; last = t;
+    const cx = W / 2, cy = H * 0.085, R = Math.min(W, H) * 0.075, U = H * 0.8, T = t / 1000;
+    const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0a0b22'); bg.addColorStop(0.55, '#070818'); bg.addColorStop(1, '#03030c'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    x.globalCompositeOperation = 'lighter';
+    glow(W * 0.12, H * 0.42, W * 0.75, 'rgba(40,120,255,.2)'); glow(W * 0.95, H * 0.62, W * 0.7, 'rgba(255,60,200,.16)'); glow(W * 0.3, H * 0.98, W * 0.6, 'rgba(255,170,50,.1)'); glow(cx, cy, R * 5, 'rgba(150,80,255,.3)');
+    x.lineCap = 'round';
+    for (const s of S) { // plus une étoile est près, plus elle tourne vite et plus son image s'étire
+      s.a += dt * 0.05 / (s.r * s.r + 0.03); s.r -= dt * 0.012 * (0.4 + 0.6 / (s.r + 0.2)); if (s.r < 0.11) { s.r = 1.45; s.a = rnd(s.a) * TAU; }
+      const rad = s.r * U, al = (0.4 + 0.6 * Math.abs(Math.sin(T * s.z * 1.7 + s.a))) * s.z * Math.min(1, (s.r - 0.1) * 12), len = 0.012 / (s.r * s.r);
+      x.strokeStyle = `rgba(215,232,255,${al})`; x.lineWidth = 1 + s.z; x.beginPath(); x.ellipse(cx, cy, rad, rad * 0.92, 0, s.a - len, s.a + 0.002); x.stroke();
+    }
+    const disc = (a0, a1) => { const g = x.createLinearGradient(cx - R * 3.3, 0, cx + R * 3.3, 0); g.addColorStop(0, 'rgba(255,79,216,0)'); g.addColorStop(0.3, 'rgba(255,170,90,.9)'); g.addColorStop(0.5, 'rgba(255,250,235,1)'); g.addColorStop(0.7, 'rgba(255,170,90,.9)'); g.addColorStop(1, 'rgba(77,243,255,0)'); x.strokeStyle = g; x.lineWidth = R * 0.34; x.setLineDash([R * 0.5, R * 0.07]); x.lineDashOffset = -T * R * 0.9; x.beginPath(); x.ellipse(cx, cy, R * 3.1, R * 0.62, -0.14, a0, a1); x.stroke(); x.setLineDash([]); };
+    disc(Math.PI, TAU); // moitié du disque derrière le trou noir
+    x.strokeStyle = 'rgba(255,205,150,.55)'; x.lineWidth = R * 0.3; x.beginPath(); x.arc(cx, cy, R * 1.5, 0, TAU); x.stroke(); // lumière du disque courbée au-dessus et en dessous
+    x.globalCompositeOperation = 'source-over';
+    x.fillStyle = '#000'; x.beginPath(); x.arc(cx, cy, R * 1.12, 0, TAU); x.fill();
+    x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1.5; x.stroke();
+    x.globalCompositeOperation = 'lighter'; disc(0, Math.PI); x.globalCompositeOperation = 'source-over';
+  };
+  requestAnimationFrame(frame);
+}
+const bgLayer = (scr) => { const d = make('div', 'hm-bg', '<canvas class="hm-space"></canvas>'); space(d.firstChild, scr); return d; };
 
 let ring = null, live = null;
 export function init() {
@@ -169,7 +190,7 @@ export function init() {
   scr.classList.add('hm');
 
   // décor : taches de couleur + sphères de verre qui flottent derrière le verre
-  scr.prepend(bgLayer(true));
+  scr.prepend(bgLayer(scr));
 
 
   // logo + réglages + étoiles
@@ -210,12 +231,6 @@ export function init() {
   if (daily) { tile(daily, ico(ICONS.cal), '.42s', '3s'); live = make('span', 'hm-live'); daily.appendChild(live); row.appendChild(daily); }
   if (chest) { tile(chest, '<span class="hm-core"></span>', '.5s', '4s'); row.appendChild(chest); }
   menu.appendChild(row);
-  const casc = $('#b-endless'); // Cascade : un vrai bouton, sous les tuiles
-  if (casc && casc !== hero) {
-    reskin(casc, ['gl', 'hm-camp', 'hm-cascb', 'hm-in']); casc.style.setProperty('--e', '.56s'); casc.style.setProperty('--d', '2.5s');
-    const t = titleOf(casc), cs = $('#b-endless-s', casc), tx = make('span', 'hm-tx');
-    tx.append(...grab(t, cs)); casc.textContent = ''; casc.insertAdjacentHTML('afterbegin', ico(ICONS.casc)); casc.append(tx); casc.insertAdjacentHTML('beforeend', CHEV); menu.appendChild(casc);
-  }
 
   // dock flottant : Niveaux · Atelier · Collection · Code
   const dock = make('nav', 'gl hm-dock hm-in'); dock.style.setProperty('--e', '.6s'); dock.style.setProperty('--d', '5s'); dock.setAttribute('aria-label', 'Navigation');
@@ -224,10 +239,16 @@ export function init() {
     if (!b.querySelector('span')) { const lbl = b.textContent.trim(); b.textContent = ''; b.appendChild(make('span', '', lbl)); }
     reskin(b, ['hm-di']); titleOf(b); b.insertAdjacentHTML('afterbegin', ico(icon)); dock.appendChild(b);
   };
-  di('#b-levels', ICONS.levels); di('#b-atelier', ICONS.atelier); di('#b-coll', ICONS.coll); di('#b-code', ICONS.code);
+  // « Plus » : les modes et outils secondaires (Cascade, Niveaux, Atelier, Code) dans une feuille, pour laisser la barre aux essentiels
+  const sheet = make('div', 'modal', '<div class="card glass"><h2>Plus</h2><div class="btns" id="hm-more"></div></div>'); sheet.id = 'hm-sheet'; document.body.appendChild(sheet);
+  const more = $('#hm-more', sheet), shut = () => sheet.classList.remove('on');
+  for (const id of ['#b-endless', '#b-levels', '#b-atelier', '#b-code']) { const b = $(id); if (!b || b === hero) continue; b.className = 'big glass'; more.appendChild(b); b.addEventListener('click', shut); }
+  const cl = make('button', 'big primary', 'Fermer'); more.appendChild(cl); cl.addEventListener('click', shut); sheet.addEventListener('click', (e) => { if (e.target === sheet) shut(); });
+  const mb = make('button', '', '<span>Plus</span>'); mb.id = 'b-more'; menu.appendChild(mb); mb.addEventListener('click', () => sheet.classList.add('on'));
+  di('#b-rank', ICONS.rank); di('#b-coll', ICONS.coll); di('#b-more', ICONS.more);
   scr.appendChild(dock);
 
-  const lv = $('#s-levels'); if (lv && !lv.classList.contains('hm2')) { lv.classList.add('hm2'); lv.prepend(bgLayer(false)); }
+  const lv = $('#s-levels'); if (lv && !lv.classList.contains('hm2')) { lv.classList.add('hm2'); lv.prepend(bgLayer(lv)); }
 
   // anciennes rangées vides
   menu.querySelectorAll('.row,.ch-row').forEach((r) => { if (!r.children.length) r.remove(); });
