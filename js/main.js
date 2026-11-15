@@ -10,6 +10,7 @@ import * as HOME from './home.js';
 import * as INTRO from './intro.js';
 import * as DAILY from './daily.js';
 import * as MINE from './mine.js';
+import * as QS from './quests.js';
 import * as Skins from './skins.js';
 
 const $ = (s) => document.querySelector(s);
@@ -198,6 +199,7 @@ function win() {
   else S.stars[curIdx] = Math.max(starsOf(curIdx), stars);
   save();
   if (!G.lv.custom) { const wi = G.lv.daily ? -1 : (curIdx / PER_WORLD) | 0, full = wi >= 0 && Array.from({ length: PER_WORLD }, (_, k) => starsOf(wi * PER_WORLD + k)).every(Boolean); CH.onWin({ stars, daily: !!G.lv.daily, world: full ? wi : -1 }); }
+  if (!G.lv.custom) { if (G.lv.daily) QS.track('daily', 1); else QS.track('stars', stars); }
   setTimeout(() => showResult(true, stars), 1250);
 }
 function lose(left) {
@@ -781,8 +783,9 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
 ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom, mat: () => CH.matOf() });
-MINE.init({ vib, toast: (m) => toast(m), COL, mat: () => CH.matOf(), gl: () => CH.matGl(), boom: (n, api, x, y, col, cs) => CH.boom(n, api, x, y, col, cs), reward: (sc) => CH.onEndless(sc) });
+MINE.init({ vib, toast: (m) => toast(m), mat: () => CH.matOf(), grant: (g) => CH.grant(g), track: QS.track, quests: QS.html });
 HOME.init();
+QS.init({ today: todayStr, grant: CH.grant, toast: (m) => toast(m), vib });
 INTRO.init({ vib, today: () => todayStr() });
 startAttract(); refreshTitle();
 requestAnimationFrame(frame);

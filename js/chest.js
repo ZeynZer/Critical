@@ -2,7 +2,7 @@
 // Module autonome : il injecte son propre HTML/CSS et sa propre sauvegarde (critical.chest.v1).
 import * as A from './audio.js';
 
-export const ADMIN = true; // ← mets false avant de publier : cache le bouton « ADMIN » de l'écran titre
+export const ADMIN = /[?&]admin=1/.test(location.search); // panneau de test : ajoute ?admin=1 à l'adresse (jamais visible des joueurs)
 
 const KEY = 'critical.chest.v1', TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -153,6 +153,8 @@ export function onEndless(score) {
   const g = 10 + Math.min(60, Math.round(score / 300));
   showBanner(g, gain(g), '', 1200);
 }
+// Récompense venue d'un autre module (Forage, missions) : énergie + éventuel noyau garanti de rareté minR.
+export function grant(g, extra = '', minR = -1) { let c = 0; if (minR >= 0) { addCore(minR); c++; } showBanner(g, gain(g) + c, extra, 300); }
 function gain(n) { st.energy += n; let c = 0; while (st.energy >= 100) { st.energy -= 100; addCore(); c++; } save(); refresh(); return c; }
 
 /* ============================== interface ============================== */
@@ -218,7 +220,7 @@ function mount() {
   d.innerHTML = `
   <div id="ch-banner" class="glass"></div>
   <div class="modal" id="ch-main"><div class="card glass"><h2>Noyaux scellés</h2><div class="ch-orbs" id="ch-orbs"></div>
-    <p id="ch-msub"></p><i class="ch-bar" style="width:100%;height:7px"><b></b></i><p style="font-size:12px">À 100 % d'énergie, un noyau apparaît. Gagne de l'énergie en finissant des niveaux et des parties.</p>
+    <p id="ch-msub"></p><i class="ch-bar" style="width:100%;height:7px"><b></b></i><p style="font-size:12px">À 100 % d'énergie, un noyau apparaît. Gagne de l'énergie en finissant des niveaux et des parties.</p><p style="font-size:11px;opacity:.75" id="ch-odds"></p>
     <div class="btns"><button class="big primary" id="ch-go">Ouvrir un noyau</button><button class="big glass" id="ch-tocoll">Collection</button><button class="big glass" id="ch-mclose">Fermer</button></div></div></div>
   <div id="ch-coll"><header class="bar"><button class="icon glass" id="ch-cback" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h2>Collection</h2><span class="ch-dust glass" id="ch-dust"></span></header>
     <div class="ch-tabs" id="ch-tabs"></div><div class="ch-prev glass" id="ch-prev"></div><div class="ch-grid" id="ch-grid"></div><div class="ch-det glass" id="ch-det" style="border-radius:20px;padding:14px"></div></div>
@@ -250,7 +252,7 @@ function refresh() {
   const go = $('#ch-go'); go.style.opacity = n ? 1 : 0.4; go.textContent = n ? 'Ouvrir un noyau' : 'Aucun noyau';
   if (ui.coll.classList.contains('on')) buildColl();
 }
-function showMain() { refresh(); ui.main.classList.add('on'); }
+function showMain() { refresh(); $('#ch-odds').textContent = 'Chances par noyau : ' + RAR.map((r) => `${r.n} ${(r.w / RAR.reduce((a, b) => a + b.w, 0) * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`).join(' · ') + '. Rare garanti au bout de 7 noyaux, Épique au bout de 21, Légendaire au bout de 61.'; ui.main.classList.add('on'); }
 
 let bT = 0;
 function showBanner(g, cores, extra, delay) {

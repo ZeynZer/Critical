@@ -41,3 +41,23 @@ const T1 = decode(mk(['a1..1', '..*..', '1....', '.d..1']));
 const r1 = solve(T1, 4, 5, 500); assert.ok(r1, 'solveur avec items'); const c1 = clone(T1); for (const i of r1.sols[0]) run(c1, i); assert.equal(remaining(c1), 0);
 let friends = 0; for (const t of c1.type) if (t === 11) friends++; assert.equal(friends, 1, 'cristal épargné');
 console.log('solveur items OK (min', r1.depth, 'taps)');
+
+// ---- Forage (fusion) : déterminisme, bornes, progression avec un joueur aléatoire ----
+import * as F from '../js/fusion.js';
+const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed ^ 0x9e37); for (let i = 0; i < drops && !g.over; i++) { F.drop(g, r() * F.W); for (let k = 0; k < 40; k++) F.tick(g, 1 / 60); g.ev.length = 0; } return g; };
+import { mulberry32 } from '../js/gen.js';
+{
+  const a = playF(7, 120), b = playF(7, 120);
+  assert.equal(a.score, b.score, 'forage déterministe'); assert.equal(a.bodies.length, b.bodies.length);
+  let over = 0, depth = 0, fus = 0, drops = 0;
+  for (let s = 1; s <= 20; s++) {
+    const g = playF(s, 400); over += g.over ? 1 : 0; depth += g.depth; fus += g.fusions; drops += g.drops;
+    for (const o of g.bodies) { assert.ok(Number.isFinite(o.x + o.y + o.vx + o.vy), 'NaN'); assert.ok(o.x >= o.r - 0.01 && o.x <= F.W - o.r + 0.01 && o.y <= F.HT - o.r + 0.01, 'hors du puits'); }
+    assert.ok(g.fusions > 5, 'des fusions se produisent');
+  }
+  // empilement stable : après repos, les noyaux ne se chevauchent presque plus et ne bougent plus
+  const g2 = F.newGame(4); for (let i = 0; i < 6; i++) { g2.cur = { k: 'c', tier: i }; F.drop(g2, 1 + i * 1.5); for (let k = 0; k < 30; k++) F.tick(g2, 1 / 60); }
+  for (let k = 0; k < 300; k++) F.tick(g2, 1 / 60);
+  assert.ok(g2.bodies.every((o) => Math.hypot(o.vx, o.vy) < 0.6), 'pile au repos');
+  console.log(`forage OK · joueur aléatoire : ${over}/20 parties finies en <400 lâchers, ${(drops / 20) | 0} lâchers, strate moy. ${(depth / 20).toFixed(1)}, ${(fus / 20) | 0} fusions`);
+}
