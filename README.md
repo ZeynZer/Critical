@@ -12,7 +12,7 @@ Aucune étape de build : c'est du JavaScript natif (modules ES), sans dépendanc
 ## Tester en local
 ```
 python3 -m http.server 8000      # puis ouvre http://localhost:8000
-node tools/test.mjs              # vérifie les 60 niveaux et le moteur du Forage
+node tools/test.mjs              # vérifie les 60 niveaux et le moteur de Genèse
 # panneau de test des noyaux : ajoute ?admin=1 à l'adresse
 ```
 
@@ -34,7 +34,7 @@ Après avoir ajouté des fichiers, change `VERSION` dans `sw.js` (ex. `critical-
 - `js/audio.js` : sons et musique synthétisés (aucun fichier audio)
 
 ## Modes
-- **Forage (mode principal)** : on lâche des minéraux dans un puits ; deux identiques fusionnent en un plus gros. Une chaîne = plusieurs fusions déclenchées par un seul lâcher (multiplicateur, charge explosive à ×5). Chaque fusion charge la foreuse : jauge pleine, la strate cède, le souffle vaporise les petits minéraux et un catalyseur est offert, puis des gravats tombent. Moteur dans `js/fusion.js` (pur, testé), rendu dans `js/mine.js`.
+- **Genèse (mode principal)** : on lâche des astres dans un puits de gravité ; deux identiques fusionnent en un plus gros (orbe → astéroïde → lune → planète → géante gazeuse → étoiles → trou noir ; deux trous noirs = Big Bang). Une chaîne = plusieurs fusions déclenchées par un seul lâcher (multiplicateur, comète explosive à ×5). Chaque fusion charge la jauge de saut : pleine, on change de secteur, l'onde vaporise les petits astres, de la matière exotique est offerte, puis des débris arrivent. Moteur dans `js/fusion.js` (pur, testé), rendu dans `js/mine.js`.
 - **Missions du jour** (`js/quests.js`) : 3 missions par jour + cadeau quotidien, payés en énergie ; les 3 terminées = noyau Rare garanti.
 - **Cascade (sans fin)** : les réacteurs tombent par vagues, de plus en plus vite. Un tap tire immédiatement et les chaînes peuvent se chevaucher. Chaîne de 3 ou plus = multiplicateur +1 (max ×8), un tap raté brise la série, 3 brèches = fin. Les vagues sont générées par le solveur : au début presque toutes les cases marchent, plus tard une seule est la bonne.
 - **Campagne** : 60 niveaux en 6 mondes, 3 étoiles par niveau.

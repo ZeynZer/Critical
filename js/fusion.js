@@ -1,7 +1,7 @@
-// Critical — « Forage » : moteur de fusion (pur, déterministe, testé dans Node).
-// On lâche des noyaux dans un puits. Deux noyaux de même rang qui se touchent fusionnent en un rang supérieur.
-// Chaque fusion charge la foreuse ; foreuse pleine = la strate cède (percée) : on descend, le souffle
-// vaporise les petits noyaux et les gravats, puis l'éboulement lâche de nouveaux gravats.
+// Critical — « Genèse » : moteur de fusion (pur, déterministe, testé dans Node).
+// On lâche des astres dans un puits de gravité. Deux astres de même rang qui se touchent fusionnent en un rang supérieur
+// (orbe → astéroïde → lune → planète → … → trou noir). Chaque fusion charge la jauge de saut ; jauge pleine = saut
+// vers le secteur suivant : l'onde vaporise les petits astres et les débris, puis de nouveaux débris arrivent.
 // Unités : largeur du puits = 10, y vers le bas, sol à y = HT.
 import { mulberry32 } from './gen.js';
 
@@ -10,7 +10,7 @@ const STEP = 1 / 120, GRAV = 34, REST = 0.12, CHAIN_WINDOW = 1.0, DANGER_TIME = 
 const RAD = [0.44, 0.58, 0.74, 0.92, 1.12, 1.34, 1.58, 1.84, 2.12, 2.42];
 export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
 export const R_RUBBLE = 0.5, R_SPECIAL = 0.6;
-export const STRATA = ['Humus', 'Argile', 'Grès', 'Calcaire', 'Schiste', 'Basalte', 'Géode', 'Magma', 'Noyau'];
+export const STRATA = ['Ceinture', 'Nébuleuse', 'Amas stellaire', 'Pulsar', 'Supergéante', 'Quasar', 'Grand Vide', 'Horizon', 'Origine']; // secteurs traversés
 export const need = (depth) => Math.min(260, 30 + depth * 24);
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : b.k === 'r' ? R_RUBBLE : R_SPECIAL);
 
