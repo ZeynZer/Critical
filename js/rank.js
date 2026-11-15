@@ -34,10 +34,10 @@ async function flush() {
   }
   save(); return out;
 }
-// Appelé en fin de partie. run = { score, sector, tier, seed, log, steps, daily }
+// Appelé en fin de partie. run = { score, sector, tier, seed, log, steps } ; avec daily = date, c'est un défi du jour (score = centièmes de seconde restants)
 export function submit(run) {
   if (!ready() || run.score <= 0) return Promise.resolve(null);
-  for (const board of run.daily ? ['all', 'day:' + run.daily] : ['all']) {
+  for (const board of [run.daily ? 'day:' + run.daily : 'all']) {
     const old = st.pending.find((p) => p.board === board);
     if (old && old.score >= run.score) continue;
     st.pending = st.pending.filter((p) => p.board !== board).concat({ board, score: run.score, sector: run.sector, tier: run.tier, seed: run.seed, log: run.log, steps: run.steps });
@@ -62,12 +62,13 @@ const CSS = `
 #rk-err{min-height:18px;color:#ff8aa0;font-size:13px}`;
 const HTML = `
 <div class="modal" id="rk"><div class="card glass"><h2>Classement</h2>
-<div class="rk-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Univers du jour</button></div>
+<div class="rk-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Défi du jour</button></div>
 <div id="rk-list"></div><p id="rk-me"></p>
 <div class="btns"><button class="big glass" id="rk-name"></button><button class="big primary" id="rk-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-ask"><div class="card glass"><h2>Ton pseudo</h2><p>Il apparaîtra dans le classement mondial. Demandé une seule fois, modifiable ensuite.</p>
 <input id="rk-in" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pseudo" enterkeyhint="done">
 <p id="rk-err"></p><div class="btns"><button class="big primary" id="rk-ok">Valider</button><button class="big glass" id="rk-later">Plus tard</button></div></div></div>`;
+const pts = (v) => (board === 'all' ? fmt(v) : (v / 100).toLocaleString('fr-FR') + ' s d\'avance'); // défi : temps restant
 let board = 'all', off = 0, done = false, busy = false, token = 0;
 const boardId = () => (board === 'all' ? 'all' : 'day:' + H.today());
 
@@ -76,8 +77,8 @@ async function more() { // charge la page suivante (défilement infini)
   try {
     const rows = await rpc('leaderboard', { p_board: boardId(), p_offset: off, p_limit: PAGE });
     if (t !== token) return;
-    if (!off && !rows.length) list.innerHTML = '<div id="rk-msg">Personne ici pour l\'instant.<br>Termine une partie pour ouvrir le classement.</div>';
-    list.insertAdjacentHTML('beforeend', rows.map((r) => `<div class="rk-row${r.name === st.name ? ' me' : ''}"><i>${r.rank}</i><span>${esc(r.name)}</span><b>${fmt(r.score)}</b><small>S${r.sector}</small></div>`).join(''));
+    if (!off && !rows.length) list.innerHTML = '<div id="rk-msg">Personne ici pour l\'instant.<br>Sois le premier à y entrer.</div>';
+    list.insertAdjacentHTML('beforeend', rows.map((r) => `<div class="rk-row${r.name === st.name ? ' me' : ''}"><i>${r.rank}</i><span>${esc(r.name)}</span><b>${pts(r.score)}</b><small>${board === 'all' ? 'S' + r.sector : ''}</small></div>`).join(''));
     off += rows.length; done = rows.length < PAGE;
   } catch (e) { if (t === token && !off) list.innerHTML = `<div id="rk-msg">${ERR.network}</div>`; done = true; }
   finally { if (t === token) busy = false; }
@@ -89,7 +90,7 @@ async function show(b) {
   $('#rk-name').textContent = st.name ? 'Changer de pseudo (' + st.name + ')' : 'Choisir un pseudo pour participer';
   more();
   if (!st.name) return;
-  try { await flush(); const me = await rpc('my_rank', { p_secret: secret(), p_board: boardId() }); if (t === token) $('#rk-me').innerHTML = me ? `Toi : <b>n° ${fmt(me.rank)}</b> sur ${fmt(me.total)} · ${fmt(me.score)} points` : 'Tu n\'as pas encore de score ici.'; } catch (e) { /* le classement s'affiche quand même */ }
+  try { await flush(); const me = await rpc('my_rank', { p_secret: secret(), p_board: boardId() }); if (t === token) $('#rk-me').innerHTML = me ? `Toi : <b>n° ${fmt(me.rank)}</b> sur ${fmt(me.total)} · ${pts(me.score)}${board === 'all' ? ' points' : ''}` : 'Tu n\'as pas encore de score ici.'; } catch (e) { /* le classement s'affiche quand même */ }
 }
 export function open() {
   if (!ready()) return H.toast('Le classement en ligne n\'est pas encore activé');

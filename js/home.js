@@ -10,6 +10,7 @@ const ICONS = {
   atelier: '<path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 013 3L8 18.5z"/><path d="M14.5 6l3.5 3.5"/>',
   coll: '<path d="M7 4h10l3.5 5L12 20.5 3.5 9z"/><path d="M3.5 9h17M9.5 9L12 20.5M14.5 9L12 20.5M7 4l2.5 5M17 4l-2.5 5"/>',
   casc: '<path d="M6 3v6M12 3v11M18 3v4"/><circle cx="6" cy="13" r="3"/><circle cx="12" cy="18.5" r="3"/><circle cx="18" cy="11" r="3"/>',
+  theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 000 17c2 0 2.4-1.6 1.4-2.8-1-1.3 0-3 1.8-3h2.3a3 3 0 003-3"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="10" r="1"/>',
   rank: '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4"/>',
   more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
@@ -72,6 +73,7 @@ const CSS = `
 .hm-row{display:flex;gap:14px;width:100%}
 .hm-tile{flex:1;min-width:0;height:112px;border-radius:28px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start}
 .hm-tile .hm-t{display:block;font:800 14px/1.1 var(--disp);letter-spacing:.03em;text-transform:uppercase}
+#b-daily small{white-space:normal;line-height:1.25;font-size:11px}
 .hm-tile small{display:block;margin-top:5px;font:500 12px/1.2 var(--font);color:rgba(238,244,255,.72)}
 .hm-ic{width:34px;height:34px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .hm-live{position:absolute;right:16px;top:16px;width:10px;height:10px;border-radius:50%;background:#5dffc0;box-shadow:0 0 12px #5dffc0;animation:hm-pu 1.8s ease-in-out infinite}
@@ -205,7 +207,7 @@ export function init() {
     reskin(hero, ['hm-hero']);
     const t = titleOf(hero), s = $('#b-mine-s', hero) || $('#b-endless-s', hero), hi = make('span', 'gl hm-hi'), tx = make('span', 'hm-tx');
     hi.style.setProperty('--d', '.5s');
-    tx.append(make('span', 'hm-chip', hero.id === 'b-mine' ? 'MODE PRINCIPAL' : 'SANS FIN'), ...grab(t, s));
+    tx.append(...grab(t, s));
     hi.insertAdjacentHTML('afterbegin', ORB); hi.append(tx); hi.insertAdjacentHTML('beforeend', CHEV);
     hero.textContent = ''; hero.appendChild(hi);
   }
@@ -220,7 +222,7 @@ export function init() {
   }
 
   // Défi du jour + Noyaux : deux tuiles
-  const daily = $('#b-daily'), chest = $('#b-chest'), row = make('div', 'hm-row');
+  const daily = $('#b-daily'), chest = $('#b-themes'), row = make('div', 'hm-row');
   const tile = (b, icon, delay, d) => {
     reskin(b, ['gl', 'hm-tile', 'hm-in']); b.style.setProperty('--e', delay); b.style.setProperty('--d', d);
     const t = titleOf(b), s = b.querySelector('small'), tt = make('span', 'hm-tt');
@@ -229,7 +231,7 @@ export function init() {
     return b;
   };
   if (daily) { tile(daily, ico(ICONS.cal), '.42s', '3s'); live = make('span', 'hm-live'); daily.appendChild(live); row.appendChild(daily); }
-  if (chest) { tile(chest, '<span class="hm-core"></span>', '.5s', '4s'); row.appendChild(chest); }
+  if (chest) { tile(chest, ico(ICONS.theme), '.5s', '4s'); row.appendChild(chest); }
   menu.appendChild(row);
 
   // dock flottant : Niveaux · Atelier · Collection · Code
@@ -239,23 +241,16 @@ export function init() {
     if (!b.querySelector('span')) { const lbl = b.textContent.trim(); b.textContent = ''; b.appendChild(make('span', '', lbl)); }
     reskin(b, ['hm-di']); titleOf(b); b.insertAdjacentHTML('afterbegin', ico(icon)); dock.appendChild(b);
   };
-  // « Plus » : les modes et outils secondaires (Cascade, Niveaux, Atelier, Code) dans une feuille, pour laisser la barre aux essentiels
-  const sheet = make('div', 'modal', '<div class="card glass"><h2>Plus</h2><div class="btns" id="hm-more"></div></div>'); sheet.id = 'hm-sheet'; document.body.appendChild(sheet);
-  const more = $('#hm-more', sheet), shut = () => sheet.classList.remove('on');
-  for (const id of ['#b-endless', '#b-levels', '#b-atelier', '#b-code']) { const b = $(id); if (!b || b === hero) continue; b.className = 'big glass'; more.appendChild(b); b.addEventListener('click', shut); }
-  const cl = make('button', 'big primary', 'Fermer'); more.appendChild(cl); cl.addEventListener('click', shut); sheet.addEventListener('click', (e) => { if (e.target === sheet) shut(); });
-  const mb = make('button', '', '<span>Plus</span>'); mb.id = 'b-more'; menu.appendChild(mb); mb.addEventListener('click', () => sheet.classList.add('on'));
-  di('#b-rank', ICONS.rank); di('#b-coll', ICONS.coll); di('#b-more', ICONS.more);
+  di('#b-rank', ICONS.rank); di('#b-codex', ICONS.coll);
   scr.appendChild(dock);
-
-  const lv = $('#s-levels'); if (lv && !lv.classList.contains('hm2')) { lv.classList.add('hm2'); lv.prepend(bgLayer(lv)); }
 
   // anciennes rangées vides
   menu.querySelectorAll('.row,.ch-row').forEach((r) => { if (!r.children.length) r.remove(); });
 }
 
 // Appelé par refreshTitle() : anneau de progression de la campagne + point « défi disponible »
-export function update({ pct = 0, lvl = 1, col = '#9b8cff' } = {}) {
-  if (ring) { ring.style.setProperty('--p', Math.round(Math.max(0, Math.min(1, pct)) * 100) + '%'); ring.style.setProperty('--c', col); const b = ring.querySelector('b'); if (b) b.textContent = lvl; }
-  const d = $('#b-daily-s'); if (live && d) live.style.display = /^Fait/.test(d.textContent) ? 'none' : '';
+// Appelé par app.js : poussière d'étoile possédée et état du défi du jour
+export function update({ dust = 0, daily = null } = {}) {
+  const p = $('#t-stars'); if (p) p.innerHTML = `<b>✦</b>&nbsp;${Math.round(dust).toLocaleString('fr-FR')}`;
+  const d = $('#b-daily small'); if (d && daily) { d.textContent = daily.done ? 'Réussi aujourd\'hui' : daily.txt; if (live) live.style.display = daily.done ? 'none' : ''; }
 }

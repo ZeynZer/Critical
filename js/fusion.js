@@ -18,12 +18,13 @@ export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
 export const R_SPECIAL = 0.6;
 export const STRATA = ['Ceinture', 'Nébuleuse', 'Amas stellaire', 'Pulsar', 'Supergéante', 'Quasar', 'Grand Vide', 'Horizon', 'Origine']; // secteurs traversés
 export const need = (depth) => Math.min(260, 30 + depth * 24);
-// Chaque secteur change une règle : g = gravité, pull = attraction des étoiles, wind = vent latéral (alt : il s'inverse), inset = parois resserrées
-const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { pull: 2, n: 'Attraction doublée' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
+// Chaque secteur change une règle : g = gravité, wind = vent latéral (alt : il s'inverse), inset = parois resserrées
+const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { wind: 3, n: 'Brise stellaire' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
   { wind: 4, n: 'Vent du quasar' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, wind: 4, alt: 1, n: 'Chaos originel' }];
-export const mod = (d) => ({ g: 1, pull: 1, wind: 0, alt: 0, inset: 0, n: '', ...MODS[d % MODS.length] });
+export const mod = (d) => ({ g: 1, wind: 0, alt: 0, inset: 0, n: '', ...MODS[d % MODS.length] });
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
+export function mulberry32(a) { return () => { let t = (a = (a + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // mulberry32 dont l'état vit dans G.rs : la partie entière tient dans un objet JSON (sauvegarde, reprise, rejeu)
 function rnd(G) { let t = (G.rs = (G.rs + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
 function nextItem(G) {
@@ -180,26 +181,14 @@ function walls(G, b) {
 }
 
 // Accélération subie par un point : gravité du secteur, vent, attraction des étoiles plus massives (tier = rang du corps, -1 sinon)
-// Seuls le trou noir et les rangs au-dessus (quasar, galaxie) courbent l'espace : on les liste une fois par pas au lieu de parcourir tous les astres pour chaque astre
-const ATT = [];
-function attractors(G) { ATT.length = 0; for (const a of G.bodies) if (a.k === 'c' && a.tier >= HOLE) ATT.push(a); }
-function accel(G, x, y, tier, self, out, rad) {
-  const M = G.mod; let ax = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1), ay = GRAV * M.g;
-  for (const a of ATT) {
-    if (a === self || a.dead || a.tier <= tier) continue;
-    const dx = a.x - x, dy = a.y - y, d = Math.hypot(dx, dy), R = a.r * 3.5 + 2;
-    if (d >= R || d < 1e-3) continue;
-    const f = 80 * M.pull * (1 - d / R) * Math.max(0, Math.min(1, (d - a.r - rad) / 0.7)); // s'éteint au contact : une pile posée reste stable
-    ax += (dx / d) * f; ay += (dy / d) * f;
-  }
-  out[0] = ax; out[1] = ay;
-}
+// Accélération d'un astre : la gravité du secteur et son vent. (Les astres ne s'attirent pas entre eux.)
+function accel(G, out) { const M = G.mod; out[0] = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1); out[1] = GRAV * M.g; }
 const ACC = [0, 0];
-// Trajectoire prévue du prochain lâcher (pour la visée) : la gravité des étoiles la courbe
+// Trajectoire prévue du prochain lâcher (pour la visée) : droite, ou penchée par le vent du secteur
 export function trace(G, x0) {
-  attractors(G); const it = G.cur, r = itemR(it), pts = []; let x = clampX(it, x0, G.inset), y = DROP_Y, vx = 0, vy = 0;
+  const it = G.cur, r = itemR(it), pts = []; let x = clampX(it, x0, G.inset), y = DROP_Y, vx = 0, vy = 0;
   for (let i = 0; i < 150; i++) {
-    accel(G, x, y, it.tier, null, ACC, r); vx += ACC[0] / 60; vy += ACC[1] / 60; x += vx / 60; y += vy / 60;
+    accel(G, ACC); vx += ACC[0] / 60; vy += ACC[1] / 60; x += vx / 60; y += vy / 60;
     if (x < G.inset + r) { x = G.inset + r; vx = 0; } else if (x > W - G.inset - r) { x = W - G.inset - r; vx = 0; }
     if (i % 2 === 0) pts.push(x, y);
     if (y > HT - r) break;
@@ -219,9 +208,9 @@ function sub(G) {
     G.pend.splice(i, 1);
     pierce(G);
   }
-  attractors(G);
+  accel(G, ACC);
   for (const b of G.bodies) {
-    b.px = b.x; b.py = b.y; b.age += dt; accel(G, b.x, b.y, b.k === 'c' ? b.tier : -1, b, ACC, b.r); b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
+    b.px = b.x; b.py = b.y; b.age += dt; b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
     if (b.k === 'c' && b.tier === GIANT) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
     else if (b.k === 'c' && b.tier === NEUTRON) { b.pt = (b.pt || 0) + dt; if (b.pt >= 4) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.7, 8); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r }); } } // l'étoile à neutrons repousse par impulsions
     else if (b.et > 0) b.et -= dt;
