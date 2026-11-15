@@ -11,10 +11,15 @@ Trace d'avancement de la refonte « jeu mobile ». La version d'avant refonte re
 - **Codex** : 10 astres + 3 découvertes secrètes, chaque nouvelle entrée rapporte de l'énergie.
 - **Univers du jour** : même tirage pour tous, une tentative comptée par jour, score partageable (local : pas de classement tant qu'il n'y a pas de backend).
 - **Skins et musique** : la couleur de la skin teinte l'orbe et son effet d'explosion s'applique aux fusions ; la musique s'intensifie avec la taille des astres, battement de cœur près de la ligne.
+- **Physique revue** : chevauchement toléré + frottement statique (les piles ne rampent plus sous la pression, testé sur 6 tirages), 6 passes de résolution, astres dessinés à la taille exacte de leur collision (astéroïde compris).
+- **13 rangs** : poussière d'étoile → orbe → astéroïde → lune → planète → géante gazeuse → naine orange → soleil → géante rouge → étoile à neutrons → trou noir → quasar → galaxie. Seuls l'étoile à neutrons et le trou noir attirent.
+- **Raretés** : 6 variantes rares (1 sur 25 à 1 sur 150 selon le rang) et 6 raretés de galaxie (62 % → 1 sur 1 000), révélation animée avec la probabilité, entrées au codex.
+- **Toucher** : appui n'importe où, l'astre suit le doigt en douceur, relâché mémorisé pendant la recharge.
+- **Sons** : un timbre par famille d'astres (roche, planète, étoile, astre extrême, galactique), légèrement désaccordé à chaque fois.
 - **Missions du jour + cadeau quotidien** (`js/quests.js`), branchés sur Genèse, la campagne et le défi du jour.
 - **Économie** : Genèse paie en énergie selon le secteur et le score ; probabilités des noyaux et seuils de garantie affichés ; panneau admin retiré de l'écran titre (`?admin=1`).
 - **Thème** : le verre liquide d'origine est conservé partout (accueil, fenêtres, missions, Genèse) ; Cascade a un vrai bouton sur l'accueil.
-- **Technique** : la boucle de Genèse s'arrête à la fermeture ; cache du service worker en v19.
+- **Technique** : la boucle de Genèse s'arrête à la fermeture ; cache du service worker en v20.
 
 ## À faire, par priorité
 1. **Réglage de Genèse sur de vrais joueurs** : tailles, rythme des sauts, fréquence des débris, seuils des missions. Les valeurs actuelles sont calées sur un joueur aléatoire simulé (`tools/test.mjs`), pas sur des humains.
