@@ -127,3 +127,12 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 #hud.endless #b-pause{display:flex}
 #hud.endless #b-hint{display:none}
 #hud.endless .hud-title b{font-size:19px}
+
+/* ---------- démarrage : sobre, un fondu, un appui ---------- */
+#splash{position:fixed;inset:0;z-index:100;background:#02030a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;transition:opacity .7s ease}
+#splash b{font:500 22px var(--font);letter-spacing:.42em;text-indent:.42em;color:#eef4ff;opacity:0;animation:sp-in 1.6s ease .25s forwards}
+#splash span{font:500 12px var(--font);letter-spacing:.24em;text-transform:uppercase;color:rgba(238,244,255,.55);opacity:0;transition:opacity .9s}
+#splash.ready span{opacity:1;animation:sp-pu 2.4s ease-in-out 1s infinite}
+#splash.out{opacity:0;pointer-events:none}
+@keyframes sp-in{to{opacity:1}}@keyframes sp-pu{50%{opacity:.35}}
+.credits{font-size:11px!important;line-height:1.6;color:rgba(238,244,255,.38)!important;margin-top:4px!important}.credits a{color:inherit;text-decoration:none}

@@ -1,12 +1,11 @@
-// Critical — « Genèse » : rendu et interface du mode principal (logique dans fusion.js, pure et testée).
+// Critical — le jeu : rendu et interface (logique dans fusion.js, pure et testée).
 // On fusionne des astres : orbe → astéroïde → lune → planète → géante gazeuse → étoiles → trou noir.
 // Habillage : le verre liquide du reste du jeu, sur fond d'espace profond.
 import * as A from './audio.js';
-import * as Skins from './skins.js';
 import * as F from './fusion.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
-const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, seen: 0, codex: {}, cx: {}, daily: { day: '', score: 0 } };
+const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, dust: 0, themes: { base: 1 }, theme: 'base', daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch (e) { /* ignore */ } };
 const $ = (s, r = document) => r.querySelector(s);
@@ -14,7 +13,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, mat: () => 'glass', col: () => [77, 243, 255], boom: () => {}, today: () => '', grant: () => {}, track: () => {}, quests: () => '', submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
+const H = { vib: () => {}, toast: () => {}, today: () => '', track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin du trou noir', 'Un trou noir avale 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux trous noirs'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -26,14 +25,28 @@ export const BODIES = [
   ['Naine orange', [255, 150, 60]], ['Soleil', [255, 226, 110]], ['Géante rouge', [255, 84, 66]], ['Étoile à neutrons', [170, 212, 255]], ['Trou noir', [190, 110, 255]], ['Quasar', [255, 214, 130]], ['Galaxie', [200, 215, 255]],
 ];
 const CY = [77, 243, 255], MG = [255, 79, 216], AM = [255, 194, 71];
-const HUES = [215, 280, 330, 190, 20, 260, 160, 300, 45]; // teinte de la nébuleuse par secteur
+// Thèmes d'arrière-plan : la récompense du jeu, achetée en poussière d'étoile (✦). h = teinte de la nébuleuse pour chacun des 9 secteurs.
+export const THEMES = [
+  { id: 'base', n: 'Nébuleuse', cost: 0, h: [215, 280, 330, 190, 20, 260, 160, 300, 45], s: 55, a: 0.2, sp: 45 },
+  { id: 'aurore', n: 'Aurore', cost: 300, h: [150, 170, 130, 190, 160, 140, 180, 120, 165], s: 65, a: 0.24, sp: 60 },
+  { id: 'braise', n: 'Braise', cost: 600, h: [10, 25, 0, 35, 15, 350, 30, 5, 20], s: 70, a: 0.24, sp: 25 },
+  { id: 'abysse', n: 'Abysse', cost: 1000, h: [200, 210, 190, 220, 205, 195, 215, 185, 200], s: 80, a: 0.13, sp: 20 },
+  { id: 'quartz', n: 'Rose quartz', cost: 1500, h: [320, 300, 340, 310, 330, 290, 345, 305, 325], s: 55, a: 0.26, sp: 40 },
+  { id: 'or', n: 'Or noir', cost: 2500, h: [45, 40, 50, 38, 48, 42, 52, 36, 46], s: 75, a: 0.16, sp: 12 },
+  { id: 'prisme', n: 'Prisme', cost: 4000, h: [0, 40, 80, 120, 160, 200, 240, 280, 320], s: 90, a: 0.3, sp: 110 },
+];
+const theme = () => THEMES.find((t) => t.id === sv.theme) || THEMES[0];
+// Défis du jour : [objectif, valeur, secondes, texte]. Durées réglées sur un joueur simulé rapide (tools/test.mjs ne les couvre pas).
+const CHAL = [['tier', 7, 75, 'Crée un Soleil en moins de 1 min 15'], ['tier', 8, 120, 'Crée une Géante rouge en moins de 2 min'], ['tier', 9, 180, 'Crée une Étoile à neutrons en moins de 3 min'],
+  ['chain', 5, 90, 'Déclenche une chaîne ×5 en moins de 1 min 30'], ['depth', 2, 60, 'Atteins le secteur 3 en moins de 1 min'], ['score', 6000, 60, 'Marque 6 000 points en moins de 1 min']];
+const TUT = ['Pose ton doigt dans la cuve, glisse pour viser, puis relâche.', 'Lâche le même astre contre le premier : deux astres identiques fusionnent.', 'Chaque fusion remplit la jauge du bas. Encore deux fusions !', 'Touche RÉSERVE, en bas à gauche, pour garder un astre de côté.', 'Voici le classement mondial. Choisis ton pseudo pour y participer.'];
 const sectorName = (d) => (d < F.STRATA.length ? F.STRATA[d] : `Origine +${d - F.STRATA.length + 1}`);
 
 /* ============================== état ============================== */
 let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, DPR = 1, SAT = 0, SAB = 0, lowFx = false, paused = false;
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
-let FN = 0, hud = null, hudKey = '';
+let FN = 0, hud = null, hudKey = '', tut = -1;
 let warp = 0, warpMsg = null, slow = 0, beatT = 0;
 let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
@@ -60,7 +73,6 @@ function onEvents() {
       label(x, y - r, '+' + fmt(e.pts), e.chain > 1 ? AM : [255, 255, 255], 14 + Math.min(10, e.tier * 1.4));
       A.fuse(e.tier <= 3 ? 0 : e.tier <= 5 ? 1 : e.tier <= 8 ? 2 : e.tier <= 10 ? 3 : 4, e.chain); H.vib(8 + e.tier * 3);
       shake = Math.max(shake, 1.5 + e.tier * 0.9); if (e.tier >= 6) { hitstop = 0.05; flash = 0.14; flashC = col; }
-      H.boom(e.chain, { ring: (a, b, r0, r1, l, c) => ring(a, b, r0, r1, l, c, 3), burst }, x, y, col, B.u * 1.2); // effet de fusion de la skin équipée
       A.setMood(Math.min(1, G.maxTier / F.MAX_TIER * 0.8 + G.depth * 0.04));
       if (e.tier === F.HOLE && !G.holeSeen) { G.holeSeen = true; slow = 1.1; ring(x, y, W * 0.7, r, 0.9, col, 5); ring(x, y, W * 0.45, r, 0.7, [255, 255, 255], 3); A.rumble(); }
       if (!sv.cx[e.tier]) { sv.cx[e.tier] = 1; save(); if (e.tier >= 4) G.bonus += 10; if (e.tier >= 3 && !reveal) { say(BODIES[e.tier][0].toUpperCase(), 'NOUVEL ASTRE · CODEX', col); A.star(2); } }
@@ -101,14 +113,14 @@ function onEvents() {
 }
 
 /* ============================== fond et astres (pré-rendus) ============================== */
-function makeTex(depth) {
-  const c = document.createElement('canvas'), w = c.width = Math.max(64, Math.round(W / 2)), h = c.height = Math.max(64, Math.round(Hh / 2)), x = c.getContext('2d');
-  const hue = HUES[depth % HUES.length], s0 = depth * 31.7;
-  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `hsl(${hue} 55% 7%)`); g.addColorStop(1, `hsl(${hue + 40} 60% 3%)`); x.fillStyle = g; x.fillRect(0, 0, w, h);
+function makeTex(depth, th = theme(), w = Math.max(64, Math.round(W / 2)), h = Math.max(64, Math.round(Hh / 2))) {
+  const c = document.createElement('canvas'), x = c.getContext('2d'); c.width = w; c.height = h;
+  const hue = th.h[depth % th.h.length], s0 = depth * 31.7;
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `hsl(${hue} ${th.s}% 7%)`); g.addColorStop(1, `hsl(${hue + 40} ${th.s}% 3%)`); x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 6; i++) { // nuages de nébuleuse
     const px = rnd(s0 + i) * w, py = rnd(s0 + i * 2.7) * h, r = (0.25 + rnd(s0 + i * 4.1) * 0.4) * w;
-    const n = x.createRadialGradient(px, py, 0, px, py, r); n.addColorStop(0, `hsla(${hue + (i % 3 - 1) * 45},90%,55%,.2)`); n.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = n; x.fillRect(px - r, py - r, r * 2, r * 2);
+    const n = x.createRadialGradient(px, py, 0, px, py, r); n.addColorStop(0, `hsla(${hue + (i % 3 - 1) * th.sp},90%,55%,${th.a})`); n.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = n; x.fillRect(px - r, py - r, r * 2, r * 2);
   }
   for (let i = 0; i < 150; i++) { x.fillStyle = `rgba(255,255,255,${0.15 + rnd(s0 + i * 1.7) * 0.6})`; const s = rnd(i * 3.3) > 0.9 ? 1.6 : 0.8; x.fillRect(rnd(s0 + i) * w, rnd(s0 + i * 2.1) * h, s, s); }
   return c;
@@ -196,7 +208,11 @@ function build(tier, r, v) {
     x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = Math.max(1, r * 0.12); x.lineCap = 'round'; x.beginPath(); x.moveTo(s - r, s); x.lineTo(s + r, s); x.moveTo(s, s - r); x.lineTo(s, s + r); x.stroke();
     return { spr: c, spin: 1.1 };
   }
-  if (kind === 'orb') { const [c, x] = mk(s * 2, s * 2); Skins.drawOrb(x, H.mat(), s, s, r, H.col().slice(), 0, 1.3, { gl: 0 }); return { spr: c, spin: 0 }; } // l'orbe porte la skin équipée
+  if (kind === 'orb') { // orbe : une bille de verre
+    const [c, x] = mk(s * 2, s * 2), g = x.createRadialGradient(s - r * 0.3, s - r * 0.35, r * 0.05, s, s, r); g.addColorStop(0, '#f4ffff'); g.addColorStop(0.45, '#4df3ff'); g.addColorStop(1, '#14589c');
+    x.fillStyle = g; x.beginPath(); x.arc(s, s, r, 0, TAU); x.fill(); soft(x, s, s + r * 0.55, r * 0.6, [190, 255, 255], 0.5); blob(x, s - r * 0.36, s - r * 0.5, r * 0.3, r * 0.14, -0.6, 'rgba(255,255,255,.8)');
+    x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 1.2; x.beginPath(); x.arc(s, s, r - 0.6, 0, TAU); x.stroke(); return { spr: c, spin: 0 };
+  }
   if (kind === 'rock') { // astéroïde : remplit tout son cercle de collision (bosses légères seulement), sinon on voit des vides entre les astres
     const [c, x] = mk(s * 2, s * 2), g = x.createLinearGradient(s - r, s - r, s + r, s + r); g.addColorStop(0, '#e2cfb4'); g.addColorStop(1, '#4a3d34'); x.fillStyle = g;
     x.beginPath(); for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU, rr = r * (0.94 + rnd(i * 2.7) * 0.06); x.lineTo(s + Math.cos(a) * rr, s + Math.sin(a) * rr); } x.closePath(); x.fill();
@@ -238,7 +254,7 @@ function build(tier, r, v) {
   return A;
 }
 function sprite(tier, v) {
-  const key = H.mat() + ':' + B.u.toFixed(2) + ':' + DPR;
+  const key = B.u.toFixed(2) + ':' + DPR;
   if (key !== spriteKey) { sprites.clear(); spriteKey = key; }
   let s = sprites.get(tier * 8 + v);
   if (!s) { const r = F.TIERS[tier].r * B.u; s = build(tier, r, v); s.h = r * 1.3; sprites.set(tier * 8 + v, s); }
@@ -379,8 +395,9 @@ function draw() {
   const sc = fmt(shown); // le score lumineux est dessiné dans une image, refaite seulement quand le nombre change
   if (sc !== hudKey || !hud) { hudKey = sc; if (!hud) hud = document.createElement('canvas'); hud.width = Math.ceil(W * DPR); hud.height = Math.ceil(64 * DPR); const hx = hud.getContext('2d'); hx.scale(DPR, DPR); hx.font = '900 32px Orbitron,system-ui,sans-serif'; hx.textAlign = 'center'; hx.shadowColor = 'rgba(77,243,255,.7)'; hx.shadowBlur = lowFx ? 0 : 16; hx.fillStyle = '#fff'; hx.fillText(sc, W / 2, 44); }
   ctx.drawImage(hud, 0, ty - 44, W, 64);
-  txt(`${G.daily ? 'UNIVERS DU JOUR · ' : ''}SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
-  if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
+  txt(`SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
+  if (G.chal) { const left = Math.max(0, G.chal[2] - G.t), m = Math.floor(left / 60); txt(`DÉFI · ${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`, cx, ty + 37, 13, left < 15 ? '#ff6a8a' : '#ffc247', 'center', 'Orbitron', 900); }
+  else if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
   // barre du bas : réserve à gauche, suivants à droite
   const hr = holdR, by = hr.y;
@@ -391,8 +408,6 @@ function draw() {
   glassBox(nx - 124, by, 124, hr.h, 20);
   const gp = clamp(1 - (T - giftT) * 2, 0, 1);
   drawItem(G.queue[0], nx - 84, by + hr.h / 2, 1 + gp * 0.5, 0, miniU(G.queue[0])); ctx.globalAlpha = 0.55; drawItem(G.queue[1], nx - 32, by + hr.h / 2, 0.7, 0, miniU(G.queue[1])); ctx.globalAlpha = 1;
-  // consignes intégrées (première partie)
-  if (sv.seen < 2 && !G.over) { const m = G.drops === 0 ? 'Glisse pour viser · relâche pour lâcher' : G.fusions === 0 ? 'Deux astres identiques fusionnent' : G.depth === 0 ? 'Chaque fusion charge la jauge de saut' : ''; if (m) txt(m, cx, B.y + B.h * 0.42, 13, `rgba(255,255,255,${0.6 + 0.25 * Math.sin(T * 3)})`, 'center', 'system-ui', 600); }
   // annonce (chaîne, saut, nouvel astre)
   if (reveal) drawReveal();
   else if (callout) { const c = callout, q = c.l / 1.2, s = q < 0.14 ? 1.5 - (q / 0.14) * 0.5 : 1, a = q > 0.7 ? 1 - (q - 0.7) / 0.3 : 1; ctx.globalAlpha = clamp(a, 0, 1); const y = B.y + B.h * 0.3; ctx.font = `900 ${Math.min(42, W * 0.094) * s}px Orbitron,sans-serif`; ctx.textAlign = 'center'; ctx.shadowColor = rgba(c.col, 0.9); ctx.shadowBlur = lowFx ? 0 : 22; ctx.fillStyle = '#fff'; ctx.fillText(c.txt, cx, y); ctx.shadowBlur = 0; if (c.sub) { ctx.font = '700 12px Orbitron,sans-serif'; ctx.fillStyle = rgba(c.col, 1); ctx.fillText(c.sub, cx, y + 24); } ctx.globalAlpha = 1; }
@@ -416,8 +431,13 @@ function update(dt) {
   parts = parts.filter((p) => p.l < p.m); rings = rings.filter((r) => r.l < r.m); labels = labels.filter((l) => l.l < 0.9);
   if (callout && (callout.l += dt) > 1.2) callout = null;
   if (reveal && (reveal.l += dt) > reveal.d) reveal = null;
+  if (tut >= 0) tutorial();
+  if (G.chal && !ended) { // défi du jour : objectif atteint avant la fin du chrono ?
+    const c = G.chal, val = c[0] === 'tier' ? G.maxTier : c[0] === 'chain' ? G.maxChain : c[0] === 'depth' ? G.depth : G.score;
+    if (val >= c[1]) { G.won = true; endRun(); } else if (G.t >= c[2]) endRun();
+  }
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
-  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); if (sv.seen < 2 && G.depth > 0) { sv.seen = 2; save(); } saveRun(); } } // un relâché pendant le temps de recharge est mémorisé
+  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); } } // un relâché pendant le temps de recharge est mémorisé
 }
 function bang() { // milieu du saut : le nouveau secteur naît
   const m = warpMsg || ['', '', 0], cx = W / 2, cy = B.y + B.h * 0.5;
@@ -451,11 +471,14 @@ const CSS = `
 /* pendant une partie, l'accueil (flous, animations) et le canvas principal sont masqués et figés : ils coûtaient cher derrière l'écran de jeu */
 .mn-open #s-title,.mn-open #cv{visibility:hidden}.mn-open #s-title,.mn-open #s-title *{animation-play-state:paused!important}
 #mn-cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
-#mn .icon{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px)}#mn-back{left:14px}#mn-help{right:14px}#mn-day{right:68px}
+#mn .icon{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px)}#mn-back{left:14px}#mn-help{right:14px}#mn.tut .icon{display:none}
+#mn-tut{position:absolute;left:22px;right:22px;top:calc(env(safe-area-inset-top,0px) + 150px);padding:14px 16px;border-radius:22px;text-align:center;font-size:15px;font-weight:600;line-height:1.4;pointer-events:none;display:none}#mn.tut #mn-tut{display:block;animation:fade .3s}
+#mn-th{width:100%;display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:52vh;overflow-y:auto;touch-action:pan-y}
+.th{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#fff;font-size:12px}.th canvas{width:100%;height:84px;border-radius:12px;display:block}.th b{font:700 12px var(--disp)}.th.on{border-color:#5dffc0}.th.lock canvas{opacity:.55}.th small{color:rgba(255,255,255,.7)}
 #mn-cx{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:46vh;overflow-y:auto;touch-action:pan-y}
 .cx{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);text-align:center;opacity:.55}.cx.ok{opacity:1;border-color:rgba(255,255,255,.28)}
 .cx canvas{width:64px;height:64px}.cx i{width:64px;height:64px;display:grid;place-items:center;font:900 26px var(--disp);font-style:normal;color:rgba(255,255,255,.4)}.cx.ok i{color:#ffc247}.cx b{font-size:11px}.cx small{font-size:9.5px;line-height:1.25;color:rgba(255,255,255,.55)}
-#mn-m-over .stats{flex-wrap:wrap}#mn-m-over .stats div{min-width:40%}#mn-m-over .stats .rec b{color:#5dffc0}
+#mn-m-over .card{max-height:calc(100vh - 40px);overflow-y:auto;touch-action:pan-y;scrollbar-width:none}#mn-m-over .stats{flex-wrap:wrap}#mn-m-over .stats div{min-width:40%}#mn-m-over .stats .rec b{color:#5dffc0}
 .fg-q{width:100%;font-size:13px;color:rgba(255,255,255,.85)}
 .fg-q .q{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.1);text-align:left}.fg-q .q:last-child{border:0}
 .fg-q .q i{flex:none;width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}.fg-q .q i::after{content:"";position:absolute;inset:0;width:var(--p);border-radius:3px;background:linear-gradient(90deg,#4df3ff,#ff4fd8)}
@@ -466,14 +489,13 @@ const CSS = `
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-day" aria-label="Univers du jour"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
-<div class="modal" id="mn-m-help"><div class="card glass"><h2>Genèse</h2><p class="multi" id="mn-ht"></p><p id="mn-lad"></p><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
-const HTML2 = `<div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
+<div class="modal" id="mn-m-help"><div class="card glass"><h2>Comment jouer</h2><p class="multi" id="mn-ht"></p><p id="mn-lad"></p><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
+const HTML2 = `<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 const HELP = `Lâche les astres dans le puits. Deux identiques qui se touchent fusionnent en un astre plus gros.
 
 Un seul lâcher qui déclenche plusieurs fusions, c'est une chaîne : chaque maillon multiplie les points. À ×5, tu gagnes une comète explosive.
@@ -502,53 +524,94 @@ function showCodex() {
   $('#mn-cxs').textContent = `${n}/${tot} découvertes. Les variantes rares triplent les points et rapportent de l'énergie.`;
   $('#mn-m-codex').classList.add('on');
 }
-function startDaily() {
-  const d = H.today(); if (!d) return;
-  if (sv.daily.day === d) return H.toast(`Univers du jour déjà joué : ${fmt(sv.daily.score)} points. Reviens demain !`);
-  if (G && !ended && G.drops > 8) return H.toast('Termine d\'abord ta partie en cours');
-  newRun(hash('critical:genese:' + d)); G.daily = d; H.toast('Univers du jour : même tirage pour tous, une seule tentative');
+export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} ✦ ${label}`.trim()); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
+export const dust = () => sv.dust;
+const todayChal = () => CHAL[hash('critical:defi:' + H.today()) % CHAL.length];
+export const daily = () => ({ txt: todayChal()[3], done: sv.daily.day === H.today() && sv.daily.done });
+export function openDaily() { // même tirage pour tout le monde ; on peut retenter, la récompense tombe une fois par jour
+  open(true); const d = H.today(); newRun(hash('critical:defi:seed:' + d), true); G.chal = todayChal(); G.day = d; say('DÉFI DU JOUR', G.chal[3].toUpperCase(), AM);
 }
 function share() {
-  const t = `Critical · Genèse — univers du ${sv.daily.day} : ${fmt(sv.daily.score)} points. À toi !`;
-  if (navigator.share) navigator.share({ text: t }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => H.toast('Score copié'), () => {});
+  const t = `Critical — défi du jour réussi avec ${sv.daily.best.toLocaleString('fr-FR')} s d'avance : « ${todayChal()[3]} ». À toi !`;
+  if (navigator.share) navigator.share({ text: t }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => H.toast('Résultat copié'), () => {});
+}
+export function openThemes() {
+  const g = $('#mn-th'); g.innerHTML = ''; $('#mn-ths').textContent = `Tu as ${fmt(sv.dust)} ✦. La poussière d'étoile se gagne en jouant, avec les missions et le défi du jour.`;
+  for (const t of THEMES) {
+    const own = !!sv.themes[t.id], b = document.createElement('button'); b.className = 'th' + (sv.theme === t.id ? ' on' : own ? '' : ' lock');
+    b.append(makeTex(1, t, 160, 84)); b.insertAdjacentHTML('beforeend', `<b>${t.n}</b><small>${sv.theme === t.id ? 'Équipé' : own ? 'Équiper' : fmt(t.cost) + ' ✦'}</small>`);
+    b.addEventListener('click', () => {
+      if (!own) { if (sv.dust < t.cost) return H.toast(`Il te manque ${fmt(t.cost - sv.dust)} ✦`); sv.dust -= t.cost; sv.themes[t.id] = 1; A.rare(2); H.vib([20, 40, 40]); }
+      sv.theme = t.id; save(); H.refresh(); if (G && W) texB = makeTex(G.depth); openThemes();
+    });
+    g.append(b);
+  }
+  $('#mn-m-themes').classList.add('on');
+}
+// Première partie guidée : chaque étape attend que le joueur fasse le geste demandé.
+function tutorial() {
+  const orb = () => ({ k: 'c', tier: 1 });
+  if (tut <= 2) { G.cur = orb(); G.queue = [orb(), orb()]; } // tirage imposé : des orbes, pour que les fusions soient certaines
+  const done = [G.drops >= 1, G.fusions >= 1, G.fusions >= 3, !!G.hold, !$('#rk-ask').classList.contains('on')][tut];
+  if (done) { tut++; if (tut === 4) { if (H.online() && !H.named()) H.askName(); else tut = 5; } }
+  if (tut >= 5) { tut = -1; sv.tut = 1; save(); $('#mn').classList.remove('tut'); H.toast('À toi de jouer !'); return; }
+  const e = $('#mn-tut'); if (e.textContent !== TUT[tut]) e.textContent = TUT[tut];
 }
 
-function saveRun() { try { if (G && !ended && !G.over && G.drops > 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
+function saveRun() { try { if (G && !ended && !G.over && G.drops > 0 && !G.chal && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
 const dropRun = () => { try { localStorage.removeItem(RUN); } catch (e) { /* ignore */ } };
 function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `Classement mondial : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
 function endRun() {
-  if (ended || !G) return; ended = true; dropRun();
-  rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n, daily: G.daily || '' }).then(rankLine, () => {});
+  if (ended || !G) return; ended = true; const c = G.chal;
+  if (!c) dropRun(); // un défi ne touche pas à la partie normale en attente
+  if (c) return endChal(c);
+  rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
-  sv.runs++; sv.seen = Math.max(sv.seen, 1); if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
+  sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
   H.track('score', G.score, true); H.track('runs', 1);
-  if (G.daily) sv.daily = { day: G.daily, score: G.score }, save();
-  const energy = Math.min(80, Math.round(G.depth * 5 + G.score / 2000)) + G.bonus; // proportionnel au jeu réel : rien à gagner à saborder une partie
+  const gain = Math.min(80, Math.round(G.depth * 5 + G.score / 2000)) + G.bonus; // proportionnel au jeu réel : rien à gagner à saborder une partie
   if (G.over) A.fail();
   setTimeout(() => {
-    if (energy > 0) H.grant(energy);
-    $('#mn-ot').textContent = G.daily ? 'Univers du jour' : rec.s && sv.runs > 1 ? 'Nouveau record !' : 'Effondrement'; $('#mn-share').hidden = !G.daily;
+    grant(gain);
+    $('#mn-ot').textContent = rec.s && sv.runs > 1 ? 'Nouveau record !' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer';
     $('#mn-os').textContent = rec.s ? 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
-    $('#mn-o1').textContent = fmt(G.score); $('#mn-o2').textContent = G.depth + 1; $('#mn-o3').textContent = '×' + G.maxChain; $('#mn-o4').textContent = G.maxTier === F.MAX_TIER ? 'Galaxie' : BODIES[G.maxTier][0];
-    $('#mn-c1').className = rec.s ? 'rec' : ''; $('#mn-c2').className = rec.d ? 'rec' : ''; $('#mn-c3').className = rec.c ? 'rec' : '';
-    $('#mn-q').innerHTML = H.quests();
-    $('#mn-m-over').classList.add('on');
+    overPanel(rec);
   }, G.over ? 900 : 0);
   refreshTitle();
 }
-function newRun(seed) {
-  dropRun(); G = F.newGame(seed); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; shake = flash = 0; aimX = F.W / 2; aiming = false;
+function overPanel(rec) {
+  $('#mn-o1').textContent = fmt(G.score); $('#mn-o2').textContent = G.depth + 1; $('#mn-o3').textContent = '×' + G.maxChain; $('#mn-o4').textContent = G.maxTier === F.MAX_TIER ? 'Galaxie' : BODIES[G.maxTier][0];
+  $('#mn-c1').className = rec.s ? 'rec' : ''; $('#mn-c2').className = rec.d ? 'rec' : ''; $('#mn-c3').className = rec.c ? 'rec' : '';
+  $('#mn-q').innerHTML = H.quests(); $('#mn-m-over').classList.add('on');
+}
+function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à temps) ou manqué
+  const won = !!G.won, left = Math.max(0, Math.round((c[2] - G.t) * 10) / 10), first = won && !(sv.daily.day === G.day && sv.daily.done);
+  if (won) { sv.daily = { day: G.day, done: true, best: sv.daily.day === G.day ? Math.max(sv.daily.best, left) : left }; save(); A.win(); } else A.fail();
+  rankLine(null); if (won) H.submit({ daily: G.day, score: Math.round(left * 100), sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n });
+  setTimeout(() => {
+    if (first) { grant(150, 'Défi du jour'); H.track('daily', 1); }
+    $('#mn-ot').textContent = won ? 'Défi réussi !' : 'Défi manqué'; $('#mn-share').hidden = !won; $('#mn-again').textContent = won ? 'Rejouer le défi' : 'Réessayer';
+    $('#mn-os').textContent = won ? `Il te restait ${left.toLocaleString('fr-FR')} s. ${first ? '' : 'Récompense déjà reçue aujourd\'hui.'}` : c[3] + '.';
+    overPanel({}); H.refresh();
+  }, 900);
+}
+function newRun(seed, keep) {
+  if (!keep) dropRun(); G = F.newGame(seed); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; shake = flash = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
 }
-function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'De l\'orbe au trou noir'; }
+function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }
 export const busy = () => isOpen;
 export { rankLine };
 export const stats = () => ({ ...sv });
-export function open() {
+export { showCodex as openCodex };
+export function open(fresh) { // fresh : on va lancer autre chose qu'une partie normale (défi du jour)
   isOpen = true; sprites.clear(); $('#mn').classList.add('on'); document.documentElement.classList.add('mn-open'); lowFx = (navigator.hardwareConcurrency || 4) <= 4;
   G = null; let old = null; try { old = JSON.parse(localStorage.getItem(RUN) || 'null'); } catch (e) { /* ignore */ }
-  resize(); newRun();
-  if (old && Array.isArray(old.bodies) && Array.isArray(old.log) && !old.over) { G = old; G.ev = []; shown = G.score; texB = makeTex(G.depth); localStorage.setItem(RUN, JSON.stringify(G)); H.toast('Partie reprise'); } // newRun() efface la sauvegarde : on la remet
+  resize(); tut = -1; $('#mn').classList.remove('tut');
+  if (fresh === true) { /* l'appelant crée sa partie */ }
+  else if (!sv.tut) { newRun(7); tut = 0; $('#mn').classList.add('tut'); } // première fois : partie guidée
+  else if (old && Array.isArray(old.bodies) && Array.isArray(old.log) && !old.over) { newRun(1, true); G = old; G.ev = []; shown = G.score; texB = makeTex(G.depth); H.toast('Partie reprise'); }
+  else newRun();
   last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
 function close() { A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
@@ -565,10 +628,10 @@ export function init(opts) {
   click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !ended && G.drops > 0) endRun(); else close(); });
   click('#mn-rkb', () => (H.online() && !H.named() ? H.askName() : H.rank()));
   click('#mn-help', () => { $('#mn-ht').textContent = HELP; $('#mn-lad').textContent = BODIES.map((b) => b[0]).join(' › '); $('#mn-m-help').classList.add('on'); paused = true; });
-  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => newRun()); click('#mn-day', startDaily); click('#mn-share', share); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
+  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
   // bouton principal de l'accueil (home.js le transforme en héros) ; Cascade devient un lien discret
   const menu = $('#s-title .menu');
-  if (menu && !$('#b-mine')) { const b = document.createElement('button'); b.className = 'big primary hero'; b.id = 'b-mine'; b.innerHTML = '<span>Genèse</span><small id="b-mine-s"></small>'; menu.insertBefore(b, menu.firstChild); b.addEventListener('click', () => { A.ui(); H.vib(9); open(); }); }
+  if (menu && !$('#b-mine')) { const b = document.createElement('button'); b.className = 'big primary hero'; b.id = 'b-mine'; b.innerHTML = '<span>Jouer</span><small id="b-mine-s"></small>'; menu.insertBefore(b, menu.firstChild); b.addEventListener('click', () => { A.ui(); H.vib(9); open(); }); }
   refreshTitle();
   window.__mine = { get G() { return G; }, get B() { return B; }, F };
 }

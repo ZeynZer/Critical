@@ -1,8 +1,8 @@
 // Critical — missions du jour + cadeau quotidien. Trois missions tirées de la date (les mêmes pour tous),
-// récompensées en énergie ; les trois terminées = un noyau Rare garanti. Aucune pénalité si on saute un jour.
+// récompensées en poussière d'étoile (✦) ; les trois terminées = 100 ✦ en plus. Aucune pénalité si on saute un jour.
 // Styles : .fg-q défini par mine.js, le reste vient du verre commun (.modal .card .big).
 // shortcut: tout est local (localStorage, horloge de l'appareil) donc falsifiable ; à valider côté serveur quand un backend existera.
-import { mulberry32 } from './gen.js';
+import { mulberry32 } from './fusion.js';
 
 const KEY = 'critical.quests.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -14,7 +14,7 @@ const POOL = [
   ['chain', 4, 20, 'Déclenche une chaîne ×4'], ['chain', 6, 35, 'Déclenche une chaîne ×6'],
   ['score', 15000, 25, 'Marque 15 000 points en une partie'], ['score', 40000, 40, 'Marque 40 000 points en une partie'],
   ['tier', 9, 25, 'Crée une Géante rouge'], ['tier', 11, 45, 'Crée un Trou noir'],
-  ['runs', 3, 20, 'Termine 3 parties de Genèse'], ['stars', 3, 25, 'Gagne 3 étoiles en campagne'], ['daily', 1, 30, 'Termine le défi du jour'],
+  ['runs', 3, 20, 'Termine 3 parties'], ['daily', 1, 30, 'Réussis le défi du jour'],
 ];
 const st = { day: '', q: [], bonus: false, gift: false, streak: 0 };
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
@@ -40,19 +40,19 @@ export function track(type, n, max = false) {
     const [ty, goal, e, lbl] = POOL[q.i]; if (ty !== type || q.done) continue;
     const p = Math.min(goal, max ? Math.max(q.p, n) : q.p + n); if (p === q.p) continue;
     q.p = p; ch = true;
-    if (p >= goal) { q.done = true; H.toast('Mission accomplie : ' + lbl); H.vib([12, 40, 12]); const all = st.q.every((x) => x.done) && !st.bonus; if (all) st.bonus = true; H.grant(e, all ? 'Trois missions : noyau Rare garanti' : '', all ? 1 : -1); }
+    if (p >= goal) { q.done = true; H.toast('Mission accomplie : ' + lbl); H.vib([12, 40, 12]); const all = st.q.every((x) => x.done) && !st.bonus; if (all) st.bonus = true; H.grant(e + (all ? 100 : 0), all ? 'Trois missions terminées' : 'Mission'); }
   }
   if (ch) { save(); refresh(); }
 }
 export function html() {
   roll();
-  return st.q.map((q) => { const [, goal, e, lbl] = POOL[q.i]; return `<div class="q${q.done ? ' ok' : ''}"><i style="--p:${Math.round((q.p / goal) * 100)}%"></i><span>${lbl}</span><em>${q.done ? 'fait' : '+' + e + ' ⚡'}</em></div>`; }).join('');
+  return st.q.map((q) => { const [, goal, e, lbl] = POOL[q.i]; return `<div class="q${q.done ? ' ok' : ''}"><i style="--p:${Math.round((q.p / goal) * 100)}%"></i><span>${lbl}</span><em>${q.done ? 'fait' : '+' + e + ' ✦'}</em></div>`; }).join('');
 }
 function refresh() {
   const b = $('#b-quests'); if (!b) return;
   const n = st.q.filter((q) => q.done).length;
   b.innerHTML = `<span>Missions du jour</span><em>${st.gift ? '' : '<u>cadeau</u> · '}${n}/3</em>`;
-  const p = $('#qs-list'); if (p) { p.innerHTML = html(); $('#qs-gift').hidden = st.gift; $('#qs-gift').textContent = `Cadeau du jour · +${giftValue()} énergie`; $('#qs-sub').textContent = `Jour ${st.streak} de suite. Les trois missions terminées : un noyau Rare garanti.`; }
+  const p = $('#qs-list'); if (p) { p.innerHTML = html(); $('#qs-gift').hidden = st.gift; $('#qs-gift').textContent = `Cadeau du jour · +${giftValue()} ✦`; $('#qs-sub').textContent = `Jour ${st.streak} de suite. Les trois missions terminées : 100 ✦ en plus.`; }
 }
 export function init(opts) {
   Object.assign(H, opts); roll();
@@ -68,6 +68,6 @@ export function init(opts) {
   b.addEventListener('click', () => { roll(); refresh(); $('#qs').classList.add('on'); });
   $('#qs-close').addEventListener('click', () => $('#qs').classList.remove('on'));
   $('#qs').addEventListener('click', (e) => { if (e.target.id === 'qs') e.currentTarget.classList.remove('on'); });
-  $('#qs-gift').addEventListener('click', () => { if (st.gift) return; st.gift = true; save(); H.grant(giftValue()); refresh(); });
+  $('#qs-gift').addEventListener('click', () => { if (st.gift) return; st.gift = true; save(); H.grant(giftValue(), 'Cadeau du jour'); refresh(); });
   refresh();
 }

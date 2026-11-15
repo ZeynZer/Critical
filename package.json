@@ -1,2 +1,2 @@
-{ "name": "critical", "version": "1.0.0", "type": "module", "private": true,
-  "scripts": { "levels": "node tools/gen-levels.mjs", "test": "node tools/test.mjs" } }
+{ "name": "critical", "version": "2.0.0", "type": "module", "private": true,
+  "scripts": { "test": "node tools/test.mjs" } }
