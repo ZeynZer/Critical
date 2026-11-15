@@ -1,6 +1,6 @@
 // Critical — missions du jour + cadeau quotidien. Trois missions tirées de la date (les mêmes pour tous),
 // récompensées en énergie ; les trois terminées = un noyau Rare garanti. Aucune pénalité si on saute un jour.
-// Styles : classes .fg-* définies par mine.js (même langage visuel que le Forage).
+// Styles : .fg-q défini par mine.js, le reste vient du verre commun (.modal .card .big).
 // shortcut: tout est local (localStorage, horloge de l'appareil) donc falsifiable ; à valider côté serveur quand un backend existera.
 import { mulberry32 } from './gen.js';
 
@@ -10,11 +10,11 @@ const H = { today: () => '', grant: () => {}, toast: () => {}, vib: () => {} };
 // [type, cible, énergie, libellé]
 const POOL = [
   ['fusions', 80, 20, 'Réalise 80 fusions'], ['fusions', 160, 35, 'Réalise 160 fusions'],
-  ['depth', 4, 25, 'Atteins la strate 4'], ['depth', 7, 40, 'Atteins la strate 7'],
+  ['depth', 4, 25, 'Atteins le secteur 4'], ['depth', 7, 40, 'Atteins le secteur 7'],
   ['chain', 4, 20, 'Déclenche une chaîne ×4'], ['chain', 6, 35, 'Déclenche une chaîne ×6'],
-  ['score', 15000, 25, 'Marque 15 000 points en un forage'], ['score', 40000, 40, 'Marque 40 000 points en un forage'],
-  ['tier', 8, 25, 'Forge une Améthyste'], ['tier', 10, 45, 'Forge une Singularité'],
-  ['runs', 3, 20, 'Termine 3 forages'], ['stars', 3, 25, 'Gagne 3 étoiles en campagne'], ['daily', 1, 30, 'Termine le défi du jour'],
+  ['score', 15000, 25, 'Marque 15 000 points en une partie'], ['score', 40000, 40, 'Marque 40 000 points en une partie'],
+  ['tier', 8, 25, 'Crée une Géante rouge'], ['tier', 10, 45, 'Crée un Trou noir'],
+  ['runs', 3, 20, 'Termine 3 parties de Genèse'], ['stars', 3, 25, 'Gagne 3 étoiles en campagne'], ['daily', 1, 30, 'Termine le défi du jour'],
 ];
 const st = { day: '', q: [], bonus: false, gift: false, streak: 0 };
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
@@ -58,12 +58,12 @@ export function init(opts) {
   Object.assign(H, opts); roll();
   const menu = $('#s-title .menu'); if (!menu) return;
   const css = document.createElement('style');
-  css.textContent = '#b-quests{display:flex;justify-content:space-between;align-items:center;width:100%;height:42px;padding:0 14px;background:rgba(10,8,12,.62);border-left:3px solid #ffb238;border-radius:4px;font-family:var(--disp);font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#fff}#b-quests em{font-style:normal;color:#ffb238}#b-quests u{text-decoration:none;color:#7dffb0}#b-quests:active{transform:translateY(2px)}';
+  css.textContent = '#b-quests{display:flex;justify-content:space-between;align-items:center;width:100%;height:46px;padding:0 18px;border-radius:23px;font:700 12px var(--disp);letter-spacing:1.2px;text-transform:uppercase;color:#fff;transition:transform .55s cubic-bezier(.2,1.6,.4,1)}#b-quests em{font-style:normal;color:#ffc247}#b-quests u{text-decoration:none;color:#5dffc0}#b-quests:active{transform:scale(.955)}';
   document.head.appendChild(css);
-  const b = document.createElement('button'); b.id = 'b-quests';
+  const b = document.createElement('button'); b.id = 'b-quests'; b.className = 'glass';
   const hero = $('#b-mine'); if (hero && hero.parentNode === menu) hero.after(b); else menu.prepend(b);
   const d = document.createElement('div');
-  d.innerHTML = '<div class="fg-modal" id="qs"><div class="fg-panel"><h2>Missions du jour</h2><p id="qs-sub"></p><div class="fg-q" id="qs-list"></div><button class="fg-btn" id="qs-gift"></button><button class="fg-btn alt" id="qs-close">Fermer</button></div></div>';
+  d.innerHTML = '<div class="modal" id="qs"><div class="card glass"><h2>Missions du jour</h2><p id="qs-sub"></p><div class="fg-q" id="qs-list"></div><div class="btns"><button class="big primary" id="qs-gift"></button><button class="big glass" id="qs-close">Fermer</button></div></div></div>';
   document.body.append(d.firstChild);
   b.addEventListener('click', () => { roll(); refresh(); $('#qs').classList.add('on'); });
   $('#qs-close').addEventListener('click', () => $('#qs').classList.remove('on'));

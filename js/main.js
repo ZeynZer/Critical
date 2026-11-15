@@ -600,7 +600,7 @@ function playEndless() {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  if (CH.busy() || ED.busy() || INTRO.busy() || MINE.busy() || G.mode === 'title') { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
+  if (CH.busy() || ED.busy() || INTRO.busy() || MINE.busy()) { last = now; return; } // ouverture d'un noyau : on économise le rendu du jeu
   const dt = Math.min(0.05, (now - last) / 1000); last = now; G.clock += dt;
   CH.tick(dt);
   update(dt);
