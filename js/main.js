@@ -783,7 +783,7 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 CH.init({ vib, toast: (m) => toast(m), COL });
 ED.init({ vib, toast: (m) => toast(m), COL, play: playCustom, mat: () => CH.matOf() });
-MINE.init({ vib, toast: (m) => toast(m), mat: () => CH.matOf(), grant: (g) => CH.grant(g), track: QS.track, quests: QS.html });
+MINE.init({ vib, toast: (m) => toast(m), mat: () => CH.matOf(), col: () => COL[1], boom: (n, api, x, y, col, cs) => CH.boom(n, api, x, y, col, cs), today: () => todayStr(), grant: (g) => CH.grant(g), track: QS.track, quests: QS.html });
 HOME.init();
 QS.init({ today: todayStr, grant: CH.grant, toast: (m) => toast(m), vib });
 INTRO.init({ vib, today: () => todayStr() });

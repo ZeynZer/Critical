@@ -58,6 +58,14 @@ import { mulberry32 } from '../js/gen.js';
   // empilement stable : après repos, les noyaux ne se chevauchent presque plus et ne bougent plus
   const g2 = F.newGame(4); for (let i = 0; i < 6; i++) { g2.cur = { k: 'c', tier: i }; F.drop(g2, 1 + i * 1.5); for (let k = 0; k < 30; k++) F.tick(g2, 1 / 60); }
   for (let k = 0; k < 300; k++) F.tick(g2, 1 / 60);
-  assert.ok(g2.bodies.every((o) => Math.hypot(o.vx, o.vy) < 0.6), 'pile au repos');
+  const pos = g2.bodies.map((o) => [o.x, o.y]); for (let k = 0; k < 120; k++) F.tick(g2, 1 / 60);
+  assert.ok(g2.bodies.every((o, i) => Math.hypot(o.x - pos[i][0], o.y - pos[i][1]) < 0.05), 'pile au repos'); // plus rien ne bouge, malgré l'attraction des étoiles
   console.log(`forage OK · joueur aléatoire : ${over}/20 parties finies en <400 lâchers, ${(drops / 20) | 0} lâchers, strate moy. ${(depth / 20).toFixed(1)}, ${(fus / 20) | 0} fusions`);
+}
+{ // gravité : un petit astre près d'un soleil est attiré vers lui ; la visée suit la même courbe
+  const g = F.newGame(1); g.bodies.push({ id: 99, k: 'c', tier: 6, x: 7, y: 12, vx: 0, vy: 0, r: F.TIERS[6].r, ang: 0, av: 0, age: 2, hit: true, dead: false });
+  g.cur = { k: 'c', tier: 0 }; const tr = F.trace(g, 4.2); assert.ok(tr[tr.length - 2] > 4.3, 'trajectoire courbée vers le soleil');
+  F.drop(g, 4.2); for (let k = 0; k < 60; k++) F.tick(g, 1 / 60); assert.ok(g.bodies.find((o) => o.tier === 0).x > 4.3, 'astre attiré');
+  assert.equal(F.mod(7).inset, 0.8); assert.equal(F.mod(9).g, 1);
+  console.log('gravité et secteurs OK');
 }
