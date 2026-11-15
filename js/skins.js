@@ -25,6 +25,7 @@ function rings(c, x, y, r, k, hp, t) {
 }
 // symbole : 1 noyau + · 2 pulsar × · 3 étoile ✳ · 7 laser # · 8/9 mèche ○
 function glyph(c, x, y, r, ty, col = 'rgba(255,255,255,.95)', w) {
+  if (ty === 0) return; // minéraux du Forage : pas de symbole
   c.strokeStyle = col; c.lineWidth = w || Math.max(2, r * 0.16); c.lineCap = 'round'; c.beginPath();
   const L = r * (ty === 3 ? 0.5 : 0.46);
   if (ty === 7) { const q = L * 0.5; for (const s of [-1, 1]) { c.moveTo(x - L, y + s * q); c.lineTo(x + L, y + s * q); c.moveTo(x + s * q, y - L); c.lineTo(x + s * q, y + L); } }
