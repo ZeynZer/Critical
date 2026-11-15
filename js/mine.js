@@ -32,6 +32,7 @@ const sectorName = (d) => (d < F.STRATA.length ? F.STRATA[d] : `Origine +${d - F
 let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, DPR = 1, SAT = 0, SAB = 0, lowFx = false, paused = false;
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
+let FN = 0, hud = null, hudKey = '';
 let warp = 0, warpMsg = null, slow = 0, beatT = 0;
 let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
@@ -42,7 +43,7 @@ const sx = (x) => B.x + x * B.u, sy = (y) => B.y + y * B.u;
 const ring = (x, y, r0, r1, life, col, w = 3) => rings.push({ x, y, r0, r1, l: 0, m: life, col, w });
 function burst(x, y, n, col, sp, life = 0.7, sz = 2.5) {
   n = Math.round(n * (lowFx ? 0.5 : 1));
-  for (let i = 0; i < n && parts.length < (lowFx ? 110 : 260); i++) { const a = Math.random() * TAU, v = sp * (0.35 + Math.random() * 0.65); parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: 0, m: life * (0.6 + Math.random() * 0.6), col, sz: sz * (0.6 + Math.random() * 0.8) }); }
+  for (let i = 0; i < n && parts.length < (lowFx ? 110 : 260); i++) { const a = Math.random() * TAU, v = sp * (0.35 + Math.random() * 0.65); parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: 0, m: life * (0.6 + Math.random() * 0.6), cs: `rgb(${col[0] | 0},${col[1] | 0},${col[2] | 0})`, sz: sz * (0.6 + Math.random() * 0.8) }); }
 }
 const label = (x, y, txt, col, sz = 16) => labels.push({ x, y, txt, col, sz, l: 0 });
 const say = (txt, sub, col) => { callout = { txt, sub, col, l: 0 }; };
@@ -244,25 +245,32 @@ function sprite(tier, v) {
   if (!s) { const r = F.TIERS[tier].r * B.u; s = build(tier, r, v); s.h = r * 1.3; sprites.set(tier * 8 + v, s); }
   return s;
 }
+// Performance : les calques d'un astre animé (halo, surface découpée, lumière) sont assemblés UNE fois par rang toutes les 2 images
+// dans s.comp ; chaque astre de ce rang n'est plus qu'une copie d'image. Avant : découpe + 3 à 5 dessins par astre et par image.
+function compose(s, tier) {
+  const h = s.h, x = s.cx, img = (c) => x.drawImage(c, -h, -h, h * 2, h * 2);
+  x.setTransform(DPR, 0, 0, DPR, 0, 0); x.clearRect(0, 0, h * 2, h * 2); x.translate(h, h);
+  if (s.back) { const p = 1 + (s.pulse || 0) * Math.sin(T * 2.3 + tier); x.save(); if (s.spinB) x.rotate(T * s.spinB); if (!s.still) x.scale(p, p); img(s.back); x.restore(); }
+  if (s.disc) { x.save(); x.rotate(T * s.spinD); img(s.disc); x.restore(); }
+  if (s.disc2) { x.save(); x.rotate(-T * s.spinD * 0.7); img(s.disc2); x.restore(); }
+  if (s.strip) {
+    const R = s.R, w = (h / 1.3) * 4, lay = (c, sp) => { const o = ((T * sp * R) % w + w) % w; x.drawImage(c, -R - o, -w / 4, w, w / 2); x.drawImage(c, -R - o + w, -w / 4, w, w / 2); };
+    x.save(); x.beginPath(); x.arc(0, 0, R, 0, TAU); x.clip(); lay(s.strip, s.sp);
+    if (s.strip2) { if (s.add) x.globalCompositeOperation = 'lighter'; lay(s.strip2, s.sp2); }
+    x.restore();
+  }
+  if (s.over) img(s.over);
+}
 function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
   if (it.k === 'c') {
-    const v = it.v | 0, s = sprite(it.tier, v), h = s.h, img = (c) => ctx.drawImage(c, -h, -h, h * 2, h * 2), k = sc * (u / B.u) * (it.r ? it.r / F.TIERS[it.tier].r : 1); // it.r : la géante rouge enfle
-    ctx.save(); ctx.translate(x, y); ctx.scale(k, k);
-    if (s.spr) { ctx.rotate(ang + T * s.spin); img(s.spr); }
+    const v = it.v | 0, s = sprite(it.tier, v), k = sc * (u / B.u) * (it.r ? it.r / F.TIERS[it.tier].r : 1), h = s.h * k; // it.r : la géante rouge enfle
+    if (s.spr) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang + T * s.spin); ctx.drawImage(s.spr, -h, -h, h * 2, h * 2); ctx.restore(); }
     else {
-      if (s.back) { const p = 1 + (s.pulse || 0) * Math.sin(T * 2.3 + it.tier); ctx.save(); if (s.spinB) ctx.rotate(T * s.spinB); if (!s.still) ctx.scale(p, p); img(s.back); ctx.restore(); }
-      if (s.disc) { ctx.save(); ctx.rotate(T * s.spinD + ang); img(s.disc); ctx.restore(); }
-      if (s.disc2) { ctx.save(); ctx.rotate(-T * s.spinD * 0.7); img(s.disc2); ctx.restore(); }
-      if (s.strip) {
-        const R = s.R, w = (h / 1.3) * 4, lay = (c, sp) => { const o = (((T * sp + ang) * R) % w + w) % w; ctx.drawImage(c, -R - o, -w / 4, w, w / 2); ctx.drawImage(c, -R - o + w, -w / 4, w, w / 2); };
-        ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.clip(); lay(s.strip, s.sp);
-        if (s.strip2) { if (s.add) ctx.globalCompositeOperation = 'lighter'; lay(s.strip2, s.sp2); }
-        ctx.restore();
-      }
-      if (s.over) img(s.over);
+      if (!s.comp) { s.comp = document.createElement('canvas'); s.comp.width = s.comp.height = Math.ceil(s.h * 2 * DPR); s.cx = s.comp.getContext('2d'); s.stamp = -1; }
+      if (s.stamp !== FN >> 1) { s.stamp = FN >> 1; compose(s, it.tier); }
+      ctx.drawImage(s.comp, x - h, y - h, h * 2, h * 2);
     }
-    if (v) { ctx.fillStyle = '#fff'; const R = (h / 1.3) * 1.1; for (let i = 0; i < 4; i++) { const a = T * 1.5 + i * 1.57, tw = 2 + 1.5 * Math.sin(T * 6 + i), px = Math.cos(a) * R, py = Math.sin(a) * R * 0.85; ctx.fillRect(px - tw, py - 0.6, tw * 2, 1.2); ctx.fillRect(px - 0.6, py - tw, 1.2, tw * 2); } } // les astres rares scintillent
-    ctx.restore();
+    if (v) { ctx.fillStyle = '#fff'; const R = (h / 1.3) * 1.1; for (let i = 0; i < 4; i++) { const a = T * 1.5 + i * 1.57, tw = 2 + 1.5 * Math.sin(T * 6 + i), px = x + Math.cos(a) * R, py = y + Math.sin(a) * R * 0.85; ctx.fillRect(px - tw, py - 0.6, tw * 2, 1.2); ctx.fillRect(px - 0.6, py - tw, 1.2, tw * 2); } } // les astres rares scintillent
   } else if (it.k === 'r') { // débris
     const r = F.R_RUBBLE * u * sc; ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
     ctx.fillStyle = '#4b4f63'; ctx.beginPath(); for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU, rr = r * (0.82 + rnd(i * 3.3) * 0.26); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill();
@@ -302,7 +310,7 @@ function resize() {
   const u = Math.min((W - 28) / F.W, availH / F.HT, 60);
   B = { u, w: u * F.W, h: u * F.HT, x: (W - u * F.W) / 2, y: top + (availH - u * F.HT) / 2 };
   holdR = { x: B.x, y: B.y + B.h + 36, w: 78, h: 60 };
-  texB = makeTex(G ? G.depth : 0); texA = null;
+  texB = makeTex(G ? G.depth : 0); texA = null; hud = null;
 }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function txt(s, x, y, size, col, align = 'center', font = 'Orbitron', weight = 900) { ctx.font = `${weight} ${size}px ${font},system-ui,sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col; ctx.fillText(s, x, y); }
@@ -343,13 +351,13 @@ function draw() {
   // visée
   if (!G.over) {
     const it = G.cur, ax = sx(F.clampX(it, aimX, G.inset)), ay = sy(F.DROP_Y), ready = G.cool <= 0;
-    if (ready) { // trajectoire prévue : la gravité des étoiles la courbe
+    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : la gravité des astres extrêmes la courbe
       const tr = F.trace(G, aimX), n = tr.length; ctx.fillStyle = '#fff';
       for (let i = 2; i < n; i += 2) { ctx.globalAlpha = 0.5 * (1 - i / n) + 0.12; ctx.beginPath(); ctx.arc(sx(tr[i]), sy(tr[i + 1]), 1.8, 0, TAU); ctx.fill(); }
       if (n > 3) { ctx.globalAlpha = 0.3; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(sx(tr[n - 2]), sy(tr[n - 1]), (it.k === 'c' ? F.TIERS[it.tier].r : F.R_SPECIAL) * B.u, 0, TAU); ctx.stroke(); }
       ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = ready ? 1 : 0.35; drawItem(it, ax, ay + (ready ? Math.sin(T * 2.6) * 2 : 0), ready ? 1 : 0.8); ctx.globalAlpha = 1;
+    ctx.globalAlpha = ready ? 1 : 0.6; drawItem(it, ax, ay + (ready ? Math.sin(T * 2.6) * 2 : 0), ready ? 1 : 0.9); ctx.globalAlpha = 1;
   }
   // astres
   for (const b of G.bodies) {
@@ -360,11 +368,12 @@ function draw() {
   // jauge de saut, sous la cuve
   const fy = B.y + B.h + 10, dp = clamp(G.drill / F.need(G.depth), 0, 1), gw = B.w - 8;
   rr(B.x + 4, fy, gw, 8, 4); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
-  if (dp > 0.01) { const hot = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0); hot.addColorStop(0, '#4df3ff'); hot.addColorStop(0.6, '#ff4fd8'); hot.addColorStop(1, '#ffc247'); ctx.shadowColor = '#ff4fd8'; ctx.shadowBlur = lowFx ? 0 : 10 + 8 * dp; rr(B.x + 4, fy, Math.max(8, gw * dp), 8, 4); ctx.fillStyle = hot; ctx.fill(); ctx.shadowBlur = 0; }
+  if (dp > 0.01) { const hot = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0); hot.addColorStop(0, '#4df3ff'); hot.addColorStop(0.6, '#ff4fd8'); hot.addColorStop(1, '#ffc247'); const gl = Math.max(8, gw * dp); if (!lowFx) { ctx.fillStyle = `rgba(255,79,216,${0.1 + 0.08 * dp})`; rr(B.x - 2, fy - 6, gl + 12, 20, 10); ctx.fill(); rr(B.x + 1, fy - 3, gl + 6, 14, 7); ctx.fill(); } rr(B.x + 4, fy, gl, 8, 4); ctx.fillStyle = hot; ctx.fill(); } // halo en deux voiles, sans shadowBlur (très coûteux sur mobile)
   // effets
   ctx.globalCompositeOperation = 'lighter';
   for (const r of rings) { const q = r.l / r.m, k = 1 - (1 - q) ** 3; ctx.strokeStyle = rgba(r.col, (1 - q) * 0.9); ctx.lineWidth = r.w * (1 - q) + 0.5; ctx.beginPath(); ctx.arc(r.x, r.y, r.r0 + (r.r1 - r.r0) * k, 0, TAU); ctx.stroke(); }
-  for (const q of parts) { const a = 1 - q.l / q.m; ctx.fillStyle = rgba(q.col, a); ctx.beginPath(); ctx.arc(q.x, q.y, q.sz * (0.4 + a * 0.6), 0, TAU); ctx.fill(); }
+  for (const q of parts) { const a = 1 - q.l / q.m; ctx.globalAlpha = a; ctx.fillStyle = q.cs; ctx.beginPath(); ctx.arc(q.x, q.y, q.sz * (0.4 + a * 0.6), 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
   for (const l of labels) { const a = clamp(1.6 - l.l * 1.9, 0, 1), s = l.l < 0.12 ? 0.6 + l.l / 0.12 * 0.4 : 1; ctx.globalAlpha = a; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,20,.55)'; ctx.font = `900 ${l.sz * s}px Orbitron,sans-serif`; ctx.textAlign = 'center'; ctx.strokeText(l.txt, l.x, l.y - l.l * 46); ctx.fillStyle = rgba(l.col, 1); ctx.fillText(l.txt, l.x, l.y - l.l * 46); }
   ctx.globalAlpha = 1;
@@ -372,7 +381,9 @@ function draw() {
 
   // HUD : score, secteur, record
   const cx = W / 2, ty = SAT + 44;
-  ctx.shadowColor = 'rgba(77,243,255,.7)'; ctx.shadowBlur = lowFx ? 0 : 16; txt(fmt(shown), cx, ty, 32, '#fff'); ctx.shadowBlur = 0;
+  const sc = fmt(shown); // le score lumineux est dessiné dans une image, refaite seulement quand le nombre change
+  if (sc !== hudKey || !hud) { hudKey = sc; if (!hud) hud = document.createElement('canvas'); hud.width = Math.ceil(W * DPR); hud.height = Math.ceil(64 * DPR); const hx = hud.getContext('2d'); hx.scale(DPR, DPR); hx.font = '900 32px Orbitron,system-ui,sans-serif'; hx.textAlign = 'center'; hx.shadowColor = 'rgba(77,243,255,.7)'; hx.shadowBlur = lowFx ? 0 : 16; hx.fillStyle = '#fff'; hx.fillText(sc, W / 2, 44); }
+  ctx.drawImage(hud, 0, ty - 44, W, 64);
   txt(`${G.daily ? 'UNIVERS DU JOUR · ' : ''}SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
   if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
@@ -421,25 +432,29 @@ function bang() { // milieu du saut : le nouveau secteur naît
   A.rumble(); A.mult(Math.min(8, m[2])); H.vib([30, 40, 70]);
 }
 function frame(now) {
-  raf = 0; if (!isOpen) return;
+  raf = 0; if (!isOpen) return; FN++;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   update(dt); draw();
   raf = requestAnimationFrame(frame);
 }
 
 /* ============================== entrées ============================== */
-const pt = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-function onDown(e) { // appuie n'importe où, glisse, relâche
+const pt = (e) => ({ x: e.clientX, y: e.clientY }); // le canvas couvre tout l'écran
+const inZone = (p) => p.x > B.x - 18 && p.x < B.x + B.w + 18 && p.y > B.y - 60 && p.y < B.y + B.h + 20; // la cuve, avec une petite marge
+function onDown(e) { // appuie dans la cuve (même pendant qu'un astre tombe), glisse, relâche ; sortir de la cuve annule
   if (!G || G.over) return; const p = pt(e);
   if (p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (F.swapHold(G)) { A.select(); H.vib(8); } return; }
+  if (!inZone(p)) return;
   aiming = true; aimT = (p.x - B.x) / B.u; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
 }
-function onMove(e) { if (aiming) aimT = (pt(e).x - B.x) / B.u; }
+function onMove(e) { if (!aiming) return; const p = pt(e); if (inZone(p)) aimT = (p.x - B.x) / B.u; else { aiming = false; H.vib(4); } }
 function onUp() { if (!aiming) return; aiming = false; want = true; }
 
 /* ============================== écrans ============================== */
 const CSS = `
 #mn{position:fixed;inset:0;z-index:9;background:#05060f;display:none}#mn.on{display:block;animation:fade .3s}
+/* pendant une partie, l'accueil (flous, animations) et le canvas principal sont masqués et figés : ils coûtaient cher derrière l'écran de jeu */
+.mn-open #s-title,.mn-open #cv{visibility:hidden}.mn-open #s-title,.mn-open #s-title *{animation-play-state:paused!important}
 #mn-cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 #mn .icon{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px)}#mn-back{left:14px}#mn-help{right:14px}#mn-day{right:68px}
 #mn-cx{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:46vh;overflow-y:auto;touch-action:pan-y}
@@ -529,10 +544,10 @@ function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.be
 export const busy = () => isOpen;
 export const stats = () => ({ ...sv });
 export function open() {
-  isOpen = true; sprites.clear(); $('#mn').classList.add('on'); lowFx = (navigator.hardwareConcurrency || 4) <= 4;
+  isOpen = true; sprites.clear(); $('#mn').classList.add('on'); document.documentElement.classList.add('mn-open'); lowFx = (navigator.hardwareConcurrency || 4) <= 4;
   G = null; resize(); newRun(); last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
-function close() { A.setMood(0); isOpen = false; $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
+function close() { A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
   Object.assign(H, opts);
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);

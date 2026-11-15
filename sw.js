@@ -1,6 +1,6 @@
 // Service worker : le jeu fonctionne hors-ligne après la première visite.
 // Pour publier une mise à jour, change simplement VERSION.
-const VERSION = 'critical-v20';
+const VERSION = 'critical-v21';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/main.js', 'js/engine.js', 'js/gen.js', 'js/levels.js', 'js/audio.js', 'js/endless.js', 'js/home.js', 'js/levelcode.js', 'js/editor.js', 'js/chest.js', 'js/skins.js', 'js/fusion.js', 'js/mine.js', 'js/quests.js', 'js/intro.js', 'js/daily.js', 'js/dailyworker.js',

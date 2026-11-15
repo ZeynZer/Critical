@@ -16,10 +16,12 @@ Trace d'avancement de la refonte « jeu mobile ». La version d'avant refonte re
 - **Raretés** : 6 variantes rares (1 sur 25 à 1 sur 150 selon le rang) et 6 raretés de galaxie (62 % → 1 sur 1 000), révélation animée avec la probabilité, entrées au codex.
 - **Toucher** : appui n'importe où, l'astre suit le doigt en douceur, relâché mémorisé pendant la recharge.
 - **Sons** : un timbre par famille d'astres (roche, planète, étoile, astre extrême, galactique), légèrement désaccordé à chaque fois.
+- **Performances** : chaque rang d'astre animé est assemblé une fois toutes les 2 images puis copié (au lieu d'une découpe et de 3 à 5 dessins par astre), plus de `shadowBlur` par image, accueil masqué et figé pendant une partie, démo de l'accueil à demi-cadence. Mesuré sur la scène de test : 24 → 56 images/s en rendu logiciel.
+- **Toucher** : on vise dans la cuve, même pendant qu'un astre tombe ; sortir de la cuve annule.
 - **Missions du jour + cadeau quotidien** (`js/quests.js`), branchés sur Genèse, la campagne et le défi du jour.
 - **Économie** : Genèse paie en énergie selon le secteur et le score ; probabilités des noyaux et seuils de garantie affichés ; panneau admin retiré de l'écran titre (`?admin=1`).
 - **Thème** : le verre liquide d'origine est conservé partout (accueil, fenêtres, missions, Genèse) ; Cascade a un vrai bouton sur l'accueil.
-- **Technique** : la boucle de Genèse s'arrête à la fermeture ; cache du service worker en v20.
+- **Technique** : la boucle de Genèse s'arrête à la fermeture ; cache du service worker en v21.
 
 ## À faire, par priorité
 1. **Réglage de Genèse sur de vrais joueurs** : tailles, rythme des sauts, fréquence des débris, seuils des missions. Les valeurs actuelles sont calées sur un joueur aléatoire simulé (`tools/test.mjs`), pas sur des humains.
