@@ -1,7 +1,7 @@
 // Critical — « Genèse » : moteur de fusion (pur, déterministe, testé dans Node).
 // On lâche des astres dans un puits de gravité. Deux astres de même rang qui se touchent fusionnent en un rang supérieur
 // (orbe → astéroïde → lune → planète → … → trou noir). Chaque fusion charge la jauge de saut ; jauge pleine = saut
-// vers le secteur suivant : l'onde vaporise les petits astres et les débris, puis de nouveaux débris arrivent.
+// vers le secteur suivant : l'onde vaporise les petits astres.
 // Unités : largeur du puits = 10, y vers le bas, sol à y = HT.
 
 export const W = 10, HT = 14.5, LINE = 2.7, DROP_Y = 1.35, MAX_TIER = 12;
@@ -18,10 +18,10 @@ export const TIERS = RAD.map((r, i) => ({ r, pts: (i + 1) * (i + 2) * 5 }));
 export const R_SPECIAL = 0.6;
 export const STRATA = ['Ceinture', 'Nébuleuse', 'Amas stellaire', 'Pulsar', 'Supergéante', 'Quasar', 'Grand Vide', 'Horizon', 'Origine']; // secteurs traversés
 export const need = (depth) => Math.min(260, 30 + depth * 24);
-// Chaque secteur change une règle : g = gravité, wind = vent latéral (alt : il s'inverse), inset = parois resserrées
-const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { wind: 3, n: 'Brise stellaire' }, { wind: 5, alt: 1, n: 'Vent stellaire alterné' }, { g: 1.3, n: 'Gravité forte' },
-  { wind: 4, n: 'Vent du quasar' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, wind: 4, alt: 1, n: 'Chaos originel' }];
-export const mod = (d) => ({ g: 1, wind: 0, alt: 0, inset: 0, n: '', ...MODS[d % MODS.length] });
+// Chaque secteur change une règle : g = intensité de la chute, inset = parois resserrées. Aucun vent : un astre qui tombe tombe droit.
+const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { inset: 0.4, n: 'Cuve étroite' }, { g: 1.15, n: 'Gravité accrue' }, { g: 1.3, n: 'Gravité forte' },
+  { g: 0.7, n: 'Légèreté' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, inset: 0.4, n: 'Chaos originel' }];
+export const mod = (d) => ({ g: 1, inset: 0, n: '', ...MODS[d % MODS.length] });
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
 export function mulberry32(a) { return () => { let t = (a = (a + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -72,7 +72,7 @@ const gift = (G, k) => { G.queue.unshift({ k, tier: -1 }); G.queue.length = 2; G
 
 function kick(G, x, y, rad, force) {
   for (const b of G.bodies) {
-    if (b.dead) continue;
+    if (b.dead || !b.hit) continue; // un astre encore en chute n'est jamais poussé de côté
     const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy) || 1e-6;
     if (d < rad) { const f = force * (1 - d / rad); b.vx += (dx / d) * f; b.vy += (dy / d) * f; }
   }
@@ -159,7 +159,7 @@ function collide(G) {
       a.x -= nx * pen * ia; a.y -= ny * pen * ia; b.x += nx * pen * ib; b.y += ny * pen * ib;
       const rvx = b.vx - a.vx, rvy = b.vy - a.vy, vn = rvx * nx + rvy * ny;
       if (vn < 0) {
-        const jn = -(1 + REST) * vn, tx = -ny, ty = nx, vt = rvx * tx + rvy * ty, jt = -vt * 0.3;
+        const jn = -(1 + REST) * vn, tx = -ny, ty = nx, vt = rvx * tx + rvy * ty, jt = -vt * 0.04;
         a.vx -= (nx * jn + tx * jt) * ia; a.vy -= (ny * jn + ty * jt) * ia; b.vx += (nx * jn + tx * jt) * ib; b.vy += (ny * jn + ty * jt) * ib;
         a.av += vt * 0.06 / a.r; b.av += vt * 0.06 / b.r;
       }
@@ -176,20 +176,16 @@ function walls(G, b) {
     b.y = HT - b.r; b.touch = true;
     if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: HT, v: b.vy }); if (b.k === 'b') b.fuse = true; }
     if (b.vy > 0) b.vy *= -REST;
-    b.vx *= 0.985; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; // roule au sol
   }
 }
 
-// Accélération d'un astre : la gravité du secteur et son vent. (Les astres ne s'attirent pas entre eux.)
-function accel(G, out) { const M = G.mod; out[0] = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1); out[1] = GRAV * M.g; }
-const ACC = [0, 0];
-// Trajectoire prévue du prochain lâcher (pour la visée) : droite, ou penchée par le vent du secteur
+// Seule force : la pesanteur du secteur, verticale. Pas de vent, pas d'attraction entre astres.
+const fall = (G) => GRAV * G.mod.g;
+// Trajectoire prévue du prochain lâcher (pour la visée) : une verticale, jusqu'au premier contact. [x, y, x, y, …]
 export function trace(G, x0) {
-  const it = G.cur, r = itemR(it), pts = []; let x = clampX(it, x0, G.inset), y = DROP_Y, vx = 0, vy = 0;
+  const it = G.cur, r = itemR(it), x = clampX(it, x0, G.inset), pts = []; let y = DROP_Y, v = 0;
   for (let i = 0; i < 150; i++) {
-    accel(G, ACC); vx += ACC[0] / 60; vy += ACC[1] / 60; x += vx / 60; y += vy / 60;
-    if (x < G.inset + r) { x = G.inset + r; vx = 0; } else if (x > W - G.inset - r) { x = W - G.inset - r; vx = 0; }
-    if (i % 2 === 0) pts.push(x, y);
+    v += fall(G) / 60; y += v / 60; if (i % 2 === 0) pts.push(x, y);
     if (y > HT - r) break;
     let hit = false; for (const b of G.bodies) if (Math.hypot(b.x - x, b.y - y) < b.r + r) { hit = true; break; }
     if (hit) break;
@@ -207,9 +203,9 @@ function sub(G) {
     G.pend.splice(i, 1);
     pierce(G);
   }
-  accel(G, ACC);
+  const gy = fall(G);
   for (const b of G.bodies) {
-    b.px = b.x; b.py = b.y; b.age += dt; b.vx += ACC[0] * dt; b.vy += ACC[1] * dt;
+    b.px = b.x; b.py = b.y; b.age += dt; b.vy += gy * dt;
     if (b.k === 'c' && b.tier === GIANT) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
     else if (b.k === 'c' && b.tier === NEUTRON) { b.pt = (b.pt || 0) + dt; if (b.pt >= 4) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.7, 8); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r }); } } // l'étoile à neutrons repousse par impulsions
     else if (b.et > 0) b.et -= dt;
@@ -223,11 +219,13 @@ function sub(G) {
     if (m) fuse(G, m[0], m[1]);
   }
   // frottement de repos : un astre en contact et presque immobile s'arrête, au lieu de glisser lentement sous la pression
-  // … et frottement statique : un déplacement infime (< 0,05 unité/s) d'un astre en contact est annulé, sinon les piles rampent
+  // résistance de roulement au sol, UNE fois par pas (elle était appliquée à chaque passe de résolution, donc multipliée par 3 puis 6)
+  for (const b of G.bodies) if (b.y >= HT - b.r - 1e-6) { b.vx *= 0.995; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; }
+  // … et gel des micro-mouvements (< 0,008 unité/s) d'un astre en contact, sinon les piles rampent ; assez bas pour ne jamais retenir un astre qui veut rouler
   for (const b of G.bodies) if (b.touch) {
     b.av *= 0.96;
     const dx = b.x - b.px, dy = b.y - b.py;
-    if (dx * dx + dy * dy < 1.6e-7) { b.x = b.px; b.y = b.py; b.vx = b.vy = 0; b.av *= 0.8; }
+    if (dx * dx + dy * dy < 4e-9) { b.x = b.px; b.y = b.py; b.vx = b.vy = 0; b.av *= 0.8; }
   }
   for (const b of G.bodies) if (b.fuse && !b.dead) explode(G, b);
   if (G.bodies.some((b) => b.dead)) G.bodies = G.bodies.filter((b) => !b.dead);

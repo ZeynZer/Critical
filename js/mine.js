@@ -362,7 +362,7 @@ function draw() {
   // visée
   if (!G.over) {
     const it = G.cur, ax = sx(F.clampX(it, aimX, G.inset)), ay = sy(F.DROP_Y), ready = G.cool <= 0;
-    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : droite, ou penchée par le vent du secteur
+    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : une verticale
       const tr = F.trace(G, aimX), n = tr.length; ctx.fillStyle = '#fff';
       for (let i = 2; i < n; i += 2) { ctx.globalAlpha = 0.5 * (1 - i / n) + 0.12; ctx.beginPath(); ctx.arc(sx(tr[i]), sy(tr[i + 1]), 1.8, 0, TAU); ctx.fill(); }
       if (n > 3) { ctx.globalAlpha = 0.3; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(sx(tr[n - 2]), sy(tr[n - 1]), (it.k === 'c' ? F.TIERS[it.tier].r : F.R_SPECIAL) * B.u, 0, TAU); ctx.stroke(); }
@@ -506,7 +506,7 @@ La visée montre où tombera ton astre. L'étoile à neutrons repousse ses voisi
 
 Certains astres ont une variante rare, et chaque galaxie tire sa rareté : les probabilités sont dans le codex.
 
-Chaque secteur change une règle (gravité, vent, parois). Si la pile dépasse la ligne trop longtemps, tout s'effondre.`;
+Chaque secteur change une règle (gravité, parois). Si la pile dépasse la ligne trop longtemps, tout s'effondre.`;
 
 function showCodex() {
   const g = $('#mn-cx'); g.innerHTML = ''; let n = 0;

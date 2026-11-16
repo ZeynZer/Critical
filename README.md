@@ -16,7 +16,7 @@ node tools/test.mjs              # moteur : déterminisme, physique, reprise, re
 ## Le jeu
 On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros : poussière → orbe → astéroïde → lune → planète → géante gazeuse → naine orange → soleil → géante rouge → étoile à neutrons → trou noir → quasar → galaxie. Deux galaxies déclenchent un Big Bang.
 - **Chaînes** : plusieurs fusions sur un seul lâcher multiplient les points (comète explosive à ×5).
-- **Secteurs** : chaque fusion charge la jauge ; pleine, on change de secteur (nouvelle règle : gravité, vent, parois) et on reçoit de la matière exotique.
+- **Secteurs** : chaque fusion charge la jauge ; pleine, on change de secteur (nouvelle règle : gravité, parois) et on reçoit de la matière exotique.
 - **Raretés** : variantes rares de certains astres et six raretés de galaxie, probabilités affichées dans le codex.
 - **Défi du jour** : un objectif chronométré, le même pour tous (ex. « Crée une Géante rouge en moins de 2 min »).
 - **Missions du jour** et **thèmes d'arrière-plan** achetés en poussière d'étoile (✦), gagnée en jouant.
