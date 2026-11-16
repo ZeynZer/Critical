@@ -16,11 +16,11 @@ node tools/test.mjs              # moteur : déterminisme, physique, reprise, re
 ## Le jeu
 On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros : poussière → orbe → astéroïde → lune → planète → géante gazeuse → naine orange → soleil → géante rouge → étoile à neutrons → trou noir → quasar → galaxie. Deux galaxies déclenchent un Big Bang.
 - **Chaînes** : plusieurs fusions sur un seul lâcher multiplient les points (comète explosive à ×5).
-- **Secteurs** : chaque fusion charge la jauge ; pleine, on change de secteur (nouvelle règle : gravité, parois) et on reçoit de la matière exotique.
+- **Secteurs** : chaque fusion charge la jauge ; pleine, on change de secteur (nouvelle règle : intensité de la chute, parois resserrées ; jamais de vent : un astre qui tombe tombe droit) et on reçoit de la matière exotique.
 - **Raretés** : variantes rares de certains astres et six raretés de galaxie, probabilités affichées dans le codex.
 - **Défi du jour** : un objectif chronométré, le même pour tous (ex. « Crée une Géante rouge en moins de 2 min »).
 - **Missions du jour** et **thèmes d'arrière-plan** achetés en poussière d'étoile (✦), gagnée en jouant.
-- **Classement mondial** et classement du défi du jour.
+- **Classement mondial**, classement du défi du jour et **profils publics** : on touche un joueur pour voir sa vitrine (jusqu'à 3 astres découverts, animés), sa devise et ses stats ; chacun peut modifier son profil.
 - **Première partie guidée**, reprise automatique de la partie en cours.
 
 ## Structure
@@ -34,7 +34,9 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 2. **SQL Editor → New query** : colle `supabase/schema.sql`, puis **Run**.
 3. **Project Settings → API** : copie l'URL du projet et la clé **publique** dans `js/config.js`. Jamais la clé `service_role`.
 
-Les tables sont fermées (RLS sans policy) : la clé publique ne peut appeler que 4 fonctions qui valident leurs entrées. Chaque score est stocké avec sa graine et son journal de lâchers, que `replay()` peut rejouer à l'identique pour une vérification côté serveur.
+**Mise à jour d'une base existante** : recolle simplement `supabase/schema.sql` en entier et lance-le. Les joueurs et les scores sont conservés ; seules des colonnes de profil sont ajoutées. À faire avant de publier une version du jeu qui contient les profils.
+
+Les tables sont fermées (RLS sans policy) : la clé publique ne peut appeler que 6 fonctions (`register`, `submit_score`, `leaderboard`, `my_rank`, `set_profile`, `get_profile`) qui valident leurs entrées. La vitrine d'un profil est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu. Chaque score est stocké avec sa graine et son journal de lâchers, que `replay()` peut rejouer à l'identique pour une vérification côté serveur.
 
 ## Icône
 Remplace `assets-src/icon-master.png` (1024×1024) puis lance `python3 tools/make-icons.py` (pip install pillow).
