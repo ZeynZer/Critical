@@ -357,7 +357,6 @@ function draw() {
   if (G.inset > 0.02) { const iw = G.inset * B.u; ctx.fillStyle = 'rgba(255,79,216,.16)'; ctx.fillRect(B.x, B.y - 30, iw, B.h + 30); ctx.fillRect(B.x + B.w - iw, B.y - 30, iw, B.h + 30); } // parois resserrées
   // ligne de danger
   const dg = G.danger, ly = sy(F.LINE);
-  ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.5 + 0.5 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.45 + 0.3 * Math.sin(T * 6)) : 'rgba(255,255,255,.22)'; ctx.lineWidth = dg > 0 ? 2.5 : G.near ? 1.8 : 1; // ambre : un astre touche la ligne (sans danger) ; rouge : il est entièrement dehors ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]);
   if (dg > 0) { const g = ctx.createLinearGradient(0, B.y - 40, 0, ly + B.u * 2); g.addColorStop(0, rgba([255, 50, 90], 0.36 * dg)); g.addColorStop(1, 'rgba(255,50,90,0)'); ctx.fillStyle = g; ctx.fillRect(B.x, B.y - 36, B.w, ly + B.u * 2 - B.y + 36); }
   // visée
   if (!G.over) {
@@ -376,6 +375,9 @@ function draw() {
     if (t0 != null) { const p = (T - t0) / 0.4; if (p >= 1) pops.delete(b.id); else sc = 1 + Math.sin(p * Math.PI * 2.2) * (1 - p) * 0.26 + (p < 0.15 ? (p / 0.15 - 1) * 0.4 : 0); }
     drawItem(b, sx(b.x), sy(b.y), sc, b.ang);
   }
+  // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
+  ctx.lineCap = 'round'; ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.8 + 0.2 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.75 + 0.25 * Math.sin(T * 6)) : 'rgba(255,255,255,.55)';
+  ctx.lineWidth = dg > 0 ? 3 : G.near ? 2.4 : 1.8; ctx.setLineDash([7, 7]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
   // jauge de saut, sous la cuve
   const fy = B.y + B.h + 10, dp = clamp(G.drill / F.need(G.depth), 0, 1), gw = B.w - 8;
   rr(B.x + 4, fy, gw, 8, 4); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
