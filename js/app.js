@@ -31,12 +31,15 @@ $('#o-vib').onchange = (e) => { S.vib = e.target.checked; save(); vib([14, 40, 1
 
 // modules (chacun ajoute ses boutons au menu, home.js les met en page)
 MINE.init({ vib, toast, today, track: QS.track, quests: QS.html, refresh, submit: RANK.submit, rank: RANK.open, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready });
-RANK.init({ toast, vib, today, astres: MINE.astres, astreInfo: MINE.astreInfo, paint: MINE.paintAstre, codexN: MINE.codexN, tierName: MINE.tierName }); RANK.whenNamed(MINE.rankLine);
+RANK.init({ toast, vib, today, astres: MINE.astres, astreInfo: MINE.astreInfo, paint: MINE.paintAstre, codexN: MINE.codexN, tierName: MINE.tierName, local: MINE.localStats }); RANK.whenNamed(MINE.rankLine);
 const menu = $('#s-title .menu');
-for (const [id, label, sub, f] of [['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex]]) {
+for (const [id, label, sub, f] of [['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex], ['b-profile', 'Profil', '', RANK.openMyProfile]]) {
   const b = document.createElement('button'); b.id = id; b.className = 'big glass'; b.innerHTML = `<span>${label}</span>` + (sub ? `<small>${sub}</small>` : ''); menu.appendChild(b); b.addEventListener('click', () => { A.ui(); vib(9); f(); });
 }
 HOME.init();
+// l'icône du bouton Profil devient l'astre de profil choisi
+const avatar = () => { const d = $('#b-profile'), k = RANK.avatarKey(); if (!d) return; let c = d.querySelector('canvas.hm-av'); if (!MINE.astreInfo(k)) { if (c) c.remove(); const ic = d.querySelector('.hm-ic'); if (ic) ic.style.display = ''; return; } if (!c) { c = document.createElement('canvas'); c.className = 'hm-av'; d.prepend(c); } d.querySelector('.hm-ic').style.display = 'none'; MINE.paintAstre(c, k, 26); };
+RANK.whenProfile(avatar); avatar();
 QS.init({ today, grant: MINE.grant, toast, vib });
 refresh();
 

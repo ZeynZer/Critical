@@ -3,7 +3,7 @@
 ## État actuel
 L'application ne contient plus que le jeu de fusion d'astres. Les anciens modes (Campagne, Cascade, Atelier, codes de niveaux), les noyaux à ouvrir et les skins ont été retirés ; ils restent dans l'historique git.
 
-Fait : profils publics du classement (vitrine d'astres, devise), moteur physique testé (13 rangs, chaînes, secteurs, raretés, rejeu), astres animés, saut de secteur animé, première partie guidée, reprise de partie, défi du jour chronométré, missions du jour, thèmes d'arrière-plan achetés en poussière d'étoile, codex, classement mondial Supabase, écran de démarrage, cache hors-ligne.
+Fait : trou noir de l'accueil en WebGL, bouton Profil avec astre de profil, profils publics du classement (vitrine d'astres, devise), moteur physique testé (13 rangs, chaînes, secteurs, raretés, rejeu), astres animés, saut de secteur animé, première partie guidée, reprise de partie, défi du jour chronométré, missions du jour, thèmes d'arrière-plan achetés en poussière d'étoile, codex, classement mondial Supabase, écran de démarrage, cache hors-ligne.
 
 ## À faire, par priorité
 1. **Essais sur de vrais téléphones** : fluidité, toucher, sons (jamais écoutés pendant le développement).
