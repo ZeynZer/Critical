@@ -1,8 +1,13 @@
 // Critical — audio 100 % synthétisé (WebAudio) : aucun fichier son, aucune licence.
-let ctx = null, master, sfx, mus, verb, AC = null;
+let ctx = null, master, fade, sfx, mus, verb, AC = null;
+let asleep = false, sleepT = 0; // asleep : l'app est en arrière-plan (écran éteint…) ; le son est suspendu
 const on = { sfx: true, mus: true };
 let musTimer = null, chordI = 0, sess = null;
 const SCALE = [0, 3, 5, 7, 10]; // pentatonique mineure : toute chaîne sonne juste
+// Session audio « jeu » (iOS 16.4+ ; ailleurs le comportement par défaut est déjà celui-ci) : on respecte l'interrupteur silencieux
+// du téléphone et on se mélange à la musique ou au podcast de l'utilisateur au lieu de les couper.
+const gameSession = () => { try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) { /* ignore */ } };
+gameSession();
 const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
 
 function impulse(sec) {
@@ -17,16 +22,17 @@ function impulse(sec) {
    « suspended » / « interrupted » après la mise en arrière-plan), il est reconstruit au geste suivant.
    Plus aucun bouton « activer le son » : le premier tap, n'importe où, suffit. */
 const GESTURES = ['touchend', 'pointerup', 'mouseup', 'click', 'keydown'];
-let armed = false, tries = 0, silentEl = null;
+let armed = false, tries = 0;
 
 function build() {
   AC = AC || window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
-  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ } // son même en mode silencieux
+  gameSession();
   ctx = new AC({ latencyHint: 'interactive' });
   const comp = ctx.createDynamicsCompressor();
   master = ctx.createGain(); master.gain.value = 0.85;
-  master.connect(comp); comp.connect(ctx.destination);
+  fade = ctx.createGain(); // fondu d'entrée et de mise en veille, indépendant des réglages
+  master.connect(fade); fade.connect(comp); comp.connect(ctx.destination);
   sfx = ctx.createGain(); sfx.connect(master);
   mus = ctx.createGain(); mus.gain.value = 0.55; mus.connect(master);
   verb = ctx.createConvolver(); verb.buffer = impulse(1.9);
@@ -35,18 +41,9 @@ function build() {
   sfx.connect(verb); mus.connect(verb);
   ctx.onstatechange = () => {
     if (!ctx) return;
-    if (ctx.state === 'running') { tries = 0; disarm(); if (on.mus) startMusic(); }
+    if (ctx.state === 'running') { tries = 0; disarm(); fadeUp(); if (on.mus) startMusic(); }
     else { stopMusic(); arm(); }
   };
-}
-function silentAudio() { // anciens iOS : un <audio> silencieux fait passer la session en « lecture »
-  if (navigator.audioSession || silentEl) return;
-  try {
-    const n = 800, u = new Uint8Array(44 + n), v = new DataView(u.buffer), w = (o, t) => [...t].forEach((c, i) => u[o + i] = c.charCodeAt(0));
-    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-    v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true); u.fill(128, 44);
-    silentEl = new Audio(URL.createObjectURL(new Blob([u], { type: 'audio/wav' }))); silentEl.setAttribute('playsinline', ''); silentEl.play().catch(() => {});
-  } catch (e) { /* ignore */ }
 }
 function unlock() { // appelé DANS un geste utilisateur
   if (!(window.AudioContext || window.webkitAudioContext)) return;
@@ -59,8 +56,27 @@ function unlock() { // appelé DANS un geste utilisateur
   tries++;
   try { ctx.resume().then(() => { if (ctx && ctx.state === 'running') { disarm(); if (on.mus) startMusic(); } }).catch(() => {}); } catch (e) { /* ignore */ }
   try { const s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0); } catch (e) { /* ignore */ }
-  silentAudio();
 }
+// Fondu d'entrée (au premier démarrage et à chaque reprise) : jamais de son qui claque
+function fadeUp() { if (asleep || !fade) return; try { const t = ctx.currentTime; fade.gain.cancelScheduledValues(t); fade.gain.setValueAtTime(0, t); fade.gain.linearRampToValueAtTime(1, t + 0.4); } catch (e) { /* ignore */ } }
+// Écran éteint, app en arrière-plan, onglet caché : fondu de 0,15 s, puis le contexte audio est suspendu (plus aucun son, plus de batterie
+// consommée par la puce audio). Au retour : reprise en fondu ; si le système exige un geste (iOS), le prochain toucher la rétablit.
+function sleep() {
+  asleep = true; clearTimeout(sleepT);
+  if (!ctx || ctx.state === 'closed') return;
+  stopMusic();
+  try { const t = ctx.currentTime; fade.gain.cancelScheduledValues(t); fade.gain.setTargetAtTime(0, t, 0.04); } catch (e) { /* ignore */ }
+  sleepT = setTimeout(() => { if (asleep && ctx && ctx.state === 'running') ctx.suspend().catch(() => {}); }, 180);
+}
+function wake() {
+  if (!asleep) return; asleep = false; clearTimeout(sleepT);
+  if (!ctx || ctx.state === 'closed') return;
+  if (ctx.state === 'running') { fadeUp(); if (on.mus) startMusic(); return; } // jamais suspendu (retour très rapide)
+  ctx.resume().catch(() => arm()); // à la reprise, onstatechange relance fondu et musique
+}
+document.addEventListener('visibilitychange', () => (document.hidden ? sleep() : wake()));
+window.addEventListener('pagehide', sleep); window.addEventListener('pageshow', wake);
+document.addEventListener('freeze', sleep); document.addEventListener('resume', wake);
 function arm() { if (armed) return; armed = true; for (const g of GESTURES) window.addEventListener(g, unlock, { capture: true, passive: true }); }
 function disarm() { if (!armed) return; armed = false; for (const g of GESTURES) window.removeEventListener(g, unlock, { capture: true }); }
 const recheck = () => { if (!document.hidden && (!ctx || ctx.state !== 'running')) arm(); };
@@ -73,7 +89,7 @@ export function setMusic(v) { on.mus = v; if (!ctx) return; v ? startMusic() : s
 export const isReady = () => !!ctx && ctx.state === 'running';
 arm();
 
-const live = () => ctx && ctx.state === 'running';
+const live = () => ctx && ctx.state === 'running' && !asleep;
 function tone(f, type, dur, vol, o = {}) {
   if (!live() || !on.sfx) return;
   const t = ctx.currentTime + (o.at || 0), osc = ctx.createOscillator(), g = ctx.createGain();
@@ -125,7 +141,7 @@ const CHORDS = [[57, 60, 64, 67], [53, 57, 60, 64], [48, 55, 59, 64], [55, 59, 6
 let mood = 0;
 export const setMood = (v) => { mood = Math.max(0, Math.min(1, v)); };
 function startMusic() {
-  if (musTimer || !ctx || ctx.state !== 'running') return;
+  if (musTimer || !ctx || ctx.state !== 'running' || asleep) return;
   sess = ctx.createGain(); sess.gain.value = 1; sess.connect(mus);
   const bus = sess;
   const play = () => {

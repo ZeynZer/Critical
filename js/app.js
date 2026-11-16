@@ -16,10 +16,9 @@ const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.classList
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const refresh = () => HOME.update({ dust: MINE.dust(), daily: MINE.daily() });
 
-// son : débloqué par le premier geste (l'écran de démarrage en demande un), repris au retour dans l'application
+// son : débloqué par le premier geste (l'écran de démarrage en demande un) ; mise en veille et reprise gérées par audio.js
 A.setSfx(S.sfx); A.setMusic(S.mus);
 ['pointerdown', 'pointerup', 'click'].forEach((ev) => document.addEventListener(ev, () => { A.init(); A.resume(); }, { passive: true }));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) A.resume(); });
 
 // réglages
 const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f(); });

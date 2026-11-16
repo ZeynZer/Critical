@@ -425,7 +425,7 @@ function update(dt) {
   if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { F.tick(G, slow > 0 ? dt * 0.3 : dt); onEvents(); }
   if (slow > 0) slow -= dt;
   if (warp > 0) { const w0 = warp; warp = Math.max(0, warp - dt / 1.8); if (w0 > 1 - BANG && warp <= 1 - BANG) bang(); }
-  if (G.danger > 0 && !ended && T - beatT > 0.62 - 0.3 * G.danger) { beatT = T; A.chestBeat(G.danger); H.vib(6); } // le cœur s'emballe près de la ligne
+  if (G.danger > 0 && !ended && !paused && T - beatT > 0.62 - 0.3 * G.danger) { beatT = T; A.chestBeat(G.danger); H.vib(6); } // le cœur s'emballe près de la ligne
   shake *= Math.exp(-dt * 9); flash *= Math.exp(-dt * 7);
   shown += (G.score - shown) * Math.min(1, dt * 10); if (G.score - shown < 1) shown = G.score;
   for (const p of parts) { p.l += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; }

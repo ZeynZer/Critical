@@ -11,6 +11,7 @@ Fusionne les astres, de la poussière d'étoile à la galaxie. Jeu mobile (PWA, 
 ```
 python3 -m http.server 8000      # puis ouvre http://localhost:8000
 node tools/test.mjs              # moteur : déterminisme, physique, reprise, rejeu
+node tools/test-audio.mjs        # son dans un vrai navigateur (playwright + serveur local) : veille en arrière-plan, mode silencieux
 ```
 
 ## Le jeu
@@ -29,7 +30,7 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 - `js/fusion.js` : moteur pur et déterministe (physique, règles, `replay()`), testé dans Node
 - `js/mine.js` : rendu canvas, effets, écrans du jeu, thèmes, tutoriel, défi du jour, codex
 - `js/home.js` : écran d'accueil · `js/blackhole.js` : le trou noir de l'accueil (rayons de lumière courbés par la gravité, calculés une fois en WebGL puis animés ; l'image `assets/blackhole.webp` s'affiche d'abord et reste seule sans WebGL ou en mouvement réduit) · `js/app.js` : démarrage, réglages, branchement des modules
-- `js/quests.js` : missions du jour · `js/rank.js` + `js/config.js` : classement · `js/audio.js` : sons synthétisés
+- `js/quests.js` : missions du jour · `js/rank.js` + `js/config.js` : classement · `js/audio.js` : sons synthétisés, session « ambiance » (respecte le mode silencieux, se mélange aux autres sons), mise en veille en arrière-plan
 
 ## Classement en ligne (Supabase)
 1. Crée un projet sur supabase.com.
