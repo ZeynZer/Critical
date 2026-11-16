@@ -22,7 +22,7 @@ const ORB = '<svg class="hm-orb" viewBox="0 0 96 96" aria-hidden="true"><defs><f
 
 const CSS = `
 #s-title.hm{padding-top:calc(env(safe-area-inset-top,0px) + clamp(0px,calc(100vh - 720px),90px));padding-bottom:calc(env(safe-area-inset-bottom,0px) + 108px);overflow:hidden}
-.hm-bh{position:absolute;pointer-events:none;display:block}
+.hm-bh{position:absolute;pointer-events:none;display:block;transition:opacity .9s ease}.hm-bh-gl{opacity:0}.hm-bh-gl.on{opacity:1}
 #s-title.hm>*{z-index:1}
 #s-title.hm .hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .hm-space{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -156,17 +156,21 @@ const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return 
 // en s'approchant : la lumière est courbée). Un seul canvas, 30 images/s, à l'arrêt dès que l'écran n'est pas visible.
 function space(cv, scr) {
   const x = cv.getContext('2d', { alpha: false }), TAU = Math.PI * 2; let W = 0, H = 0, last = 0;
-  // le trou noir (WebGL) vit dans son propre canvas, posé au-dessus du titre ; sans WebGL, le dessin 2D de secours ci-dessous prend le relais
-  const glc = document.createElement('canvas'); glc.className = 'hm-bh'; cv.after(glc);
-  let bh = createBlackHole(glc); if (!bh) glc.remove();
-  const LV = [[260, 110], [200, 80], [150, 60]]; // qualité : [taille interne en pixels, pas de calcul par rayon], abaissée si le téléphone peine
-  let lv = (navigator.hardwareConcurrency || 4) <= 4 ? 1 : 0, bad = 0, ema = 33, still = false, cx = 0, cy = 0, tcy = 0, SZ = 340, since = 99;
+  // Trou noir : l'image pré-rendue en très haute qualité est là dès la première image ; la version animée (WebGL, cuite en arrière-plan
+  // par petites tranches) la remplace en fondu quand elle est prête. Sans WebGL, ou si l'on préfère moins de mouvement : l'image seule.
+  const still = document.createElement('img'); still.className = 'hm-bh'; still.alt = ''; still.src = 'assets/blackhole.webp'; still.decoding = 'async'; cv.after(still);
+  const glc = document.createElement('canvas'); glc.className = 'hm-bh hm-bh-gl'; still.after(glc);
+  let bh = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? null : createBlackHole(glc);
+  if (!bh) glc.remove();
+  const DS = [640, 480, 360, 270]; // tailles d'affichage, abaissées si l'appareil peine ; la physique cuite, elle, ne change pas
+  let ds = 0, bad = 0, ema = 33, cx = 0, cy = 0, tcy = 0, SZ = 340, since = 99, shown = false;
+  const S = Array.from({ length: 230 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
   const place = () => {
     SZ = Math.min(W * 0.98, 420, H * 0.5); const lg = document.querySelector('#s-title .logo'), top = lg ? lg.getBoundingClientRect().top : H * 0.2;
     cx = W / 2; tcy = Math.max(SZ * 0.21, Math.min(H * 0.3, top - SZ * 0.2)); if (!cy) cy = tcy; // cible : au-dessus du titre, sans sortir de l'écran
-    if (bh) { glc.style.width = glc.style.height = SZ + 'px'; glc.style.left = cx - SZ / 2 + 'px'; bh.size(Math.min(LV[lv][0], SZ * Math.min(window.devicePixelRatio || 1, 1.5))); bh.steps = LV[lv][1]; }
+    for (const e of [still, bh && glc]) if (e) { e.style.width = e.style.height = SZ + 'px'; e.style.left = cx - SZ / 2 + 'px'; }
+    if (bh) bh.size(Math.min(DS[ds], Math.round(SZ * Math.min(window.devicePixelRatio || 1, 2.5))));
   };
-  const S = Array.from({ length: 230 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
   const fit = () => { const k = Math.min(1.5, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); }; // l'échelle suit la taille réelle en pixels : la dernière rangée est couverte en entier même avec un ratio fractionnaire (2,625…)
   window.addEventListener('resize', () => { W = 0; since = 99; });
   const glow = (px, py, r, col) => { const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); };
@@ -175,31 +179,27 @@ function space(cv, scr) {
     if (t - last < 28 || !scr.classList.contains('on') || document.hidden || document.documentElement.classList.contains('mn-open')) return; // ~30 images/s, à l'arrêt hors de l'accueil
     if (!W) fit(); if (!W) return;
     const gap = t - last, dt = Math.min(0.1, gap / 1000) || 0.033; last = t;
-    if (gap < 200) ema += (gap - ema) * 0.05; // cadence réelle : si elle tombe sous ~18 images/s, on baisse la qualité du trou noir, puis on le remplace par le dessin 2D
-    if (bh && !bh.lost && !still) { if (ema > 55) { if (++bad > 60) { bad = 0; ema = 33; if (++lv >= LV.length) { still = true; lv = 0; bh.dirty = true; } since = 99; } } else bad = 0; } // trop lent : image fixe du vrai trou noir, rendue une dernière fois en pleine qualité
-    if (++since > 20) { since = 0; place(); }
+    if (++since > 20) { since = 0; place(); } // se recale sur le titre (qui bouge à l'ouverture et selon la taille de l'écran)
     if (Math.abs(tcy - cy) > 0.3) cy += (tcy - cy) * 0.2; // glisse vers sa place au lieu de sauter quand le titre finit son animation
-    if (bh) glc.style.top = cy - SZ / 2 + 'px'; // se recale sur le titre (qui bouge à l'ouverture et selon la taille de l'écran)
-    const R = Math.min(W, H) * 0.075, U = H * 0.8, T = t / 1000;
+    still.style.top = cy - SZ / 2 + 'px'; if (bh) glc.style.top = cy - SZ / 2 + 'px';
+    if (bh && !bh.lost) {
+      if (!bh.ready) bh.step(); // cuisson : une petite tranche par image
+      else {
+        if (gap < 200) ema += (gap - ema) * 0.05; // cadence réelle : sous ~18 images/s, on réduit la taille d'affichage, puis on revient à l'image fixe
+        if (ema > 55) { if (++bad > 60) { bad = 0; ema = 33; if (++ds >= DS.length) { bh = null; glc.remove(); still.style.opacity = 1; } else since = 99; } } else bad = 0;
+        if (bh) { bh.draw(t / 1000); if (!shown) { shown = true; glc.classList.add('on'); setTimeout(() => { still.style.opacity = 0; }, 900); } }
+      }
+    } else if (bh && bh.lost) { bh = null; glc.remove(); still.style.opacity = 1; }
+    const U = H * 0.8, T = t / 1000;
     const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0a0b22'); bg.addColorStop(0.55, '#070818'); bg.addColorStop(1, '#03030c'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
     x.globalCompositeOperation = 'lighter';
-    glow(W * 0.12, H * 0.42, W * 0.75, 'rgba(40,120,255,.2)'); glow(W * 0.95, H * 0.62, W * 0.7, 'rgba(255,60,200,.16)'); glow(W * 0.3, H * 0.98, W * 0.6, 'rgba(255,170,50,.1)'); glow(cx, cy, R * 5, 'rgba(150,80,255,.3)');
+    glow(W * 0.12, H * 0.42, W * 0.75, 'rgba(40,120,255,.2)'); glow(W * 0.95, H * 0.62, W * 0.7, 'rgba(255,60,200,.16)'); glow(W * 0.3, H * 0.98, W * 0.6, 'rgba(255,170,50,.1)'); glow(cx, cy, SZ * 0.4, 'rgba(150,80,255,.26)');
     x.lineCap = 'round';
     for (const s of S) { // plus une étoile est près, plus elle tourne vite et plus son image s'étire
       s.a += dt * 0.05 / (s.r * s.r + 0.03); s.r -= dt * 0.012 * (0.4 + 0.6 / (s.r + 0.2)); if (s.r < 0.11) { s.r = 1.45; s.a = rnd(s.a) * TAU; }
       const rad = s.r * U, al = (0.4 + 0.6 * Math.abs(Math.sin(T * s.z * 1.7 + s.a))) * s.z * Math.min(1, (s.r - 0.1) * 12), len = 0.012 / (s.r * s.r);
       x.strokeStyle = `rgba(215,232,255,${al})`; x.lineWidth = 1 + s.z; x.beginPath(); x.ellipse(cx, cy, rad, rad * 0.92, 0, s.a - len, s.a + 0.002); x.stroke();
     }
-    const flat = !bh || bh.lost; // repli sans WebGL : disque et ombre dessinés en 2D
-    const disc = (a0, a1) => { const g = x.createLinearGradient(cx - R * 3.3, 0, cx + R * 3.3, 0); g.addColorStop(0, 'rgba(255,79,216,0)'); g.addColorStop(0.3, 'rgba(255,170,90,.9)'); g.addColorStop(0.5, 'rgba(255,250,235,1)'); g.addColorStop(0.7, 'rgba(255,170,90,.9)'); g.addColorStop(1, 'rgba(77,243,255,0)'); x.strokeStyle = g; x.lineWidth = R * 0.34; x.setLineDash([R * 0.5, R * 0.07]); x.lineDashOffset = -T * R * 0.9; x.beginPath(); x.ellipse(cx, cy, R * 3.1, R * 0.62, -0.14, a0, a1); x.stroke(); x.setLineDash([]); };
-    if (flat) {
-      disc(Math.PI, TAU); // moitié du disque derrière le trou noir
-      x.strokeStyle = 'rgba(255,205,150,.55)'; x.lineWidth = R * 0.3; x.beginPath(); x.arc(cx, cy, R * 1.5, 0, TAU); x.stroke(); // lumière du disque courbée au-dessus et en dessous
-      x.globalCompositeOperation = 'source-over';
-      x.fillStyle = '#000'; x.beginPath(); x.arc(cx, cy, R * 1.12, 0, TAU); x.fill();
-      x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1.5; x.stroke();
-      x.globalCompositeOperation = 'lighter'; disc(0, Math.PI);
-    } else if (!still || bh.dirty) bh.draw(T);
     x.globalCompositeOperation = 'source-over';
   };
   requestAnimationFrame(frame);
