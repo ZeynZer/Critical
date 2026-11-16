@@ -24,6 +24,11 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   const g = F.newGame(1); g.bodies.push({ id: 99, k: 'c', tier: F.HOLE, x: 7, y: 12, vx: 0, vy: 0, r: F.TIERS[F.HOLE].r, ang: 0, av: 0, age: 2, hit: true, dead: false });
   g.cur = { k: 'c', tier: 2 }; const tr = F.trace(g, 2.5); assert.ok(Math.abs(tr[tr.length - 2] - 2.5) < 1e-9, 'la trajectoire doit rester droite');
   g.mod = F.mod(5); const tw = F.trace(g, 2.5); assert.ok(tw[tw.length - 2] > 2.6, 'le vent penche la trajectoire');
+  // et en vrai : sans pesanteur ni vent, un petit astre posé près d'un trou noir ne bouge pas du tout
+  const z = F.newGame(2); z.mod = { g: 0, wind: 0, alt: 0, inset: 0, n: '' }; z.over = false;
+  for (const [id, tier, x, y] of [[1, F.HOLE, 7, 7], [2, 2, 4.6, 7], [3, F.HOLE + 2, 2, 11]]) z.bodies.push({ id, k: 'c', tier, x, y, vx: 0, vy: 0, r: F.TIERS[tier].r, ang: 0, av: 0, age: 2, hit: true, dead: false });
+  for (let k = 0; k < 240; k++) F.tick(z, 1 / 60);
+  assert.ok(z.bodies.every((o) => Math.hypot(o.vx, o.vy) < 1e-9), 'des astres s\'attirent');
   assert.equal(F.mod(7).inset, 0.8); assert.equal(F.mod(9).g, 1);
   console.log('trajectoire et secteurs OK');
 }
