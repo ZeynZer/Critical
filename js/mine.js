@@ -362,7 +362,7 @@ function draw() {
   // visée
   if (!G.over) {
     const it = G.cur, ax = sx(F.clampX(it, aimX, G.inset)), ay = sy(F.DROP_Y), ready = G.cool <= 0;
-    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : la gravité des astres extrêmes la courbe
+    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : droite, ou penchée par le vent du secteur
       const tr = F.trace(G, aimX), n = tr.length; ctx.fillStyle = '#fff';
       for (let i = 2; i < n; i += 2) { ctx.globalAlpha = 0.5 * (1 - i / n) + 0.12; ctx.beginPath(); ctx.arc(sx(tr[i]), sy(tr[i + 1]), 1.8, 0, TAU); ctx.fill(); }
       if (n > 3) { ctx.globalAlpha = 0.3; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(sx(tr[n - 2]), sy(tr[n - 1]), (it.k === 'c' ? F.TIERS[it.tier].r : F.R_SPECIAL) * B.u, 0, TAU); ctx.stroke(); }
@@ -502,7 +502,7 @@ Un seul lâcher qui déclenche plusieurs fusions, c'est une chaîne : chaque mai
 
 Chaque fusion charge la jauge de saut. Pleine, tu passes au secteur suivant : l'onde vaporise les petits astres, et tu reçois de la matière exotique qui copie l'astre qu'elle touche.
 
-À partir du trou noir, les astres attirent les plus petits : la visée montre la trajectoire courbée. L'étoile à neutrons repousse par impulsions, la géante rouge enfle tant qu'on ne la fusionne pas, le trou noir avale les petits astres voisins.
+La visée montre où tombera ton astre. L'étoile à neutrons repousse ses voisins par impulsions, la géante rouge enfle tant qu'on ne la fusionne pas, le trou noir avale les petits astres voisins.
 
 Certains astres ont une variante rare, et chaque galaxie tire sa rareté : les probabilités sont dans le codex.
 

@@ -180,7 +180,6 @@ function walls(G, b) {
   }
 }
 
-// Accélération subie par un point : gravité du secteur, vent, attraction des étoiles plus massives (tier = rang du corps, -1 sinon)
 // Accélération d'un astre : la gravité du secteur et son vent. (Les astres ne s'attirent pas entre eux.)
 function accel(G, out) { const M = G.mod; out[0] = M.wind * (M.alt && Math.sin(G.t * 0.8) < 0 ? -1 : 1); out[1] = GRAV * M.g; }
 const ACC = [0, 0];
