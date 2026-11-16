@@ -28,7 +28,7 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 ## Structure
 - `js/fusion.js` : moteur pur et déterministe (physique, règles, `replay()`), testé dans Node
 - `js/mine.js` : rendu canvas, effets, écrans du jeu, thèmes, tutoriel, défi du jour, codex
-- `js/home.js` : écran d'accueil · `js/blackhole.js` : le trou noir de l'accueil (WebGL, rayons de lumière courbés par la gravité ; image fixe si l'appareil est trop lent, dessin 2D sans WebGL) · `js/app.js` : démarrage, réglages, branchement des modules
+- `js/home.js` : écran d'accueil · `js/blackhole.js` : le trou noir de l'accueil (rayons de lumière courbés par la gravité, calculés une fois en WebGL puis animés ; l'image `assets/blackhole.webp` s'affiche d'abord et reste seule sans WebGL ou en mouvement réduit) · `js/app.js` : démarrage, réglages, branchement des modules
 - `js/quests.js` : missions du jour · `js/rank.js` + `js/config.js` : classement · `js/audio.js` : sons synthétisés
 
 ## Classement en ligne (Supabase)
@@ -39,6 +39,9 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 **Mise à jour d'une base existante** : recolle simplement `supabase/schema.sql` en entier et lance-le. Les joueurs et les scores sont conservés ; seules des colonnes de profil sont ajoutées. À faire avant de publier une version du jeu qui contient les profils.
 
 Les tables sont fermées (RLS sans policy) : la clé publique ne peut appeler que 6 fonctions (`register`, `submit_score`, `leaderboard`, `my_rank`, `set_profile`, `get_profile`) qui valident leurs entrées. La vitrine d'un profil est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu. Chaque score est stocké avec sa graine et son journal de lâchers, que `replay()` peut rejouer à l'identique pour une vérification côté serveur.
+
+## Image du trou noir
+`assets/blackhole.webp` est générée avec le même moteur que l'animation, en très haute définition : lance un serveur local puis `node tools/bake-blackhole.mjs` (nécessite playwright) pour la régénérer après une modification de `js/blackhole.js`.
 
 ## Icône
 Remplace `assets-src/icon-master.png` (1024×1024) puis lance `python3 tools/make-icons.py` (pip install pillow).
