@@ -1,9 +1,10 @@
--- Critical — classement mondial de Genèse.
+-- Critical — classement mondial et profils publics.
 -- À coller tel quel dans Supabase : SQL Editor → New query → Run. Peut être relancé sans risque.
 --
 -- Principe de sécurité : les tables sont fermées (RLS activé, aucune policy). La clé publique de l'application ne peut
 -- ni les lire ni les écrire directement ; tout passe par les 4 fonctions ci-dessous, qui valident ce qu'elles reçoivent.
 -- Un joueur est identifié par un secret aléatoire créé sur son appareil ; seule son empreinte (sha256) est stockée.
+-- Mise à jour d'une base existante : recoller ce fichier en entier suffit (les colonnes de profil sont ajoutées, rien n'est perdu).
 
 create table if not exists public.players (
   id uuid primary key default gen_random_uuid(),
@@ -11,6 +12,11 @@ create table if not exists public.players (
   name text not null,
   created_at timestamptz not null default now()
 );
+-- profil public : vitrine (jusqu'à 3 astres, au format 'rang' ou 'rang:variante'), devise, nombre de découvertes du codex
+alter table public.players add column if not exists motto text not null default '';
+alter table public.players add column if not exists featured text[] not null default '{}';
+alter table public.players add column if not exists codex integer not null default 0;
+alter table public.players add column if not exists profile_at timestamptz;
 create unique index if not exists players_name_key on public.players (lower(name));
 
 create table if not exists public.scores (
@@ -75,12 +81,13 @@ begin
   return json_build_object('rank', v_rank, 'total', v_total, 'best', v_best);
 end $$;
 
--- Lire une page du classement (50 lignes par défaut, 100 au plus).
+-- Lire une page du classement (50 lignes par défaut, 100 au plus). badge = premier astre de la vitrine du joueur.
+drop function if exists public.leaderboard(text, integer, integer); -- le type de retour a changé (colonne badge)
 create or replace function public.leaderboard(p_board text, p_offset integer default 0, p_limit integer default 50)
-returns table (rank bigint, name text, score integer, sector integer, tier integer)
+returns table (rank bigint, name text, score integer, sector integer, tier integer, badge text)
 language sql stable security definer set search_path = public as $$
-  select r.rank, r.name, r.score, r.sector, r.tier from (
-    select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier
+  select r.rank, r.name, r.score, r.sector, r.tier, r.badge from (
+    select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier, p.featured[1] as badge
     from scores s join players p on p.id = s.player_id where s.board = p_board
   ) r order by r.rank offset greatest(p_offset, 0) limit least(greatest(p_limit, 1), 100)
 $$;
@@ -95,5 +102,37 @@ language sql stable security definer set search_path = public as $$
   where p.secret_hash = critical_hash(p_secret) and s.board = p_board
 $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text) to anon, authenticated;
+-- Modifier son profil public : vitrine (0 à 3 astres distincts), devise (40 caractères au plus), nombre de découvertes.
+-- La vitrine est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu.
+create or replace function public.set_profile(p_secret text, p_featured text[], p_motto text, p_codex integer) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_last timestamptz; v_motto text := btrim(coalesce(p_motto, '')); v_feat text[] := coalesce(p_featured, '{}');
+begin
+  select id, profile_at into v_id, v_last from players where secret_hash = critical_hash(p_secret);
+  if v_id is null then raise exception 'unknown_player'; end if;
+  if v_last is not null and v_last > now() - interval '3 seconds' then raise exception 'too_fast'; end if;
+  if coalesce(array_length(v_feat, 1), 0) > 3
+     or exists (select 1 from unnest(v_feat) f where f is null or f !~ '^([0-9]|1[0-2])(:[0-5])?$')
+     or (select count(distinct f) from unnest(v_feat) f) <> coalesce(array_length(v_feat, 1), 0)
+  then raise exception 'invalid_featured'; end if;
+  if v_motto !~ '^[^[:cntrl:]<>]{0,40}$' then raise exception 'invalid_motto'; end if;
+  if p_codex is null or p_codex < 0 or p_codex > 100 then raise exception 'invalid_codex'; end if;
+  update players set featured = v_feat, motto = v_motto, codex = p_codex, profile_at = now() where id = v_id;
+  return json_build_object('ok', true);
+end $$;
+
+-- Voir le profil public d'un joueur (par pseudo) : null s'il n'existe pas.
+create or replace function public.get_profile(p_name text) returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('name', p.name, 'motto', p.motto, 'featured', to_json(p.featured), 'codex', p.codex, 'since', p.created_at,
+    'score', s.score, 'sector', s.sector,
+    'tier', (select max(m.tier) from scores m where m.player_id = p.id),
+    'rank', case when s.score is null then null else (select count(*) + 1 from scores o where o.board = 'all' and o.score > s.score) end,
+    'total', (select count(*) from scores o where o.board = 'all'),
+    'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'))
+  from players p left join scores s on s.player_id = p.id and s.board = 'all'
+  where lower(p.name) = lower(btrim(p_name))
+$$;
+
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text) to anon, authenticated;

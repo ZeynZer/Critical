@@ -362,7 +362,7 @@ function draw() {
   // visée
   if (!G.over) {
     const it = G.cur, ax = sx(F.clampX(it, aimX, G.inset)), ay = sy(F.DROP_Y), ready = G.cool <= 0;
-    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : droite, ou penchée par le vent du secteur
+    { // trajectoire prévue (visible aussi pendant qu'un astre tombe) : une verticale
       const tr = F.trace(G, aimX), n = tr.length; ctx.fillStyle = '#fff';
       for (let i = 2; i < n; i += 2) { ctx.globalAlpha = 0.5 * (1 - i / n) + 0.12; ctx.beginPath(); ctx.arc(sx(tr[i]), sy(tr[i + 1]), 1.8, 0, TAU); ctx.fill(); }
       if (n > 3) { ctx.globalAlpha = 0.3; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(sx(tr[n - 2]), sy(tr[n - 1]), (it.k === 'c' ? F.TIERS[it.tier].r : F.R_SPECIAL) * B.u, 0, TAU); ctx.stroke(); }
@@ -506,22 +506,42 @@ La visée montre où tombera ton astre. L'étoile à neutrons repousse ses voisi
 
 Certains astres ont une variante rare, et chaque galaxie tire sa rareté : les probabilités sont dans le codex.
 
-Chaque secteur change une règle (gravité, vent, parois). Si la pile dépasse la ligne trop longtemps, tout s'effondre.`;
+Chaque secteur change une règle (gravité, parois). Si la pile dépasse la ligne trop longtemps, tout s'effondre.`;
 
+// Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
+const entries = () => [
+  ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '' })),
+  ...GAL.map((g, v) => ({ key: F.MAX_TIER + ':' + v, name: g.n, tier: F.MAX_TIER, v, p: F.GALAXY[v], ok: !!sv.cx[F.MAX_TIER + ':' + v], sub: odds(F.GALAXY[v]) })),
+  ...Object.keys(VAR).map((t) => ({ key: t + ':1', name: VAR[t][0], tier: +t, v: 1, p: F.RARE[t], ok: !!sv.cx[t + ':1'], sub: odds(F.RARE[t]) })),
+  ...Object.keys(SECRETS).map((id) => ({ key: id, name: SECRETS[id][0], tier: -1, v: 0, ok: !!sv.cx[id], sub: SECRETS[id][1] })),
+];
+const parseKey = (k) => { const m = /^(\d{1,2})(?::(\d))?$/.exec(String(k)); return m && +m[1] <= F.MAX_TIER ? { tier: +m[1], v: +(m[2] || 0) } : null; };
+export const codexN = () => entries().filter((e) => e.ok).length;
+export const tierName = (t) => (t === F.MAX_TIER ? 'Galaxie' : (BODIES[t] || ['?'])[0]);
+// Astres que le joueur peut exposer sur son profil (découverts, hors secrets), du plus rare au plus courant
+export const astres = () => entries().filter((e) => e.ok && e.tier >= 0).map((e) => ({ ...e, r: e.p ? -Math.log(e.p) : e.tier / 20 })).sort((a, b) => b.r - a.r);
+export function astreInfo(key) { // nom, rareté (-1 = courant) et couleur d'un astre, pour l'affichage d'un profil
+  const k = parseKey(key); if (!k) return null;
+  const p = k.tier === F.MAX_TIER ? F.GALAXY[k.v] : k.v ? F.RARE[k.tier] : 0, rar = k.tier === F.MAX_TIER ? k.v : k.v && p ? rarOf(k.tier, 1, p) : -1;
+  return { name: k.tier === F.MAX_TIER ? GAL[k.v].n : nameOf(k.tier, k.v), rar, col: rar >= 0 ? RCOL[rar] : [160, 185, 225], sub: p ? odds(p) : '' };
+}
+// Dessine un astre dans une vignette carrée de px pixels (profil, classement). live : astre animé, à repeindre régulièrement.
+export function paintAstre(c, key, px, live) {
+  const k = parseKey(key); if (!k) return;
+  const d = Math.min(window.devicePixelRatio || 1, 2); c.width = c.height = Math.round(px * d); c.style.width = c.style.height = px + 'px';
+  const keep = ctx, t0 = T; ctx = c.getContext('2d'); ctx.scale(d, d); if (live) { T = performance.now() / 1000; FN += 2; }
+  drawItem({ k: 'c', tier: k.tier, v: k.v }, px / 2, px / 2, 1, 0, Math.min(B.u, px * 0.36 / F.TIERS[k.tier].r)); // jamais plus grand que le sprite : pas de flou
+  ctx = keep; T = t0;
+}
 function showCodex() {
-  const g = $('#mn-cx'); g.innerHTML = ''; let n = 0;
-  const cell = (name, tier, v, hint, ok) => {
-    const d = document.createElement('div'); d.className = 'cx' + (ok ? ' ok' : ''); if (ok) n++; tot++;
-    if (ok && tier >= 0) { const c = document.createElement('canvas'), keep = ctx; c.width = c.height = 64 * DPR; ctx = c.getContext('2d'); ctx.scale(DPR, DPR); drawItem({ k: 'c', tier, v }, 32, 32, 1, 0, 21 / F.TIERS[tier].r); ctx = keep; d.append(c); }
-    else d.insertAdjacentHTML('beforeend', `<i>${ok ? '★' : '?'}</i>`);
-    d.insertAdjacentHTML('beforeend', `<b>${ok ? name : '???'}</b>` + (hint ? `<small>${hint}</small>` : '')); g.append(d);
-  };
-  let tot = 0;
-  for (let i = 0; i < F.MAX_TIER; i++) cell(BODIES[i][0], i, 0, '', !!sv.cx[i]);
-  GAL.forEach((G2, v) => cell(G2.n, F.MAX_TIER, v, odds(F.GALAXY[v]), !!sv.cx[F.MAX_TIER + ':' + v]));
-  for (const t in VAR) cell(VAR[t][0], +t, 1, odds(F.RARE[t]), !!sv.cx[t + ':1']);
-  for (const id in SECRETS) cell(SECRETS[id][0], -1, 0, SECRETS[id][1], !!sv.cx[id]);
-  $('#mn-cxs').textContent = `${n}/${tot} découvertes. Les variantes rares triplent les points et rapportent de l'énergie.`;
+  const g = $('#mn-cx'); g.innerHTML = ''; const all = entries(); let n = 0;
+  for (const e of all) {
+    const d = document.createElement('div'); d.className = 'cx' + (e.ok ? ' ok' : ''); if (e.ok) n++;
+    if (e.ok && e.tier >= 0) { const c = document.createElement('canvas'); paintAstre(c, e.key, 64); d.append(c); }
+    else d.insertAdjacentHTML('beforeend', `<i>${e.ok ? '★' : '?'}</i>`);
+    d.insertAdjacentHTML('beforeend', `<b>${e.ok ? e.name : '???'}</b>` + (e.sub ? `<small>${e.sub}</small>` : '')); g.append(d);
+  }
+  $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent de la poussière d'étoile.`;
   $('#mn-m-codex').classList.add('on');
 }
 export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} ✦ ${label}`.trim()); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
@@ -616,7 +636,7 @@ export function open(fresh) { // fresh : on va lancer autre chose qu'une partie 
 }
 function close() { A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
-  Object.assign(H, opts);
+  Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const d = document.createElement('div'); d.innerHTML = HTML + HTML2; document.body.append(...d.children);
   cv = $('#mn-cv'); ctx = cv.getContext('2d');
