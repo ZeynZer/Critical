@@ -357,7 +357,7 @@ function draw() {
   if (G.inset > 0.02) { const iw = G.inset * B.u; ctx.fillStyle = 'rgba(255,79,216,.16)'; ctx.fillRect(B.x, B.y - 30, iw, B.h + 30); ctx.fillRect(B.x + B.w - iw, B.y - 30, iw, B.h + 30); } // parois resserrées
   // ligne de danger
   const dg = G.danger, ly = sy(F.LINE);
-  ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.5 + 0.5 * Math.sin(T * 14)) : 'rgba(255,255,255,.22)'; ctx.lineWidth = dg > 0 ? 2.5 : 1; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.5 + 0.5 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.45 + 0.3 * Math.sin(T * 6)) : 'rgba(255,255,255,.22)'; ctx.lineWidth = dg > 0 ? 2.5 : G.near ? 1.8 : 1; // ambre : un astre touche la ligne (sans danger) ; rouge : il est entièrement dehors ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]);
   if (dg > 0) { const g = ctx.createLinearGradient(0, B.y - 40, 0, ly + B.u * 2); g.addColorStop(0, rgba([255, 50, 90], 0.36 * dg)); g.addColorStop(1, 'rgba(255,50,90,0)'); ctx.fillStyle = g; ctx.fillRect(B.x, B.y - 36, B.w, ly + B.u * 2 - B.y + 36); }
   // visée
   if (!G.over) {
@@ -506,7 +506,7 @@ La visée montre où tombera ton astre. L'étoile à neutrons repousse ses voisi
 
 Certains astres ont une variante rare, et chaque galaxie tire sa rareté : les probabilités sont dans le codex.
 
-Chaque secteur change une règle (gravité, parois). Si la pile dépasse la ligne trop longtemps, tout s'effondre.`;
+Chaque secteur change une règle (gravité, parois). Si un astre reste entièrement au-dessus de la ligne pointillée pendant 2,6 secondes, c'est perdu. Qu'un astre la touche ou la dépasse en partie ne compte pas : la ligne devient ambrée, puis rouge quand le danger est réel.`;
 
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [

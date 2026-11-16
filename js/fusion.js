@@ -38,7 +38,7 @@ function nextItem(G) {
 export function newGame(seed = (Math.random() * 2 ** 32) >>> 0) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
-    chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, cool: 0, over: false,
+    chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
     cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0,
   };
   G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
@@ -229,9 +229,10 @@ function sub(G) {
   }
   for (const b of G.bodies) if (b.fuse && !b.dead) explode(G, b);
   if (G.bodies.some((b) => b.dead)) G.bodies = G.bodies.filter((b) => !b.dead);
-  // danger : un noyau posé dépasse la ligne
-  let hot = false;
-  for (const b of G.bodies) if (b.hit && b.age > 1 && b.y - b.r < LINE) { hot = true; break; }
+  // défaite : un astre posé ENTIÈREMENT au-dessus de la ligne (son bord bas compris) pendant DANGER_TIME ; un simple dépassement ne compte pas
+  let hot = false, near = false;
+  for (const b of G.bodies) if (b.hit && b.age > 1) { if (b.y + b.r < LINE) { hot = true; break; } if (b.y - b.r < LINE) near = true; }
+  G.near = near || hot; // avertissement visuel seulement
   G.danger = hot ? G.danger + dt / DANGER_TIME : Math.max(0, G.danger - dt * 1.5);
   if (G.danger >= 1 && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; G.ev.push({ t: 'over' }); }
 }
