@@ -76,3 +76,13 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   }
   console.log('roulement OK');
 }
+{ // défaite : seulement si un astre est ENTIÈREMENT au-dessus de la ligne, pendant 2,6 s ; dépasser en partie ne coûte rien
+  const mk = (y, tier) => { const g = F.newGame(8); g.mod = { g: 0, inset: 0, n: '' }; g.bodies.push({ id: 1, k: 'c', tier, x: 5, y, vx: 0, vy: 0, r: F.TIERS[tier].r, ang: 0, av: 0, age: 5, hit: true, dead: false }); return g; };
+  const run = (g, s) => { for (let k = 0; k < s * 60 && !g.over; k++) F.tick(g, 1 / 60); return g; };
+  const part = run(mk(F.LINE - 0.2, 7), 12); assert.ok(!part.over, 'un astre qui dépasse en partie ne doit pas faire perdre'); assert.equal(part.danger, 0, 'pas de compte à rebours tant que l\'astre n\'est pas entièrement dehors');
+  const ent = mk(F.LINE - F.TIERS[1].r - 0.1, 1);
+  assert.ok(!run(ent, 2.2).over, 'le temps d\'attente doit être respecté'); assert.ok(run(ent, 1).over, 'un astre entièrement au-dessus doit faire perdre après 2,6 s');
+  const back = mk(F.LINE - F.TIERS[1].r - 0.1, 1); run(back, 1.5); back.bodies[0].y = F.LINE + 3; run(back, 3); assert.ok(!back.over && back.danger === 0, 'le compte à rebours retombe quand l\'astre redescend');
+  assert.ok(part.near, 'le dépassement partiel est signalé (avertissement visuel)');
+  console.log('règle de défaite OK');
+}

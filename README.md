@@ -21,12 +21,14 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 - **Défi du jour** : un objectif chronométré, le même pour tous (ex. « Crée une Géante rouge en moins de 2 min »).
 - **Missions du jour** et **thèmes d'arrière-plan** achetés en poussière d'étoile (✦), gagnée en jouant.
 - **Classement mondial**, classement du défi du jour et **profils publics** : on touche un joueur pour voir sa vitrine (jusqu'à 3 astres découverts, animés), sa devise et ses stats ; chacun peut modifier son profil.
+- **Profil** : bouton dans le menu ; un astre découvert au choix devient ton astre de profil (affiché en grand, dans le menu et devant ton pseudo dans le classement), les deux suivants forment ta vitrine. Utilisable hors connexion : les modifications partent dès que le réseau revient.
+- **Défaite** : seulement si un astre reste **entièrement** au-dessus de la ligne pendant 2,6 s ; la ligne devient ambrée quand un astre la touche, rouge quand le danger est réel.
 - **Première partie guidée**, reprise automatique de la partie en cours.
 
 ## Structure
 - `js/fusion.js` : moteur pur et déterministe (physique, règles, `replay()`), testé dans Node
 - `js/mine.js` : rendu canvas, effets, écrans du jeu, thèmes, tutoriel, défi du jour, codex
-- `js/home.js` : écran d'accueil · `js/app.js` : démarrage, réglages, branchement des modules
+- `js/home.js` : écran d'accueil · `js/blackhole.js` : le trou noir de l'accueil (WebGL, rayons de lumière courbés par la gravité ; image fixe si l'appareil est trop lent, dessin 2D sans WebGL) · `js/app.js` : démarrage, réglages, branchement des modules
 - `js/quests.js` : missions du jour · `js/rank.js` + `js/config.js` : classement · `js/audio.js` : sons synthétisés
 
 ## Classement en ligne (Supabase)

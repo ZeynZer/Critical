@@ -1,9 +1,9 @@
 // Service worker : le jeu fonctionne hors-ligne après la première visite.
 // Pour publier une mise à jour, change simplement VERSION.
-const VERSION = 'critical-v27';
+const VERSION = 'critical-v30';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/app.js', 'js/fusion.js', 'js/mine.js', 'js/home.js', 'js/audio.js', 'js/quests.js', 'js/rank.js', 'js/config.js',
+  'js/app.js', 'js/fusion.js', 'js/mine.js', 'js/home.js', 'js/blackhole.js', 'js/audio.js', 'js/quests.js', 'js/rank.js', 'js/config.js',
   'assets/fonts/orbitron-latin-700-normal.woff2', 'assets/fonts/orbitron-latin-900-normal.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];

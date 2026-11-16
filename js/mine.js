@@ -315,7 +315,7 @@ function drawReveal() { // l'écran s'assombrit, des rayons tournent, l'astre gr
 }
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, lowFx ? 1.5 : 2); W = window.innerWidth; Hh = window.innerHeight;
-  cv.width = Math.round(W * DPR); cv.height = Math.round(Hh * DPR);
+  cv.width = Math.ceil(W * DPR); cv.height = Math.ceil(Hh * DPR);
   SAT = $('#probe-t') ? $('#probe-t').offsetHeight : 0; SAB = $('#probe-b') ? $('#probe-b').offsetHeight : 0;
   const top = SAT + 104, bar = 86, availH = Hh - top - bar - SAB - 30;
   const u = Math.min((W - 28) / F.W, availH / F.HT, 60);
@@ -331,7 +331,7 @@ function glassBox(x, y, w, h, r, hi = 0.2) { // panneau de verre : voile, reflet
 }
 
 function draw() {
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.setTransform(cv.width / W, 0, 0, cv.height / Hh, 0, 0); // idem : pas de bord à demi couvert
   const sh = shake > 0.3 ? shake : 0, ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh;
   // espace : en changeant de secteur, l'ancien ciel file vers le haut
   const q = warp > 0 ? 1 - warp : -1, im = q >= 0 && q < BANG, p = q < 0 ? 1 : im ? q / BANG : (q - BANG) / (1 - BANG), mx = W / 2, my = B.y + B.h * 0.5;
@@ -357,7 +357,7 @@ function draw() {
   if (G.inset > 0.02) { const iw = G.inset * B.u; ctx.fillStyle = 'rgba(255,79,216,.16)'; ctx.fillRect(B.x, B.y - 30, iw, B.h + 30); ctx.fillRect(B.x + B.w - iw, B.y - 30, iw, B.h + 30); } // parois resserrées
   // ligne de danger
   const dg = G.danger, ly = sy(F.LINE);
-  ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.5 + 0.5 * Math.sin(T * 14)) : 'rgba(255,255,255,.22)'; ctx.lineWidth = dg > 0 ? 2.5 : 1; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.5 + 0.5 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.45 + 0.3 * Math.sin(T * 6)) : 'rgba(255,255,255,.22)'; ctx.lineWidth = dg > 0 ? 2.5 : G.near ? 1.8 : 1; // ambre : un astre touche la ligne (sans danger) ; rouge : il est entièrement dehors ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]);
   if (dg > 0) { const g = ctx.createLinearGradient(0, B.y - 40, 0, ly + B.u * 2); g.addColorStop(0, rgba([255, 50, 90], 0.36 * dg)); g.addColorStop(1, 'rgba(255,50,90,0)'); ctx.fillStyle = g; ctx.fillRect(B.x, B.y - 36, B.w, ly + B.u * 2 - B.y + 36); }
   // visée
   if (!G.over) {
@@ -506,7 +506,7 @@ La visée montre où tombera ton astre. L'étoile à neutrons repousse ses voisi
 
 Certains astres ont une variante rare, et chaque galaxie tire sa rareté : les probabilités sont dans le codex.
 
-Chaque secteur change une règle (gravité, parois). Si la pile dépasse la ligne trop longtemps, tout s'effondre.`;
+Chaque secteur change une règle (gravité, parois). Si un astre reste entièrement au-dessus de la ligne pointillée pendant 2,6 secondes, c'est perdu. Qu'un astre la touche ou la dépasse en partie ne compte pas : la ligne devient ambrée, puis rouge quand le danger est réel.`;
 
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
@@ -517,6 +517,7 @@ const entries = () => [
 ];
 const parseKey = (k) => { const m = /^(\d{1,2})(?::(\d))?$/.exec(String(k)); return m && +m[1] <= F.MAX_TIER ? { tier: +m[1], v: +(m[2] || 0) } : null; };
 export const codexN = () => entries().filter((e) => e.ok).length;
+export const localStats = () => ({ score: sv.best || null, sector: sv.depth || null, tier: sv.tier ? sv.tier - 1 : null }); // pour le profil quand le serveur ne répond pas
 export const tierName = (t) => (t === F.MAX_TIER ? 'Galaxie' : (BODIES[t] || ['?'])[0]);
 // Astres que le joueur peut exposer sur son profil (découverts, hors secrets), du plus rare au plus courant
 export const astres = () => entries().filter((e) => e.ok && e.tier >= 0).map((e) => ({ ...e, r: e.p ? -Math.log(e.p) : e.tier / 20 })).sort((a, b) => b.r - a.r);
@@ -639,7 +640,7 @@ export function init(opts) {
   Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const d = document.createElement('div'); d.innerHTML = HTML + HTML2; document.body.append(...d.children);
-  cv = $('#mn-cv'); ctx = cv.getContext('2d');
+  cv = $('#mn-cv'); ctx = cv.getContext('2d', { alpha: false });
   cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove); cv.addEventListener('pointerup', onUp); cv.addEventListener('pointercancel', () => { aiming = false; });
   window.addEventListener('resize', () => { if (isOpen) resize(); });
   document.addEventListener('visibilitychange', () => { last = performance.now(); if (document.hidden && isOpen) saveRun(); }); window.addEventListener('pagehide', () => { if (isOpen) saveRun(); });
