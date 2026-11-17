@@ -145,6 +145,28 @@ language sql stable security definer set search_path = public as $$
   where lower(p.name) = lower(btrim(p_name)) and s.log is not null
 $$;
 
+-- Le joueur juste au-dessus d'un score donné (sert de cible en partie) : toujours un vrai joueur, avec une partie rejouable.
+create or replace function public.rival(p_score integer) returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('name', p.name, 'score', s.score, 'rank', (select count(*) + 1 from scores o where o.board = 'all' and o.score > s.score))
+  from scores s join players p on p.id = s.player_id
+  where s.board = 'all' and s.score > greatest(coalesce(p_score, 0), 0) and s.log is not null
+  order by s.score asc, s.updated_at asc limit 1
+$$;
+
+-- Dernières parties réelles du classement mondial (fil d'activité).
+create or replace function public.activity() returns table (name text, score integer, sector integer, tier integer, at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select p.name, s.score, s.sector, s.tier, s.updated_at from scores s join players p on p.id = s.player_id where s.board = 'all' order by s.updated_at desc limit 6
+$$;
+
+-- Part réelle des joueurs classés ayant déjà atteint un trou noir (10), un quasar (11), une galaxie (12).
+create or replace function public.rarity() returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('total', count(*), 'hole', count(*) filter (where t >= 10), 'quasar', count(*) filter (where t >= 11), 'galaxy', count(*) filter (where t >= 12))
+  from (select max(tier) as t from scores group by player_id) x
+$$;
+
 -- Envoyer son temps de jeu cumulé (secondes). Valeur jamais diminuée, et progression bornée par le temps réellement écoulé depuis le
 -- dernier envoi (+ 2 min de marge) : impossible de s'attribuer 500 heures d'un coup. Premier envoi : jusqu'à 72 h déjà jouées avant l'inscription.
 create or replace function public.report_playtime(p_secret text, p_seconds integer) returns json
@@ -160,5 +182,5 @@ begin
   return json_build_object('playtime', v_new);
 end $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text) to anon, authenticated;
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity() to anon, authenticated;

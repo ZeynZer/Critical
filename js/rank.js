@@ -71,6 +71,7 @@ const CSS = `
 #rk-in{width:100%;height:52px;border-radius:18px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#fff;font:700 18px var(--font);text-align:center;outline:none;user-select:text;-webkit-user-select:text}
 #rk-err{min-height:18px;color:#ff8aa0;font-size:13px}
 .rk-row{cursor:pointer}.rk-row:active{background:rgba(255,255,255,.1)}.rk-ic{flex:none;width:26px;height:26px;display:block}.rk-ic[data-key='']{visibility:hidden}
+#rk-feed{width:100%;font-size:11.5px;line-height:1.5;color:rgba(255,255,255,.72);text-align:left}#rk-feed:empty{display:none}#rk-feed b{color:#fff}#rk-feed .rf-s{color:#ffc247;margin-bottom:3px}
 #rk-hint{font-size:11px;color:rgba(255,255,255,.45);margin:-4px 0 0}
 #rk-prof .card,#rk-edit .card{max-width:420px;max-height:calc(100vh - 32px);overflow-y:auto;touch-action:pan-y;scrollbar-width:none}
 #pf-av{width:112px;height:112px;flex:none;border-radius:50%;display:grid;place-items:center;border:2px solid var(--c,rgba(255,255,255,.25));background:radial-gradient(circle at 50% 35%,color-mix(in srgb,var(--c,#fff) 30%,transparent),rgba(255,255,255,.03));box-shadow:0 0 28px color-mix(in srgb,var(--c,#fff) 45%,transparent)}
@@ -90,7 +91,7 @@ const CSS = `
 const HTML = `
 <div class="modal" id="rk"><div class="card glass"><h2>Classement</h2>
 <div class="rk-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Défi du jour</button></div>
-<div id="rk-list"></div><p id="rk-hint">Touche un joueur pour voir son profil.</p><p id="rk-me"></p>
+<div id="rk-feed"></div><div id="rk-list"></div><p id="rk-hint">Touche un joueur pour voir son profil.</p><p id="rk-me"></p>
 <div class="btns"><button class="big glass" id="rk-name"></button><button class="big primary" id="rk-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-prof"><div class="card glass"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-motto"></p>
 <div class="stats" id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div></div>
@@ -125,10 +126,21 @@ async function show(b) {
   document.querySelectorAll('.rk-tabs button').forEach((x) => x.classList.toggle('on', x.dataset.b === b));
   $('#rk-list').innerHTML = ''; $('#rk-list').scrollTop = 0; $('#rk-me').textContent = '';
   $('#rk-name').textContent = st.name ? 'Mon profil (' + st.name + ')' : 'Choisir un pseudo pour participer';
-  more();
+  more(); feed(t);
   if (!st.name) return;
   try { await flush(); const me = await rpc('my_rank', { p_secret: secret(), p_board: boardId() }); if (t === token) $('#rk-me').innerHTML = me ? `Toi : <b>n° ${fmt(me.rank)}</b> sur ${fmt(me.total)} · ${pts(me.score)}${board === 'all' ? ' points' : ''}` : 'Tu n\'as pas encore de score ici.'; } catch (e) { /* le classement s'affiche quand même */ }
 }
+const ago = (iso) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? 'à l\'instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
+async function feed(t) { // faits réels uniquement : dernières parties classées, part des joueurs ayant atteint les gros astres
+  const box = $('#rk-feed'); box.innerHTML = ''; if (board !== 'all') return;
+  try {
+    const [a, r] = await Promise.all([rpc('activity', {}), rpc('rarity', {})]); if (t !== token || board !== 'all') return;
+    const pc = (n) => (r.total ? Math.max(0.1, Math.round((n / r.total) * 1000) / 10).toLocaleString('fr-FR') : '0');
+    box.innerHTML = (r.total >= 3 ? `<div class="rf-s">${pc(r.hole)} % des joueurs ont atteint un trou noir · ${pc(r.galaxy)} % une galaxie (sur ${fmt(r.total)})</div>` : '') + (a || []).slice(0, 3).map((x) => `<div><b>${esc(x.name)}</b> · ${fmt(x.score)} pts · ${esc(H.tierName(x.tier))} · ${ago(x.at)}</div>`).join('');
+  } catch (e) { /* le fil est un bonus : pas d'erreur affichée */ }
+}
+export const rival = (score) => (ready() ? rpc('rival', { p_score: Math.round(score || 0) }) : Promise.resolve(null));
+export const runOf = (name) => rpc('get_run', { p_name: name });
 export function open() {
   if (!ready()) return H.toast('Le classement en ligne n\'est pas encore activé');
   $('#rk').classList.add('on'); show('all');

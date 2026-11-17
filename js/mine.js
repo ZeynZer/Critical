@@ -13,7 +13,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -47,6 +47,7 @@ let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, 
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
 let FN = 0, hud = null, hudKey = '', tut = -1;
+let rv = null, rvDone = false, gh = null, runTok = 0; // rival (joueur juste au-dessus de mon record) et fantôme optionnel de sa partie
 let warp = 0, warpMsg = null, slow = 0, beatT = 0, tAcc = 0, ghosts = []; // tAcc : secondes de jeu pas encore enregistrées ; ghosts : astres aspirés par un Big Bang
 let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
@@ -431,6 +432,7 @@ function draw() {
     const p = clamp((T - g.t0) / 0.65, 0, 1), e = p * p * (3 - 2 * p), an = e * 2.2, dx = g.x0 - g.cx, dy = g.y0 - g.cy, c = Math.cos(an), sn = Math.sin(an), k = 1 - e;
     drawItem({ k: 'c', tier: g.tier, v: g.v, r: g.r }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, Math.max(0.05, 1 - e * 0.9), e * 3);
   }
+  if (gh && !G.nop) { ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of gh.G.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
   // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
   if (!G.sandbox) {
   ctx.lineCap = 'round'; ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.8 + 0.2 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.75 + 0.25 * Math.sin(T * 6)) : 'rgba(255,255,255,.55)';
@@ -465,6 +467,10 @@ function draw() {
   else if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
   }
+  if (!G.nop && !G.chal && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
+    if (gh) { const d = G.score - gh.G.score; txt(`FANTÔME ${gh.name.toUpperCase()} · ${fmt(gh.G.score)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
+    else if (rv && !rvDone) txt(`CIBLE · ${rv.name.toUpperCase()} · encore ${fmt(rv.score - G.score)}`, cx, ty + 52, 9.5, '#ffc247', 'center', 'Orbitron', 700);
+  }
   // barre du bas : réserve à gauche, suivants à droite
   if (!G.nop) {
   const hr = holdR, by = hr.y;
@@ -488,7 +494,7 @@ const miniU = (it) => Math.min(B.u, 20 / (it.k === 'c' ? F.TIERS[it.tier].r : F.
 /* ============================== boucle ============================== */
 function update(dt) {
   T += dt;
-  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else F.tick(G, slow > 0 ? dt * 0.3 : dt); onEvents(); }
+  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else { F.tick(G, slow > 0 ? dt * 0.3 : dt); if (gh) stepGhost(); } onEvents(); }
   if (slow > 0) slow -= dt;
   if (warp > 0) { const w0 = warp; warp = Math.max(0, warp - dt / 1.8); if (w0 > 1 - BANG && warp <= 1 - BANG) bang(); }
   if (G.danger > 0 && !ended && !paused && T - beatT > 0.62 - 0.3 * G.danger) { beatT = T; A.chestBeat(G.danger); H.vib(6); } // le cœur s'emballe près de la ligne
@@ -497,6 +503,7 @@ function update(dt) {
   for (const p of parts) { p.l += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; }
   for (const r of rings) r.l += dt; for (const l of labels) l.l += dt;
   parts = parts.filter((p) => p.l < p.m); rings = rings.filter((r) => r.l < r.m); labels = labels.filter((l) => l.l < 0.9);
+  if (rv && !rvDone && !ended && G.score > rv.score) { rvDone = true; say('RIVAL DÉPASSÉ', rv.name.toUpperCase(), AM); ring(W / 2, B.y + B.h * 0.4, 8, W * 0.7, 0.8, AM, 6); A.win(); H.vib([20, 30, 20]); }
   if (callout && (callout.l += dt) > 1.2) callout = null;
   if (reveal && (reveal.l += dt) > reveal.d) reveal = null;
   if (ghosts.length) ghosts = ghosts.filter((g) => T - g.t0 < 0.65);
@@ -690,10 +697,11 @@ function endRun() {
   H.track('score', G.score, true); H.track('runs', 1);
   const gain = Math.min(80, Math.round(G.depth * 5 + G.score / 2000)) + G.bonus; // proportionnel au jeu réel : rien à gagner à saborder une partie
   if (G.over) A.fail();
+  const rvTxt = rvDone ? `Tu as dépassé ${rv.name} !` : rv ? `À ${fmt(rv.score - G.score)} points de ${rv.name}.` : '';
   setTimeout(() => {
     grant(gain);
     $('#mn-ot').textContent = rec.s && sv.runs > 1 ? 'Nouveau record !' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer';
-    $('#mn-os').textContent = rec.s ? 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
+    $('#mn-os').textContent = rvTxt || rec.s ? rvTxt || 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
     overPanel(rec);
   }, G.over ? 900 : 0);
   refreshTitle();
@@ -717,7 +725,22 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep)); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
+  rv = null; rvDone = false; gh = null; const tok = ++runTok;
+  if (!opt && H.online()) H.rival(sv.best).then((r) => {
+    if (tok !== runTok || !r || G.chal || tut >= 0) return; rv = r;
+    if (sv.ghost) H.runOf(r.name).then((run) => { if (tok === runTok && run && Array.isArray(run.log)) gh = { G: F.newGame(run.seed), log: run.log, steps: run.steps || 0, i: 0, done: false, name: r.name }; }).catch(() => {});
+  }).catch(() => {});
 }
+function stepGhost() { // le fantôme rejoue la partie du rival, calée sur le temps de la mienne (même nombre de pas)
+  const R = gh; if (R.done) return; let k = 0;
+  while (R.G.n < G.n && k++ < 800 && !R.done) {
+    if (R.i < R.log.length && R.G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.swapHold(R.G); else F.drop(R.G, x / 1000); R.i += 2; }
+    else if (R.G.n < R.steps && !R.G.over) F.step(R.G); else R.done = true;
+  }
+  R.G.ev.length = 0;
+}
+export const ghostOn = () => !!sv.ghost;
+export const setGhost = (v) => { sv.ghost = !!v; save(); };
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }
 export const busy = () => isOpen;
 export { rankLine };
