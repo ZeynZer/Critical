@@ -13,7 +13,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -47,6 +47,7 @@ let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, 
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
 let FN = 0, hud = null, hudKey = '', tut = -1;
+let rv = null, rvDone = false, gh = null, runTok = 0; // rival (joueur juste au-dessus de mon record) et fantôme optionnel de sa partie
 let warp = 0, warpMsg = null, slow = 0, beatT = 0, tAcc = 0, ghosts = []; // tAcc : secondes de jeu pas encore enregistrées ; ghosts : astres aspirés par un Big Bang
 let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
@@ -75,15 +76,15 @@ function onEvents() {
       shake = Math.max(shake, 1.5 + e.tier * 0.9); if (e.tier >= 6) { hitstop = 0.05; flash = 0.14; flashC = col; }
       A.setMood(Math.min(1, G.maxTier / F.MAX_TIER * 0.8 + G.depth * 0.04));
       if (e.tier === F.HOLE && !G.holeSeen) { G.holeSeen = true; slow = 1.1; ring(x, y, W * 0.7, r, 0.9, col, 5); ring(x, y, W * 0.45, r, 0.7, [255, 255, 255], 3); A.rumble(); }
-      if (G.sandbox) { /* rien ne se débloque ici */ }
+      if (G.nop) { /* rien ne se débloque ici */ }
       else if (!sv.cx[e.tier]) { sv.cx[e.tier] = 1; save(); if (e.tier >= 4) G.bonus += 10; if (e.tier >= 3 && !reveal) { say(BODIES[e.tier][0].toUpperCase(), 'NOUVEL ASTRE · CODEX', col); A.star(2); } }
       else if (e.chain >= 2) say('×' + Math.min(8, e.chain), e.chain >= 3 ? 'CHAÎNE' : '', e.chain >= 5 ? AM : [255, 255, 255]);
-      if (!G.sandbox) { H.track('fusions', 1); H.track('tier', e.tier + 1, true); H.track('chain', e.chain, true); }
+      if (!G.nop) { H.track('fusions', 1); H.track('tier', e.tier + 1, true); H.track('chain', e.chain, true); }
     } else if (e.t === 'land') { if (T - landT > 0.07) { landT = T; A.thud(Math.min(1, e.v / 30)); if (e.v > 9) burst(x, y, 3, [200, 220, 255], B.u * 2, 0.3, 1.6); } }
     else if (e.t === 'vapor') { const col = BODIES[e.tier][1]; burst(x, y, 7, col, B.u * 5, 0.6); ring(x, y, 2, B.u * 0.9, 0.3, col, 2); }
     else if (e.t === 'boom') { ring(x, y, 4, B.u * 3.4, 0.45, CY, 7); burst(x, y, 40, [200, 240, 255], B.u * 13, 0.8, 3.5); shake = 14; flash = 0.3; flashC = CY; A.breach(); H.vib([20, 30, 40]); }
     else if (e.t === 'morph') { ring(x, y, 2, B.u * 1.4, 0.3, MG, 3); A.star(2); }
-    else if (e.t === 'gift') { giftT = T; A.star(e.k === 'j' ? 1 : 0); H.toast(e.k === 'j' ? 'Matière exotique : elle copie l\'astre qu\'elle touche' : 'Belle chaîne ! Comète explosive offerte'); }
+    else if (e.t === 'gift') { giftT = T; A.star(e.k === 'j' ? 1 : 0); if (!G.rep) H.toast(e.k === 'j' ? 'Matière exotique : elle copie l\'astre qu\'elle touche' : 'Belle chaîne ! Comète explosive offerte'); }
     else if (e.t === 'pierce') {
       // saut : l'espace se contracte (implosion), bang, puis le nouveau secteur se déploie — voir draw() et bang()
       texA = texB; texB = makeTex(e.depth); warp = 1; shake = 6; callout = null;
@@ -94,13 +95,13 @@ function onEvents() {
       // Big Bang : ralenti, la lumière est aspirée, silence… puis l'explosion
       slow = 1.5; for (let k = 0; k < 3; k++) ring(x, y, W * (0.9 - k * 0.2), 4, 0.6, [[190, 110, 255], MG, [255, 255, 255]][k], 4);
       ghosts = (e.gone || []).filter((o) => o.k === 'c').slice(0, 40).map((o) => ({ ...o, t0: T, cx: x, cy: y, x0: sx(o.x), y0: sy(o.y) })); // tout est aspiré vers le point d'impact avant l'explosion
-      A.chestRise(0.6); if (!G.sandbox && !sv.cx.bigbang) { sv.cx.bigbang = 1; save(); G.bonus += 40; }
+      A.chestRise(0.6); if (!G.nop && !sv.cx.bigbang) { sv.cx.bigbang = 1; save(); G.bonus += 40; }
       const pts = e.pts; setTimeout(() => { if (!isOpen) return;
         shake = 30; flash = 1; flashC = [255, 255, 255]; hitstop = 0.16; slow = 0;
         for (let k = 0; k < 5; k++) ring(x, y, 6, W * (0.4 + k * 0.3), 0.6 + k * 0.16, [CY, MG, AM, [255, 255, 255], [190, 110, 255]][k], 11 - k * 2);
         burst(x, y, 110, [255, 240, 220], B.u * 22, 1.3, 4); say('BIG BANG', '+' + fmt(pts), [255, 255, 255]);
         A.win(); A.rumble(); H.vib([40, 30, 40, 30, 80]); }, 650);
-      if (!G.sandbox) H.track('nova', 1);
+      if (!G.nop) H.track('nova', 1);
     } else if (e.t === 'pulse') { const mag = e.v ? [90, 255, 200] : [170, 212, 255]; ring(x, y, e.r * B.u, e.r * B.u * (e.reach || 2.7), 0.45, mag, e.v ? 7 : 4); if (e.v) ring(x, y, e.r * B.u, e.r * B.u * e.reach * 0.7, 0.35, [255, 255, 255], 3); A.ping(); }
     else if (e.t === 'swallow') { // le petit astre est aspiré : un filet de lumière file vers l'absorbeur
       const hx = sx(e.hx), hy = sy(e.hy), col = e.by === F.MAX_TIER ? RCOL[Math.min(5, e.bv)] : e.by === 11 ? AM : e.by === 7 ? [100, 170, 255] : [190, 110, 255];
@@ -109,7 +110,7 @@ function onEvents() {
     }
     else if (e.t === 'rare') { // variante rare ou galaxie : grande révélation la 1re fois seulement, ensuite un simple éclat
       const r = rarOf(e.tier, e.v, e.p), key = e.tier + ':' + e.v;
-      if (G.sandbox) continue;
+      if (G.nop) continue;
       if (sv.cx[key]) { say(nameOf(e.tier, e.v).toUpperCase(), 'RARE · ×3 POINTS', RCOL[r]); ring(x, y, B.u * 3, B.u * 0.6, 0.55, RCOL[r], 3); burst(x, y, 14, RCOL[r], B.u * 6, 0.7, 2.4); A.rare(Math.min(r, 1)); H.vib(18); }
       else {
         sv.cx[key] = 1; save(); G.bonus += 15 + r * 15;
@@ -117,8 +118,8 @@ function onEvents() {
         A.rare(r); H.vib(r >= 3 ? [30, 40, 30, 40, 30, 40, 90] : [20, 40, 40]);
       }
     }
-    else if (e.t === 'secret') { const S = SECRETS[e.id]; if (!sv.cx[e.id]) { sv.cx[e.id] = 1; save(); G.bonus += 40; } say(S[0].toUpperCase(), 'DÉCOUVERTE SECRÈTE', AM); ring(x, y, 6, W * 0.6, 0.8, AM, 6); A.win();
-    } else if (e.t === 'over') endRun();
+    else if (e.t === 'secret') { const S = SECRETS[e.id]; if (!G.nop && !sv.cx[e.id]) { sv.cx[e.id] = 1; save(); G.bonus += 40; } say(S[0].toUpperCase(), 'DÉCOUVERTE SECRÈTE', AM); ring(x, y, 6, W * 0.6, 0.8, AM, 6); A.win();
+    } else if (e.t === 'over') { if (G.rep) G.rep.done = true; else endRun(); }
   }
   G.ev.length = 0;
 }
@@ -431,6 +432,7 @@ function draw() {
     const p = clamp((T - g.t0) / 0.65, 0, 1), e = p * p * (3 - 2 * p), an = e * 2.2, dx = g.x0 - g.cx, dy = g.y0 - g.cy, c = Math.cos(an), sn = Math.sin(an), k = 1 - e;
     drawItem({ k: 'c', tier: g.tier, v: g.v, r: g.r }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, Math.max(0.05, 1 - e * 0.9), e * 3);
   }
+  if (gh && !G.nop) { ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of gh.G.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
   // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
   if (!G.sandbox) {
   ctx.lineCap = 'round'; ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.8 + 0.2 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.75 + 0.25 * Math.sin(T * 6)) : 'rgba(255,255,255,.55)';
@@ -461,11 +463,16 @@ function draw() {
   ctx.drawImage(hud, 0, ty - 44, W, 64);
   txt(`SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
   if (G.chal) { const left = Math.max(0, G.chal[2] - G.t), m = Math.floor(left / 60); txt(`DÉFI · ${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`, cx, ty + 37, 13, left < 15 ? '#ff6a8a' : '#ffc247', 'center', 'Orbitron', 900); }
+  else if (G.rep) txt('REDIFFUSION · ' + G.rep.run.name.toUpperCase(), cx, ty + 35, 9.5, AM, 'center', 'Orbitron', 700);
   else if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
   }
+  if (!G.nop && !G.chal && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
+    if (gh) { const d = G.score - gh.G.score; txt(`FANTÔME ${gh.name.toUpperCase()} · ${fmt(gh.G.score)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
+    else if (rv && !rvDone) txt(`CIBLE · ${rv.name.toUpperCase()} · encore ${fmt(rv.score - G.score)}`, cx, ty + 52, 9.5, '#ffc247', 'center', 'Orbitron', 700);
+  }
   // barre du bas : réserve à gauche, suivants à droite
-  if (!G.sandbox) {
+  if (!G.nop) {
   const hr = holdR, by = hr.y;
   txt('RÉSERVE', hr.x + hr.w / 2, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
   glassBox(hr.x, by, hr.w, hr.h, 20, G.swapped ? 0.14 : 0.45);
@@ -487,7 +494,7 @@ const miniU = (it) => Math.min(B.u, 20 / (it.k === 'c' ? F.TIERS[it.tier].r : F.
 /* ============================== boucle ============================== */
 function update(dt) {
   T += dt;
-  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { F.tick(G, slow > 0 ? dt * 0.3 : dt); onEvents(); }
+  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else { F.tick(G, slow > 0 ? dt * 0.3 : dt); if (gh) stepGhost(); } onEvents(); }
   if (slow > 0) slow -= dt;
   if (warp > 0) { const w0 = warp; warp = Math.max(0, warp - dt / 1.8); if (w0 > 1 - BANG && warp <= 1 - BANG) bang(); }
   if (G.danger > 0 && !ended && !paused && T - beatT > 0.62 - 0.3 * G.danger) { beatT = T; A.chestBeat(G.danger); H.vib(6); } // le cœur s'emballe près de la ligne
@@ -496,10 +503,11 @@ function update(dt) {
   for (const p of parts) { p.l += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; }
   for (const r of rings) r.l += dt; for (const l of labels) l.l += dt;
   parts = parts.filter((p) => p.l < p.m); rings = rings.filter((r) => r.l < r.m); labels = labels.filter((l) => l.l < 0.9);
+  if (rv && !rvDone && !ended && G.score > rv.score) { rvDone = true; say('RIVAL DÉPASSÉ', rv.name.toUpperCase(), AM); ring(W / 2, B.y + B.h * 0.4, 8, W * 0.7, 0.8, AM, 6); A.win(); H.vib([20, 30, 20]); }
   if (callout && (callout.l += dt) > 1.2) callout = null;
   if (reveal && (reveal.l += dt) > reveal.d) reveal = null;
   if (ghosts.length) ghosts = ghosts.filter((g) => T - g.t0 < 0.65);
-  if (!G.sandbox && !ended && !paused && !document.hidden) { sv.time += dt; tAcc += dt; if (tAcc >= 10) { tAcc = 0; save(); H.time(sv.time); } } // temps de jeu : seulement quand on joue vraiment (ni pause, ni écran de fin, ni arrière-plan)
+  if (!G.nop && !ended && !paused && !document.hidden) { sv.time += dt; tAcc += dt; if (tAcc >= 10) { tAcc = 0; save(); H.time(sv.time); } } // temps de jeu : seulement quand on joue vraiment (ni pause, ni écran de fin, ni arrière-plan)
   if (tut >= 0) tutorial();
   if (G.chal && !ended) { // défi du jour : objectif atteint avant la fin du chrono ?
     const c = G.chal, val = c[0] === 'tier' ? G.maxTier : c[0] === 'chain' ? G.maxChain : c[0] === 'depth' ? G.depth : G.score;
@@ -508,6 +516,21 @@ function update(dt) {
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
   if (want && G.cool <= 0 && !ended && !paused) { want = false; if (F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); } } // un relâché pendant le temps de recharge est mémorisé
 }
+function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisie ; les lâchers tombent exactement au pas où ils ont eu lieu
+  const R = G.rep; if (R.done) return;
+  R.acc = Math.min(R.acc + dt * 120 * R.speed, 240);
+  while (R.acc >= 1 && !R.done) {
+    R.acc--;
+    if (R.i < R.log.length && G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.swapHold(G); else { aimT = aimX = x / 1000; if (F.drop(G, x / 1000)) A.release(); } R.i += 2; }
+    else if (G.n < R.steps && !G.over) F.step(G); else R.done = true;
+  }
+  if (R.done) $('#mn-rpp').textContent = '↻';
+}
+export function openReplay(run) { // revoir la meilleure partie d'un joueur : même graine, mêmes lâchers, vitesse réglable
+  open(true); newRun(run.seed, true, { rep: true }); G.rep = { log: run.log, steps: run.steps || 0, i: 0, acc: 0, speed: 2, done: false, run };
+  $('#mn-rp').style.top = holdR.y - 4 + 'px'; rpSpeed(2); say('REDIFFUSION', run.name.toUpperCase(), CY);
+}
+const rpSpeed = (v) => { G.rep.speed = v; $('#mn-rpp').textContent = '❚❚'; document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.classList.toggle('on', +b.dataset.s === v)); };
 function bang() { // milieu du saut : le nouveau secteur naît
   const m = warpMsg || ['', '', 0], cx = W / 2, cy = B.y + B.h * 0.5;
   flash = 0.95; flashC = [255, 255, 255]; shake = 24; hitstop = 0.08;
@@ -526,8 +549,8 @@ function frame(now) {
 const pt = (e) => ({ x: e.clientX, y: e.clientY }); // le canvas couvre tout l'écran
 const inZone = (p) => p.x > B.x - 18 && p.x < B.x + B.w + 18 && p.y > B.y - 60 && p.y < B.y + B.h + 20; // la cuve, avec une petite marge
 function onDown(e) { // appuie dans la cuve (même pendant qu'un astre tombe), glisse, relâche ; sortir de la cuve annule
-  if (!G || G.over) return; if (reveal) { if (reveal.l > 1.6) { reveal.l = reveal.d; slow = 0; } return; } const p = pt(e);
-  if (!G.sandbox && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (F.swapHold(G)) { A.select(); H.vib(8); } return; }
+  if (!G || G.over || G.rep) return; if (reveal) { if (reveal.l > 1.6) { reveal.l = reveal.d; slow = 0; } return; } const p = pt(e);
+  if (!G.nop && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (F.swapHold(G)) { A.select(); H.vib(8); } return; }
   if (!inZone(p)) return;
   aiming = true; aimT = (p.x - B.x) / B.u; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
 }
@@ -556,12 +579,13 @@ const CSS = `
 #mn-cxd{min-height:34px;font-size:12.5px;line-height:1.4;color:rgba(255,255,255,.85);text-align:center}
 #mn-sb{position:absolute;left:12px;right:12px;display:none;gap:8px;align-items:center}#mn.sbx #mn-sb{display:flex}#mn-sbl{flex:1;display:flex;gap:6px;overflow-x:auto;padding:4px 2px;scrollbar-width:none}#mn-sbl::-webkit-scrollbar{display:none}
 #mn-sbl button{flex:none;width:54px;height:54px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);display:grid;place-items:center;padding:0}#mn-sbl button.on{border-color:#4df3ff;background:rgba(77,243,255,.16);box-shadow:0 0 14px rgba(77,243,255,.4)}#mn-sbc{flex:none;height:54px;padding:0 14px;border-radius:18px;color:#fff;font:700 12px Orbitron,system-ui,sans-serif;border:1px solid rgba(255,255,255,.14)}
+#mn-rp{position:absolute;left:12px;right:12px;display:none;align-items:center;gap:8px;justify-content:center}#mn.rpl #mn-rp{display:flex}#mn-rpn{display:none;flex:1;font:700 12px Orbitron,system-ui,sans-serif;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#mn-rp button{height:44px;min-width:44px;border-radius:16px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:700 12px Orbitron,system-ui,sans-serif}#mn-rp div{display:flex;gap:6px}#mn-rp div button.on{border-color:#4df3ff;background:rgba(77,243,255,.18)}
 #mn-ht{font-size:13px;color:rgba(255,255,255,.7);text-align:center;margin:0}#mn-lad{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin:6px 0 4px}#mn-lad canvas{opacity:.92}
 `;
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
@@ -660,7 +684,7 @@ function tutorial() {
   const e = $('#mn-tut'); if (e.textContent !== TUT[tut]) e.textContent = TUT[tut];
 }
 
-function saveRun() { try { if (G && !G.sandbox && !ended && !G.over && G.drops > 0 && !G.chal && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
+function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
 const dropRun = () => { try { localStorage.removeItem(RUN); } catch (e) { /* ignore */ } };
 function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `Classement mondial : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
 function endRun() {
@@ -673,10 +697,11 @@ function endRun() {
   H.track('score', G.score, true); H.track('runs', 1);
   const gain = Math.min(80, Math.round(G.depth * 5 + G.score / 2000)) + G.bonus; // proportionnel au jeu réel : rien à gagner à saborder une partie
   if (G.over) A.fail();
+  const rvTxt = rvDone ? `Tu as dépassé ${rv.name} !` : rv ? `À ${fmt(rv.score - G.score)} points de ${rv.name}.` : '';
   setTimeout(() => {
     grant(gain);
     $('#mn-ot').textContent = rec.s && sv.runs > 1 ? 'Nouveau record !' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer';
-    $('#mn-os').textContent = rec.s ? 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
+    $('#mn-os').textContent = rvTxt || rec.s ? rvTxt || 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
     overPanel(rec);
   }, G.over ? 900 : 0);
   refreshTitle();
@@ -698,9 +723,24 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   }, 900);
 }
 function newRun(seed, keep, opt) {
-  if (!keep) dropRun(); G = F.newGame(seed, opt); $('#mn').classList.toggle('sbx', !!G.sandbox); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep)); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
+  rv = null; rvDone = false; gh = null; const tok = ++runTok;
+  if (!opt && H.online()) H.rival(sv.best).then((r) => {
+    if (tok !== runTok || !r || G.chal || tut >= 0) return; rv = r;
+    if (sv.ghost) H.runOf(r.name).then((run) => { if (tok === runTok && run && Array.isArray(run.log)) gh = { G: F.newGame(run.seed), log: run.log, steps: run.steps || 0, i: 0, done: false, name: r.name }; }).catch(() => {});
+  }).catch(() => {});
 }
+function stepGhost() { // le fantôme rejoue la partie du rival, calée sur le temps de la mienne (même nombre de pas)
+  const R = gh; if (R.done) return; let k = 0;
+  while (R.G.n < G.n && k++ < 800 && !R.done) {
+    if (R.i < R.log.length && R.G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.swapHold(R.G); else F.drop(R.G, x / 1000); R.i += 2; }
+    else if (R.G.n < R.steps && !R.G.over) F.step(R.G); else R.done = true;
+  }
+  R.G.ev.length = 0;
+}
+export const ghostOn = () => !!sv.ghost;
+export const setGhost = (v) => { sv.ghost = !!v; save(); };
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }
 export const busy = () => isOpen;
 export { rankLine };
@@ -726,11 +766,13 @@ export function init(opts) {
   window.addEventListener('resize', () => { if (isOpen) resize(); });
   document.addEventListener('visibilitychange', () => { last = performance.now(); if (document.hidden && isOpen) saveRun(); }); window.addEventListener('pagehide', () => { if (isOpen) saveRun(); });
   const click = (el, f) => $(el).addEventListener('click', () => { A.ui(); H.vib(9); f(); });
+  document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.addEventListener('click', () => { if (G && G.rep) { rpSpeed(+b.dataset.s); A.select(); } }));
+  click('#mn-rpp', () => { const R = G && G.rep; if (!R) return; if (R.done) { const run = R.run; openReplay(run); } else { R.speed = R.speed ? 0 : +(document.querySelector('#mn-rp [data-s].on') || { dataset: { s: 2 } }).dataset.s; $('#mn-rpp').textContent = R.speed ? '❚❚' : '▶'; } });
   click('#mn-sbc', () => { if (G && G.sandbox) { G.bodies.length = 0; A.select(); } });
   click('#mn-back', () => { saveRun(); close(); }); // la partie est gardée : on la reprend en revenant
-  click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !G.sandbox && !ended && G.drops > 0) endRun(); else close(); });
+  click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !G.nop && !ended && G.drops > 0) endRun(); else close(); });
   click('#mn-rkb', () => (H.online() && !H.named() ? H.askName() : H.rank()));
-  click('#mn-help', () => { $('#mn-quit').textContent = G && G.sandbox ? 'Quitter le bac à sable' : 'Abandonner la partie'; const l = $('#mn-lad'); if (!l.firstChild) BODIES.forEach((b, i) => { const c = document.createElement('canvas'); c.title = b[0]; paintAstre(c, i + ':0', 34); l.append(c); }); $('#mn-m-help').classList.add('on'); paused = true; });
+  click('#mn-help', () => { $('#mn-quit').textContent = G && G.nop ? 'Quitter' : 'Abandonner la partie'; const l = $('#mn-lad'); if (!l.firstChild) BODIES.forEach((b, i) => { const c = document.createElement('canvas'); c.title = b[0]; paintAstre(c, i + ':0', 34); l.append(c); }); $('#mn-m-help').classList.add('on'); paused = true; });
   click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
   // bouton principal de l'accueil (home.js le transforme en héros) ; Cascade devient un lien discret
   const menu = $('#s-title .menu');
