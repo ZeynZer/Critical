@@ -86,3 +86,43 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   assert.ok(part.near, 'le dépassement partiel est signalé (avertissement visuel)');
   console.log('règle de défaite OK');
 }
+{ // absorption : chaque absorbeur avale jusqu'à son rang maximum, à son rythme, plus loin quand il est rare ; jamais un astre plus gros ni un autre absorbeur
+  const mkb = (id, tier, x, y, v = 0) => ({ id, k: 'c', tier, v, x, y, vx: 0, vy: 0, r: F.TIERS[tier].r, ang: 0, av: 0, age: 5, hit: true, dead: false });
+  const world = () => { const g = F.newGame(31); g.mod = { g: 0, inset: 0, n: '' }; g.over = false; return g; };
+  const eats = (abTier, abV, preyTier, gap = -0.01, secs = 0.5) => {
+    const g = world(), r = F.TIERS[abTier].r + F.TIERS[preyTier].r + gap; g.bodies.push(mkb(1, abTier, 5, 8, abV), mkb(2, preyTier, 5 + r, 8));
+    for (let k = 0; k < secs * 60; k++) F.tick(g, 1 / 60); return !g.bodies.some((o) => o.id === 2);
+  };
+  const CASES = [[10, 0, 0, 1], [10, 0, 1, 1], [10, 0, 2, 0], [10, 1, 2, 1], [10, 1, 3, 0], [11, 0, 2, 1], [11, 0, 3, 0], [11, 1, 3, 1], [11, 1, 4, 0],
+    [12, 0, 3, 1], [12, 0, 4, 0], [12, 2, 4, 1], [12, 2, 5, 0], [12, 5, 6, 1], [12, 5, 7, 0],
+    [7, 0, 1, 0], [7, 1, 1, 1], [7, 1, 2, 0]]; // le soleil ordinaire n'avale rien, l'étoile bleue brûle les orbes
+  for (const [t, v, prey, ok] of CASES) assert.equal(eats(t, v, prey), !!ok, `absorbeur ${t}:${v} / proie de rang ${prey} : attendu ${ok ? 'avalée' : 'épargnée'}`);
+  assert.ok(!eats(11, 0, 10) && !eats(12, 5, 11) && !eats(10, 1, 12), 'un absorbeur n\'en avale jamais un autre');
+  // portée : une galaxie critique avale à distance, un trou noir ordinaire seulement au contact
+  assert.ok(eats(12, 5, 2, 0.9), 'une galaxie critique avale sans toucher'); assert.ok(!eats(10, 0, 0, 0.5), 'un trou noir ordinaire n\'avale qu\'au contact');
+  // rythme : le trou noir (3 s) n'avale qu'une proie à la fois ; la galaxie critique (0,5 s) enchaîne
+  const two = (t, v, secs) => { const g = world(), r = F.TIERS[t].r + F.TIERS[0].r - 0.01; g.bodies.push(mkb(1, t, 5, 8, v), mkb(2, 0, 5 + r, 8), mkb(3, 0, 5 - r, 8)); for (let k = 0; k < secs * 60; k++) F.tick(g, 1 / 60); return g.bodies.filter((o) => o.tier === 0).length; };
+  assert.equal(two(10, 0, 2), 1, 'le trou noir doit attendre 3 s entre deux repas'); assert.equal(two(10, 0, 3.4), 0, 'puis avaler la seconde proie');
+  assert.equal(two(12, 5, 1), 0, 'une galaxie critique enchaîne les proies');
+  console.log('absorption OK');
+}
+{ // étoile à neutrons : le magnétar pulse plus souvent et plus fort ; la supergéante n'enfle pas
+  const mkb = (id, tier, x, y, v = 0) => ({ id, k: 'c', tier, v, x, y, vx: 0, vy: 0, r: F.TIERS[tier].r, ang: 0, av: 0, age: 0, hit: true, dead: false });
+  const pulses = (v) => { const g = F.newGame(32); g.mod = { g: 0, inset: 0, n: '' }; g.over = false; g.bodies.push(mkb(1, F.NEUTRON, 5, 8, v)); const probe = mkb(2, 0, 5 + F.TIERS[F.NEUTRON].r + 0.9, 8); g.bodies.push(probe);
+    let n = 0, first = 0; for (let k = 0; k < 600; k++) { F.tick(g, 1 / 60); for (const e of g.ev) if (e.t === 'pulse') { n++; if (!first) first = Math.abs(probe.vx) + Math.abs(probe.vy); } g.ev.length = 0; } return { n, first }; };
+  const base = pulses(0), mag = pulses(1);
+  assert.ok(mag.n > base.n, `le magnétar doit pulser plus souvent (${mag.n} contre ${base.n} en 10 s)`); assert.ok(mag.first > base.first * 1.5, `et plus fort (${mag.first.toFixed(1)} contre ${base.first.toFixed(1)})`);
+  const swell = (v) => { const g = F.newGame(33); g.mod = { g: 0, inset: 0, n: '' }; g.over = false; g.bodies.push(mkb(1, F.GIANT, 5, 8, v)); g.danger = -1e9; for (let k = 0; k < 3000; k++) F.tick(g, 1 / 60); return g.bodies[0].r / F.TIERS[F.GIANT].r; };
+  assert.ok(swell(0) > 1.15, 'la géante rouge enfle'); assert.ok(Math.abs(swell(1) - 1) < 1e-9, 'la supergéante reste stable');
+  console.log('pouvoirs des étoiles OK');
+}
+{ // Big Bang : deux galaxies font disparaître tout le reste (secteur vierge) et déclenchent le saut de secteur
+  const mkb = (id, tier, x, y, v = 0) => ({ id, k: 'c', tier, v, x, y, vx: 0, vy: 0, r: F.TIERS[tier].r, ang: 0, av: 0, age: 5, hit: true, dead: false });
+  const g = F.newGame(34); g.mod = { g: 0, inset: 0, n: '' }; g.over = false;
+  g.bodies.push(mkb(1, 12, 4.5, 9, 3), mkb(2, 12, 6.2, 9, 1)); for (let i = 0; i < 8; i++) g.bodies.push(mkb(10 + i, 2 + (i % 5), 1 + i, 13));
+  const s0 = g.score; let nova = null; for (let k = 0; k < 40; k++) { F.tick(g, 1 / 60); for (const e of g.ev) if (e.t === 'nova') nova = e; g.ev.length = 0; }
+  assert.ok(nova, 'le Big Bang doit être signalé'); assert.equal(g.bodies.length, 0, 'plus aucun astre après le Big Bang'); assert.ok(nova.gone.length >= 10, 'la liste des astres disparus accompagne l\'événement (pour l\'animation)');
+  assert.ok(g.score - s0 >= 5000, 'le Big Bang rapporte ses points'); assert.equal(g.danger, 0);
+  for (let k = 0; k < 40; k++) F.tick(g, 1 / 60); assert.equal(g.depth, 1, 'le saut de secteur suit le Big Bang'); assert.equal(g.bodies.length, 0, 'le nouveau secteur est vierge');
+  console.log('Big Bang OK');
+}

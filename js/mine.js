@@ -5,7 +5,7 @@ import * as A from './audio.js';
 import * as F from './fusion.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
-const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, dust: 0, themes: { base: 1 }, theme: 'base', daily: { day: '', done: false, best: 0 } };
+const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch (e) { /* ignore */ } };
 const $ = (s, r = document) => r.querySelector(s);
@@ -13,9 +13,9 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
-const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin du trou noir', 'Un trou noir avale 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux trous noirs'] };
+const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
 const hash = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return h >>> 0; };
 
@@ -47,7 +47,7 @@ let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, 
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
 let FN = 0, hud = null, hudKey = '', tut = -1;
-let warp = 0, warpMsg = null, slow = 0, beatT = 0;
+let warp = 0, warpMsg = null, slow = 0, beatT = 0, tAcc = 0, ghosts = []; // tAcc : secondes de jeu pas encore enregistrées ; ghosts : astres aspirés par un Big Bang
 let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
 
@@ -92,6 +92,7 @@ function onEvents() {
     } else if (e.t === 'nova') {
       // Big Bang : ralenti, la lumière est aspirée, silence… puis l'explosion
       slow = 1.5; for (let k = 0; k < 3; k++) ring(x, y, W * (0.9 - k * 0.2), 4, 0.6, [[190, 110, 255], MG, [255, 255, 255]][k], 4);
+      ghosts = (e.gone || []).filter((o) => o.k === 'c').slice(0, 40).map((o) => ({ ...o, t0: T, cx: x, cy: y, x0: sx(o.x), y0: sy(o.y) })); // tout est aspiré vers le point d'impact avant l'explosion
       A.chestRise(0.6); if (!sv.cx.bigbang) { sv.cx.bigbang = 1; save(); G.bonus += 40; }
       const pts = e.pts; setTimeout(() => { if (!isOpen) return;
         shake = 30; flash = 1; flashC = [255, 255, 255]; hitstop = 0.16; slow = 0;
@@ -99,11 +100,15 @@ function onEvents() {
         burst(x, y, 110, [255, 240, 220], B.u * 22, 1.3, 4); say('BIG BANG', '+' + fmt(pts), [255, 255, 255]);
         A.win(); A.rumble(); H.vib([40, 30, 40, 30, 80]); }, 650);
       H.track('nova', 1);
-    } else if (e.t === 'pulse') { ring(x, y, e.r * B.u, e.r * B.u * 2.7, 0.45, [170, 212, 255], 4); A.ping(); }
-    else if (e.t === 'swallow') { burst(x, y, 6, [190, 110, 255], B.u * 3, 0.4, 2); ring(sx(e.hx), sy(e.hy), B.u * 2.6, B.u * 0.6, 0.4, [190, 110, 255], 3); A.gulp(); }
+    } else if (e.t === 'pulse') { const mag = e.v ? [90, 255, 200] : [170, 212, 255]; ring(x, y, e.r * B.u, e.r * B.u * (e.reach || 2.7), 0.45, mag, e.v ? 7 : 4); if (e.v) ring(x, y, e.r * B.u, e.r * B.u * e.reach * 0.7, 0.35, [255, 255, 255], 3); A.ping(); }
+    else if (e.t === 'swallow') { // le petit astre est aspiré : un filet de lumière file vers l'absorbeur
+      const hx = sx(e.hx), hy = sy(e.hy), col = e.by === F.MAX_TIER ? RCOL[Math.min(5, e.bv)] : e.by === 11 ? AM : e.by === 7 ? [100, 170, 255] : [190, 110, 255];
+      for (let k = 0; k < 9 && parts.length < 260; k++) { const f = 0.5 + k / 9; parts.push({ x, y, vx: (hx - x) * 3.4 * f + (Math.random() - 0.5) * 30, vy: (hy - y) * 3.4 * f + (Math.random() - 0.5) * 30, l: 0, m: 0.3 + Math.random() * 0.15, cs: `rgb(${col[0] | 0},${col[1] | 0},${col[2] | 0})`, sz: 2.4 }); }
+      ring(hx, hy, B.u * 2.4, B.u * 0.5, 0.4, col, 3); A.gulp();
+    }
     else if (e.t === 'rare') { // variante rare ou galaxie : grande révélation avec la probabilité
       const r = rarOf(e.tier, e.v, e.p), key = e.tier + ':' + e.v, isNew = !sv.cx[key]; if (isNew) { sv.cx[key] = 1; save(); G.bonus += 15 + r * 15; }
-      reveal = { tier: e.tier, v: e.v, r, p: e.p, isNew, l: 0, d: 2.2 + r * 0.45 }; slow = reveal.d * 0.85; callout = null;
+      reveal = { tier: e.tier, v: e.v, r, p: e.p, isNew, pw: powerText(e.tier, e.v), l: 0, d: 2.5 + r * 0.45 }; slow = reveal.d * 0.85; callout = null;
       A.rare(r); H.vib(r >= 3 ? [30, 40, 30, 40, 30, 40, 90] : [20, 40, 40]); flash = 0.3 + r * 0.1; flashC = RCOL[r];
     }
     else if (e.t === 'secret') { const S = SECRETS[e.id]; if (!sv.cx[e.id]) { sv.cx[e.id] = 1; save(); G.bonus += 40; } say(S[0].toUpperCase(), 'DÉCOUVERTE SECRÈTE', AM); ring(x, y, 6, W * 0.6, 0.8, AM, 6); A.win();
@@ -194,7 +199,7 @@ function galaxy(r, v) {
 }
 const KIND = ['dust', 'orb', 'rock', 'moon', 'planet', 'gas', 'dwarf', 'sun', 'giant', 'neutron', 'hole', 'quasar', 'galaxy'];
 // Variantes rares (une seule par rang, la galaxie a les siennes) : [nom, teinte]
-const VAR = { 3: ['Lune de glace', [130, 220, 255]], 4: ['Monde de lave', [255, 84, 36]], 5: ['Géante de saphir', [64, 120, 255]], 7: ['Étoile bleue', [100, 170, 255]], 10: ['Trou blanc', [190, 255, 255]], 11: ['Blazar', [110, 255, 190]] };
+const VAR = { 3: ['Lune de glace', [130, 220, 255]], 4: ['Monde de lave', [255, 84, 36]], 5: ['Géante de saphir', [64, 120, 255]], 7: ['Étoile bleue', [100, 170, 255]], 8: ['Supergéante', [255, 190, 70]], 9: ['Magnétar', [90, 255, 200]], 10: ['Trou blanc', [190, 255, 255]], 11: ['Blazar', [110, 255, 190]] };
 const nameOf = (tier, v) => (tier === F.MAX_TIER ? GAL[v | 0].n : v ? VAR[tier][0] : BODIES[tier][0]);
 const RCOL = [[160, 185, 225], [77, 243, 255], [255, 79, 216], [255, 194, 71], [255, 120, 90], [255, 255, 255]];
 const rarOf = (tier, v, p) => (tier === F.MAX_TIER ? v : p > 0.03 ? 2 : p > 0.02 ? 3 : 4); // niveau de mise en scène 0..5
@@ -232,7 +237,7 @@ function build(tier, r, v) {
     A = { R: r, sp: 0.5, over: o, back: b, still: true, strip: strip(r, (x, w, h) => { for (let i = 0; i < 9; i++) { x.fillStyle = ['#f6d9a8', '#d98a48', '#f0c088', '#b9642e', '#f8e4c0', '#cf7d3e', '#eec489', '#a9562a', '#e9b877'][i]; x.fillRect(0, (i / 9) * h, w, h / 9 + 1); } }, 22, 31, (x, px, py, i) => { py = (Math.floor((py / (r * 2)) * 9) + 0.5) * r * 2 / 9; blob(x, px, py, r * (0.2 + rnd(i * 3) * 0.3), r * 0.045, 0, i % 2 ? 'rgba(255,246,220,.5)' : 'rgba(110,46,18,.4)'); if (i === 0) blob(x, px, r * 1.25, r * 0.22, r * 0.12, 0, '#c8442c'); }) };
   } else if (kind === 'dwarf' || kind === 'sun' || kind === 'giant') { // étoiles : deux couches de plasma qui se croisent, halo qui respire
     const P = { dwarf: ['#ff8a34', [255, 224, 150], [150, 30, 10], [150, 30, 10], [255, 140, 60], 0], sun: ['#ffcf40', [255, 255, 225], [255, 120, 20], [230, 110, 10], [255, 220, 90], 16], giant: ['#ee3d2c', [255, 180, 120], [80, 0, 12], [90, 0, 14], [255, 70, 60], 0] }[kind];
-    const [o] = light(r, r, v ? [20, 60, 200] : P[3]);
+    const [o] = light(r, r, v ? (tier === 7 ? [20, 60, 200] : [120, 70, 10]) : P[3]);
     A = { R: r, sp: 0.22, sp2: -0.3, add: true, over: o, back: halo(r, P[4], 0.7, P[5]), spinB: P[5] ? 0.12 : 0, pulse: 0.045, strip: starStrip(r, P[0], P[1], P[2], tier * 7), strip2: starStrip(r, null, P[1], [255, 255, 255], tier * 13) };
   } else if (kind === 'neutron') { // jets qui balayent, surface très rapide
     const [j, jx] = mk(s * 2, s * 2), g = jx.createLinearGradient(0, s, s * 2, s); g.addColorStop(0, 'rgba(160,210,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(160,210,255,0)');
@@ -294,8 +299,17 @@ function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
 }
 
 /* ============================== rendu ============================== */
+const sec = (x) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+// Description d'un pouvoir, construite depuis les tables du moteur (une seule source de vérité)
+export function powerText(tier, v = 0) {
+  const t = F.ABSORB[tier], pw = t && t[tier === F.MAX_TIER ? Math.min(v, 5) : v ? 1 : 0];
+  if (pw) return `Avale tout astre jusqu'à « ${BODIES[pw[0]][0]} », un toutes les ${sec(pw[1])} s${pw[2] >= 0.5 ? ', même sans contact' : pw[2] >= 0.1 ? ', à courte distance' : ''}.`;
+  if (tier === F.NEUTRON) return v ? `Impulsions bien plus fortes, toutes les ${sec(F.PULSE[1][0])} s.` : `Repousse ses voisins toutes les ${sec(F.PULSE[0][0])} s.`;
+  if (tier === F.GIANT) return v ? 'Reste stable : ne gonfle jamais.' : 'Gonfle avec le temps : fusionne-la vite.';
+  return '';
+}
 const RNAME = ['COMMUNE', 'PEU COMMUNE', 'RARE', 'ÉPIQUE', 'LÉGENDAIRE', 'CRITIQUE'];
-const odds = (p) => (p >= 0.01 ? `${(p * 100).toLocaleString('fr-FR')} % de chances` : `1 chance sur ${Math.round(1 / p).toLocaleString('fr-FR')}`);
+const odds = (p) => (p >= 0.05 ? `${(p * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} % de chances` : `1 chance sur ${Math.round(1 / p).toLocaleString('fr-FR')}`);
 function drawReveal() { // l'écran s'assombrit, des rayons tournent, l'astre grossit au centre, puis son nom, sa rareté et sa probabilité
   const R = reveal, q = R.l / R.d, env = Math.min(1, q * 6, (1 - q) * 5), cx = W / 2, cy = Hh * 0.4, col = R.r === 5 ? hueC(T * 160) : RCOL[R.r];
   ctx.fillStyle = `rgba(2,3,14,${0.78 * env})`; ctx.fillRect(0, 0, W, Hh);
@@ -310,7 +324,9 @@ function drawReveal() { // l'écran s'assombrit, des rayons tournent, l'astre gr
   ctx.font = '700 12px Orbitron,sans-serif'; ctx.fillStyle = rgba(col, 1); ctx.fillText((R.tier === F.MAX_TIER ? 'GALAXIE ' : 'VARIANTE ') + RNAME[R.r], cx, ty - 28);
   ctx.font = `900 ${Math.min(30, W * 0.07)}px Orbitron,sans-serif`; ctx.shadowColor = rgba(col, 0.9); ctx.shadowBlur = lowFx ? 0 : 24; ctx.fillStyle = '#fff'; ctx.fillText(nameOf(R.tier, R.v).toUpperCase(), cx, ty); ctx.shadowBlur = 0;
   ctx.font = '700 13px Orbitron,sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(odds(R.p).toUpperCase(), cx, ty + 26);
-  if (R.isNew) { ctx.font = '700 11px Orbitron,sans-serif'; ctx.fillStyle = '#5dffc0'; ctx.fillText('DÉBLOQUÉE · AJOUTÉE AU CODEX', cx, ty + 46); }
+  let ly = ty + 48; // le pouvoir de l'astre, sur une ou deux lignes
+  if (R.pw) { ctx.font = '600 12px system-ui,sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.85)'; const words = R.pw.split(' '); let line = ''; for (const w of words) { if ((line + ' ' + w).length > 36 && line) { ctx.fillText(line, cx, ly); ly += 17; line = w; } else line = line ? line + ' ' + w : w; } ctx.fillText(line, cx, ly); ly += 26; }
+  if (R.isNew) { ctx.font = '700 11px Orbitron,sans-serif'; ctx.fillStyle = '#5dffc0'; ctx.fillText('DÉBLOQUÉE · AJOUTÉE AU CODEX', cx, ly); }
   ctx.globalAlpha = 1;
 }
 function resize() {
@@ -375,6 +391,15 @@ function draw() {
     if (t0 != null) { const p = (T - t0) / 0.4; if (p >= 1) pops.delete(b.id); else sc = 1 + Math.sin(p * Math.PI * 2.2) * (1 - p) * 0.26 + (p < 0.15 ? (p / 0.15 - 1) * 0.4 : 0); }
     drawItem(b, sx(b.x), sy(b.y), sc, b.ang);
   }
+  // aura des absorbeurs : jusqu'où ils avalent. Nette = prêt à avaler, discrète = en train de digérer. Les astres qui s'en approchent sont prévenus.
+  for (const b of G.bodies) {
+    const pw = F.absorbOf(b); if (!pw || pw[2] < 0.1) continue; const ready = !(b.et > 0), rc = b.tier === F.MAX_TIER ? RCOL[Math.min(5, b.v | 0)] : b.tier === 11 ? AM : b.tier === 7 ? [100, 170, 255] : [190, 110, 255];
+    ctx.strokeStyle = rgba(rc, ready ? 0.4 + 0.18 * Math.sin(T * 4 + b.id) : 0.1); ctx.lineWidth = 1.5; ctx.setLineDash([3, 6]); ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), (b.r + pw[2]) * B.u, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  }
+  for (const g of ghosts) { // Big Bang : les astres disparus tournent et fondent vers le point d'impact
+    const p = clamp((T - g.t0) / 0.65, 0, 1), e = p * p * (3 - 2 * p), an = e * 2.2, dx = g.x0 - g.cx, dy = g.y0 - g.cy, c = Math.cos(an), sn = Math.sin(an), k = 1 - e;
+    drawItem({ k: 'c', tier: g.tier, v: g.v, r: g.r }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, Math.max(0.05, 1 - e * 0.9), e * 3);
+  }
   // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
   ctx.lineCap = 'round'; ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.8 + 0.2 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.75 + 0.25 * Math.sin(T * 6)) : 'rgba(255,255,255,.55)';
   ctx.lineWidth = dg > 0 ? 3 : G.near ? 2.4 : 1.8; ctx.setLineDash([7, 7]); ctx.beginPath(); ctx.moveTo(B.x + 6, ly); ctx.lineTo(B.x + B.w - 6, ly); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = 'butt';
@@ -433,6 +458,8 @@ function update(dt) {
   parts = parts.filter((p) => p.l < p.m); rings = rings.filter((r) => r.l < r.m); labels = labels.filter((l) => l.l < 0.9);
   if (callout && (callout.l += dt) > 1.2) callout = null;
   if (reveal && (reveal.l += dt) > reveal.d) reveal = null;
+  if (ghosts.length) ghosts = ghosts.filter((g) => T - g.t0 < 0.65);
+  if (!ended && !paused && !document.hidden) { sv.time += dt; tAcc += dt; if (tAcc >= 10) { tAcc = 0; save(); H.time(sv.time); } } // temps de jeu : seulement quand on joue vraiment (ni pause, ni écran de fin, ni arrière-plan)
   if (tut >= 0) tutorial();
   if (G.chal && !ended) { // défi du jour : objectif atteint avant la fin du chrono ?
     const c = G.chal, val = c[0] === 'tier' ? G.maxTier : c[0] === 'chain' ? G.maxChain : c[0] === 'depth' ? G.depth : G.score;
@@ -486,6 +513,7 @@ const CSS = `
 .fg-q .q i{flex:none;width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}.fg-q .q i::after{content:"";position:absolute;inset:0;width:var(--p);border-radius:3px;background:linear-gradient(90deg,#4df3ff,#ff4fd8)}
 .fg-q .q.ok{color:#5dffc0}.fg-q .q.ok i::after{background:#5dffc0}.fg-q .q span{flex:1}.fg-q .q em{font-style:normal;color:rgba(255,255,255,.55);font-size:12px;white-space:nowrap}
 #mn-rk{font-size:13px;color:#5dffc0;min-height:0}#mn-rk:empty{display:none}
+#mn-cxd{min-height:34px;font-size:12.5px;line-height:1.4;color:rgba(255,255,255,.85);text-align:center}
 #mn-lad{font-size:11.5px;line-height:1.6;color:rgba(255,255,255,.6)}
 `;
 const HTML = `
@@ -497,7 +525,7 @@ const HTML = `
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Comment jouer</h2><p class="multi" id="mn-ht"></p><p id="mn-lad"></p><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
-const HTML2 = `<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
+const HTML2 = `<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 const HELP = `Lâche les astres dans le puits. Deux identiques qui se touchent fusionnent en un astre plus gros.
 
 Un seul lâcher qui déclenche plusieurs fusions, c'est une chaîne : chaque maillon multiplie les points. À ×5, tu gagnes une comète explosive.
@@ -512,14 +540,16 @@ Chaque secteur change une règle (gravité, parois). Si un astre reste entièrem
 
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
-  ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '' })),
-  ...GAL.map((g, v) => ({ key: F.MAX_TIER + ':' + v, name: g.n, tier: F.MAX_TIER, v, p: F.GALAXY[v], ok: !!sv.cx[F.MAX_TIER + ':' + v], sub: odds(F.GALAXY[v]) })),
-  ...Object.keys(VAR).map((t) => ({ key: t + ':1', name: VAR[t][0], tier: +t, v: 1, p: F.RARE[t], ok: !!sv.cx[t + ':1'], sub: odds(F.RARE[t]) })),
-  ...Object.keys(SECRETS).map((id) => ({ key: id, name: SECRETS[id][0], tier: -1, v: 0, ok: !!sv.cx[id], sub: SECRETS[id][1] })),
+  ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '', info: powerText(i, 0) })),
+  ...GAL.map((g, v) => ({ key: F.MAX_TIER + ':' + v, name: g.n, tier: F.MAX_TIER, v, p: F.GALAXY[v], ok: !!sv.cx[F.MAX_TIER + ':' + v], sub: odds(F.GALAXY[v]), info: powerText(F.MAX_TIER, v) })),
+  ...Object.keys(VAR).map((t) => ({ key: t + ':1', name: VAR[t][0], tier: +t, v: 1, p: F.RARE[t], ok: !!sv.cx[t + ':1'], sub: odds(F.RARE[t]), info: powerText(+t, 1) })),
+  ...Object.keys(SECRETS).map((id) => ({ key: id, name: SECRETS[id][0], tier: -1, v: 0, ok: !!sv.cx[id], sub: SECRETS[id][1], info: '' })),
 ];
 const parseKey = (k) => { const m = /^(\d{1,2})(?::(\d))?$/.exec(String(k)); return m && +m[1] <= F.MAX_TIER ? { tier: +m[1], v: +(m[2] || 0) } : null; };
 export const codexN = () => entries().filter((e) => e.ok).length;
-export const localStats = () => ({ score: sv.best || null, sector: sv.depth || null, tier: sv.tier ? sv.tier - 1 : null }); // pour le profil quand le serveur ne répond pas
+export const playtime = () => Math.floor(sv.time);
+export const themeName = (id) => (THEMES.find((t) => t.id === id) || { n: id }).n;
+export const localStats = () => ({ score: sv.best || null, sector: sv.depth || null, tier: sv.tier ? sv.tier - 1 : null, playtime: Math.floor(sv.time) }); // pour le profil quand le serveur ne répond pas
 export const tierName = (t) => (t === F.MAX_TIER ? 'Galaxie' : (BODIES[t] || ['?'])[0]);
 // Astres que le joueur peut exposer sur son profil (découverts, hors secrets), du plus rare au plus courant
 export const astres = () => entries().filter((e) => e.ok && e.tier >= 0).map((e) => ({ ...e, r: e.p ? -Math.log(e.p) : e.tier / 20 })).sort((a, b) => b.r - a.r);
@@ -543,12 +573,20 @@ function showCodex() {
     if (e.ok && e.tier >= 0) { const c = document.createElement('canvas'); paintAstre(c, e.key, 64); d.append(c); }
     else d.insertAdjacentHTML('beforeend', `<i>${e.ok ? '★' : '?'}</i>`);
     d.insertAdjacentHTML('beforeend', `<b>${e.ok ? e.name : '???'}</b>` + (e.sub ? `<small>${e.sub}</small>` : '')); g.append(d);
+    d.addEventListener('click', () => { $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.'; });
   }
+  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.';
   $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent de la poussière d'étoile.`;
   $('#mn-m-codex').classList.add('on');
 }
 export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} ✦ ${label}`.trim()); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
 export const dust = () => sv.dust;
+// Récompense de mission : un thème offert ; si on le possède déjà, la moitié de son prix en poussière d'étoile
+export function giveTheme(id) {
+  const t = THEMES.find((x) => x.id === id); if (!t) return '';
+  if (!sv.themes[id]) { sv.themes[id] = 1; save(); H.refresh(); return `Thème « ${t.n} » débloqué`; }
+  const back = Math.round(t.cost / 2); grant(back, 'Thème déjà possédé'); return `Thème déjà possédé : +${fmt(back)} ✦`;
+}
 const todayChal = () => CHAL[hash('critical:defi:' + H.today()) % CHAL.length];
 export const daily = () => ({ txt: todayChal()[3], done: sv.daily.day === H.today() && sv.daily.done });
 export function openDaily() { // même tirage pour tout le monde ; on peut retenter, la récompense tombe une fois par jour
@@ -619,7 +657,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   }, 900);
 }
 function newRun(seed, keep) {
-  if (!keep) dropRun(); G = F.newGame(seed); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  if (!keep) dropRun(); G = F.newGame(seed); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
 }
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }
@@ -637,7 +675,7 @@ export function open(fresh) { // fresh : on va lancer autre chose qu'une partie 
   else newRun();
   last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
-function close() { A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
+function close() { save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
   Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);

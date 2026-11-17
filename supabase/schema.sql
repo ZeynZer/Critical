@@ -17,6 +17,9 @@ alter table public.players add column if not exists motto text not null default 
 alter table public.players add column if not exists featured text[] not null default '{}';
 alter table public.players add column if not exists codex integer not null default 0;
 alter table public.players add column if not exists profile_at timestamptz;
+-- temps de jeu actif en secondes (déclaré par l'appareil, mais borné par le temps réellement écoulé : voir report_playtime)
+alter table public.players add column if not exists playtime integer not null default 0;
+alter table public.players add column if not exists play_at timestamptz;
 create unique index if not exists players_name_key on public.players (lower(name));
 
 create table if not exists public.scores (
@@ -126,7 +129,7 @@ create or replace function public.get_profile(p_name text) returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object('name', p.name, 'motto', p.motto, 'featured', to_json(p.featured), 'codex', p.codex, 'since', p.created_at,
     'score', s.score, 'sector', s.sector,
-    'tier', (select max(m.tier) from scores m where m.player_id = p.id),
+    'tier', (select max(m.tier) from scores m where m.player_id = p.id), 'playtime', p.playtime,
     'rank', case when s.score is null then null else (select count(*) + 1 from scores o where o.board = 'all' and o.score > s.score) end,
     'total', (select count(*) from scores o where o.board = 'all'),
     'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'))
@@ -134,5 +137,20 @@ language sql stable security definer set search_path = public as $$
   where lower(p.name) = lower(btrim(p_name))
 $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text) to anon, authenticated;
+-- Envoyer son temps de jeu cumulé (secondes). Valeur jamais diminuée, et progression bornée par le temps réellement écoulé depuis le
+-- dernier envoi (+ 2 min de marge) : impossible de s'attribuer 500 heures d'un coup. Premier envoi : jusqu'à 72 h déjà jouées avant l'inscription.
+create or replace function public.report_playtime(p_secret text, p_seconds integer) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_old integer; v_at timestamptz; v_cap bigint; v_new integer;
+begin
+  select id, playtime, play_at into v_id, v_old, v_at from players where secret_hash = critical_hash(p_secret);
+  if v_id is null then raise exception 'unknown_player'; end if;
+  if p_seconds is null or p_seconds < 0 or p_seconds > 36000000 then raise exception 'invalid_playtime'; end if;
+  v_cap := case when v_at is null then 259200 else v_old + (extract(epoch from now() - v_at) * 1.05)::bigint + 120 end;
+  v_new := least(greatest(v_old, p_seconds), v_cap)::integer;
+  update players set playtime = v_new, play_at = now() where id = v_id;
+  return json_build_object('playtime', v_new);
+end $$;
+
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer) to anon, authenticated;
