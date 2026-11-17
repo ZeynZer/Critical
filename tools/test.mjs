@@ -126,3 +126,12 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   for (let k = 0; k < 40; k++) F.tick(g, 1 / 60); assert.equal(g.depth, 1, 'le saut de secteur suit le Big Bang'); assert.equal(g.bodies.length, 0, 'le nouveau secteur est vierge');
   console.log('Big Bang OK');
 }
+{ // bac à sable : on ne meurt pas, rien n'est tiré au sort, l'astre choisi reste en main, pas de saut de secteur
+  const g = F.newGame(35, { sandbox: true }); g.cur = { k: 'c', tier: 10, v: 1 }; let rare = 0;
+  for (let i = 0; i < 60; i++) { g.cool = 0; F.drop(g, 1 + (i % 8)); for (let k = 0; k < 20; k++) F.tick(g, 1 / 60); for (const e of g.ev) if (e.t === 'rare' || e.t === 'pierce' || e.t === 'over') rare++; g.ev.length = 0; }
+  for (let k = 0; k < 60 * 8; k++) F.tick(g, 1 / 60);
+  assert.equal(g.over, false, 'jamais de défaite'); assert.equal(rare, 0); assert.equal(g.depth, 0, 'pas de saut de secteur'); assert.equal(g.danger, 0);
+  assert.ok(g.cur.tier === 10 && g.cur.v === 1, "l'astre choisi reste en main"); const d = F.newGame(37, { sandbox: true }); d.cur = { k: 'c', tier: 3, v: 1 }; F.drop(d, 5); assert.equal(d.bodies[0].v, 1, 'la variante choisie est lâchée telle quelle');
+  const h = F.newGame(36, { sandbox: true }); let rr = 0; for (let n = 0; n < 400; n++) { h.bodies.length = 0; h.bodies.push({ id: 1, k: 'c', tier: 2, v: 0, x: 4, y: 12, vx: 0, vy: 0, r: F.TIERS[2].r, ang: 0, av: 0, age: 5, hit: true, dead: false }, { id: 2, k: 'c', tier: 2, v: 0, x: 4 + F.TIERS[2].r * 1.9, y: 12, vx: 0, vy: 0, r: F.TIERS[2].r, ang: 0, av: 0, age: 5, hit: true, dead: false }); for (let k = 0; k < 10; k++) F.tick(h, 1 / 60); for (const e of h.ev) if (e.t === 'rare') rr++; h.ev.length = 0; }
+  assert.equal(rr, 0, 'aucune variante rare dans le bac à sable'); console.log('bac à sable OK');
+}

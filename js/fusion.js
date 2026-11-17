@@ -45,11 +45,11 @@ function nextItem(G) {
   return { k: 'c', tier: 0 };
 }
 
-export function newGame(seed = (Math.random() * 2 ** 32) >>> 0) {
+export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0,
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
   G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
@@ -67,8 +67,8 @@ export function drop(G, x) {
   if (G.over || G.cool > 0) return false;
   const it = G.cur;
   const dx = Math.round(clampX(it, x, G.inset) * 1000) / 1000; // position arrondie au millième : c'est exactement ce que le journal enregistre
-  add(G, it.k, it.tier, dx, DROP_Y).fresh = true;
-  G.cur = G.queue.shift(); G.queue.push(nextItem(G));
+  const nb = add(G, it.k, it.tier, dx, DROP_Y); nb.fresh = true; if (it.v) nb.v = it.v;
+  if (!G.sandbox) { G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
   G.cool = COOLDOWN; G.swapped = false; G.drops++; G.log.push(G.n, Math.round(dx * 1000)); // journal (pas de calcul, position) : permet de rejouer la partie à l'identique
   return true;
 }
@@ -107,18 +107,20 @@ function fuse(G, a, b) {
     }
     G.danger = 0; G.near = false;
     G.ev.push({ t: 'nova', x, y, chain: G.chain, pts, gone });
-    charge(G, need(G.depth));
+    if (!G.sandbox) charge(G, need(G.depth));
     return;
   }
   const n = add(G, 'c', tier + 1, x, y, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2);
   n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(HT - n.r, n.y); n.hit = true; n.age = 0.5;
-  if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
+  if (G.sandbox) { /* aucun tirage : une variante rare ne se débloque pas ici */ }
+  else if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
   else if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
   const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v ? 3 : 1); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
-  if (tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
+  if (!G.sandbox && tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
   G.ev.push({ t: 'merge', x, y, tier: tier + 1, chain: G.chain, pts, id: n.id });
+  if (G.sandbox) return;
   charge(G, tier + 1 + (G.chain - 1));
   if (G.chain === 5) gift(G, 'b'); // belle chaîne : une charge explosive offerte
 }
@@ -258,7 +260,7 @@ function sub(G) {
   if (G.bodies.some((b) => b.dead)) G.bodies = G.bodies.filter((b) => !b.dead);
   // défaite : un astre posé ENTIÈREMENT au-dessus de la ligne (son bord bas compris) pendant DANGER_TIME ; un simple dépassement ne compte pas
   let hot = false, near = false;
-  for (const b of G.bodies) if (b.hit && b.age > 1) { if (b.y + b.r < LINE) { hot = true; break; } if (b.y - b.r < LINE) near = true; }
+  if (!G.sandbox) for (const b of G.bodies) if (b.hit && b.age > 1) { if (b.y + b.r < LINE) { hot = true; break; } if (b.y - b.r < LINE) near = true; }
   G.near = near || hot; // avertissement visuel seulement
   G.danger = hot ? G.danger + dt / DANGER_TIME : Math.max(0, G.danger - dt * 1.5);
   if (G.danger >= 1 && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; G.ev.push({ t: 'over' }); }
