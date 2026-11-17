@@ -8,7 +8,16 @@ export const W = 10, HT = 14.5, LINE = 2.7, DROP_Y = 1.35, MAX_TIER = 12;
 // Rangs : 0 poussière · 1 orbe · 2 astéroïde · 3 lune · 4 planète · 5 géante gazeuse · 6 naine orange · 7 soleil · 8 géante rouge · 9 étoile à neutrons · 10 trou noir · 11 quasar · 12 galaxie
 export const NEUTRON = 9, HOLE = 10, GIANT = 8, SUN = 7;
 // Variantes rares : chance, à chaque création d'un astre de ce rang, d'obtenir sa version rare
-export const RARE = { 3: 1 / 120, 4: 1 / 150, 5: 1 / 150, 7: 1 / 120, 10: 1 / 40, 11: 1 / 25 };
+export const RARE = { 3: 1 / 120, 4: 1 / 150, 5: 1 / 150, 7: 1 / 120, 8: 1 / 110, 9: 1 / 90, 10: 1 / 40, 11: 1 / 25 };
+// Pouvoirs d'absorption : [rang maximum avalé, secondes entre deux repas, portée au-delà du contact].
+// Le trou noir avale les poussières et les orbes ; le quasar jusqu'aux astéroïdes ; la galaxie jusqu'aux lunes, de plus en plus loin, vite et gros selon sa rareté.
+export const ABSORB = {
+  10: [[1, 3.0, 0], [2, 1.6, 0.12]],                                                                  // trou noir · trou blanc
+  11: [[2, 2.0, 0.15], [3, 1.2, 0.3]],                                                                // quasar · blazar
+  12: [[3, 1.6, 0.2], [3, 1.3, 0.35], [4, 1.1, 0.5], [4, 0.9, 0.65], [5, 0.7, 0.85], [6, 0.5, 1.1]], // galaxies, de la plus courante à la critique
+};
+export const PULSE = [[4, 2.7, 8], [2.6, 3.4, 15]]; // étoile à neutrons · magnétar : [secondes entre deux impulsions, portée en rayons, force]
+export const absorbOf = (b) => { const t = b.k === 'c' && ABSORB[b.tier]; return t ? t[b.tier === MAX_TIER ? Math.min(b.v | 0, t.length - 1) : b.v ? 1 : 0] : null; };
 // Une galaxie tire toujours sa rareté : spirale, barrée dorée, émeraude, annulaire, prismatique, critique
 export const GALAXY = [0.62, 0.25, 0.09, 0.03, 0.009, 0.001];
 const SLOP = 0.012; // chevauchement toléré : sans lui, la correction de position fait trembler et ramper les piles
@@ -89,10 +98,14 @@ function fuse(G, a, b) {
   if (G.chain > G.maxChain) G.maxChain = G.chain;
   G.fusions++;
   const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2, tier = a.tier;
-  if (tier >= MAX_TIER) { // deux noyaux ultimes : supernova
-    const pts = 5000 * Math.min(G.chain, 8); G.score += pts;
-    kick(G, x, y, 7, 16);
-    G.ev.push({ t: 'nova', x, y, chain: G.chain, pts });
+  if (tier >= MAX_TIER) { // deux galaxies : Big Bang. Tout disparaît (secteur vierge), puis le saut de secteur suit.
+    const pts = 5000 * Math.min(G.chain, 8), gone = []; G.score += pts;
+    for (const o of G.bodies) {
+      if (!o.dead) { o.dead = true; if (o.k === 'c') G.score += TIERS[o.tier].pts; }
+      gone.push({ x: o.x, y: o.y, k: o.k, tier: o.k === 'c' ? o.tier : -1, v: o.v | 0, r: o.r }); // pour l'animation : les astres sont aspirés vers le point d'impact
+    }
+    G.danger = 0; G.near = false;
+    G.ev.push({ t: 'nova', x, y, chain: G.chain, pts, gone });
     charge(G, need(G.depth));
     return;
   }
@@ -148,12 +161,6 @@ function collide(G) {
       if (a.k === 'b' || b.k === 'b') { (a.k === 'b' ? a : b).fuse = true; }
       if (a.k === 'j' && b.k === 'c') { a.k = 'c'; a.tier = b.tier; a.r = b.r; G.ev.push({ t: 'morph', x: a.x, y: a.y, tier: b.tier }); }
       else if (b.k === 'j' && a.k === 'c') { b.k = 'c'; b.tier = a.tier; b.r = a.r; G.ev.push({ t: 'morph', x: b.x, y: b.y, tier: a.tier }); }
-      const hole = a.k === 'c' && a.tier === HOLE ? a : b.k === 'c' && b.tier === HOLE ? b : null, o = hole === a ? b : a;
-      if (hole && !(hole.et > 0) && o.k === 'c' && o.tier <= 1) { // le trou noir avale un petit voisin de temps en temps
-        o.dead = true; hole.et = 3; G.score += 50; G.eaten++; G.ev.push({ t: 'swallow', x: o.x, y: o.y, hx: hole.x, hy: hole.y });
-        if (G.eaten === 5) G.ev.push({ t: 'secret', id: 'festin', x: hole.x, y: hole.y });
-        continue;
-      }
       if (!merge && a.k === 'c' && b.k === 'c' && a.tier === b.tier) { merge = [a, b]; continue; }
       const ma = a.r * a.r, mb = b.r * b.r, ia = mb / (ma + mb), ib = ma / (ma + mb), pen = Math.max(0, rr - d - SLOP) * 0.6; a.touch = b.touch = true;
       a.x -= nx * pen * ia; a.y -= ny * pen * ia; b.x += nx * pen * ib; b.y += ny * pen * ib;
@@ -168,6 +175,22 @@ function collide(G) {
   return merge;
 }
 
+// Les absorbeurs (trou noir, quasar, galaxie) avalent le plus proche de leurs petits voisins, puis doivent attendre. Jamais un autre absorbeur.
+function absorb(G) {
+  for (const a of G.bodies) {
+    if (a.dead || a.tier < HOLE || a.et > 0) continue; const pw = absorbOf(a); if (!pw) continue;
+    let best = null, bd = 1e9;
+    for (const o of G.bodies) {
+      if (o === a || o.dead || o.k !== 'c' || o.tier > pw[0]) continue;
+      const d = Math.hypot(o.x - a.x, o.y - a.y) - a.r - o.r; // distance entre les bords (négative si ça se chevauche)
+      if (d < pw[2] + 0.02 && d < bd) { bd = d; best = o; }
+    }
+    if (!best) continue;
+    best.dead = true; a.et = pw[1]; G.score += Math.round(TIERS[best.tier].pts / 2); G.eaten++;
+    G.ev.push({ t: 'swallow', x: best.x, y: best.y, hx: a.x, hy: a.y, tier: best.tier, by: a.tier, bv: a.v | 0 });
+    if (G.eaten === 5) G.ev.push({ t: 'secret', id: 'festin', x: a.x, y: a.y });
+  }
+}
 function walls(G, b) {
   const L = G.inset + b.r, R = W - G.inset - b.r;
   if (b.x < L) { b.x = L; if (b.vx < 0) b.vx *= -REST; }
@@ -206,9 +229,11 @@ function sub(G) {
   const gy = fall(G);
   for (const b of G.bodies) {
     b.px = b.x; b.py = b.y; b.age += dt; b.vy += gy * dt;
-    if (b.k === 'c' && b.tier === GIANT) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); // la géante rouge enfle tant qu'on ne la fusionne pas
-    else if (b.k === 'c' && b.tier === NEUTRON) { b.pt = (b.pt || 0) + dt; if (b.pt >= 4) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.7, 8); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r }); } } // l'étoile à neutrons repousse par impulsions
-    else if (b.et > 0) b.et -= dt;
+    if (b.k === 'c') {
+      if (b.tier === GIANT) { if (!b.v) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); } // la géante rouge enfle tant qu'on ne la fusionne pas ; la supergéante (rare) reste stable
+      else if (b.tier === NEUTRON) { const pu = PULSE[b.v ? 1 : 0]; b.pt = (b.pt || 0) + dt; if (b.pt >= pu[0]) { b.pt = 0; kick(G, b.x, b.y, b.r * pu[1], pu[2]); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: b.v | 0, reach: pu[1] }); } } // l'étoile à neutrons repousse par impulsions ; le magnétar plus souvent et plus fort
+      else if (b.et > 0) b.et -= dt;
+    }
     const sp = Math.hypot(b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
     b.x += b.vx * dt; b.y += b.vy * dt; b.vx *= 0.9992; b.ang += b.av * dt; b.av *= 0.985;
   }
@@ -227,6 +252,7 @@ function sub(G) {
     const dx = b.x - b.px, dy = b.y - b.py;
     if (dx * dx + dy * dy < 4e-9) { b.x = b.px; b.y = b.py; b.vx = b.vy = 0; b.av *= 0.8; }
   }
+  absorb(G);
   for (const b of G.bodies) if (b.fuse && !b.dead) explode(G, b);
   if (G.bodies.some((b) => b.dead)) G.bodies = G.bodies.filter((b) => !b.dead);
   // défaite : un astre posé ENTIÈREMENT au-dessus de la ligne (son bord bas compris) pendant DANGER_TIME ; un simple dépassement ne compte pas
