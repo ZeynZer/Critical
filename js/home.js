@@ -244,11 +244,10 @@ export function init() {
     tx.append(...grab(t, s)); play.textContent = ''; play.append(ring, tx); play.insertAdjacentHTML('beforeend', CHEV);
   }
 
-  // Bac à sable : même rangée que l'ancienne campagne
-  const sbx = $('#b-sandbox');
-  if (sbx) {
+  // Bac à sable et Duel : même rangée que l'ancienne campagne
+  for (const sbx of [$('#b-duel'), $('#b-sandbox')]) if (sbx) {
     reskin(sbx, ['gl', 'hm-camp', 'hm-in']); sbx.style.setProperty('--e', '.36s'); sbx.style.setProperty('--d', '2s');
-    const t = titleOf(sbx), s = sbx.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); sbx.textContent = ''; sbx.append(make('span', 'hm-sbi', ico(ICONS.casc)), tx); sbx.insertAdjacentHTML('beforeend', CHEV);
+    const t = titleOf(sbx), s = sbx.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); sbx.textContent = ''; sbx.append(make('span', 'hm-sbi', ico(sbx.id === 'b-duel' ? ICONS.rank : ICONS.casc)), tx); sbx.insertAdjacentHTML('beforeend', CHEV);
   }
 
   // Défi du jour + Noyaux : deux tuiles

@@ -3,6 +3,7 @@
 // Habillage : le verre liquide du reste du jeu, sur fond d'espace profond.
 import * as A from './audio.js';
 import * as F from './fusion.js';
+import { channel } from './realtime.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
 const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
@@ -13,7 +14,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -47,6 +48,7 @@ let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, 
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
 let FN = 0, hud = null, hudKey = '', tut = -1;
+let duel = null; // duel 1v1 en cours (salon Realtime)
 let rv = null, rvDone = false, gh = null, runTok = 0; // rival (joueur juste au-dessus de mon record) et fantôme optionnel de sa partie
 let warp = 0, warpMsg = null, slow = 0, beatT = 0, tAcc = 0, ghosts = []; // tAcc : secondes de jeu pas encore enregistrées ; ghosts : astres aspirés par un Big Bang
 let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
@@ -119,7 +121,7 @@ function onEvents() {
       }
     }
     else if (e.t === 'secret') { const S = SECRETS[e.id]; if (!G.nop && !sv.cx[e.id]) { sv.cx[e.id] = 1; save(); G.bonus += 40; } say(S[0].toUpperCase(), 'DÉCOUVERTE SECRÈTE', AM); ring(x, y, 6, W * 0.6, 0.8, AM, 6); A.win();
-    } else if (e.t === 'over') { if (G.rep) G.rep.done = true; else endRun(); }
+    } else if (e.t === 'over') { if (G.rep) G.rep.done = true; else if (G.duel) duelFinish(); else endRun(); }
   }
   G.ev.length = 0;
 }
@@ -432,7 +434,8 @@ function draw() {
     const p = clamp((T - g.t0) / 0.65, 0, 1), e = p * p * (3 - 2 * p), an = e * 2.2, dx = g.x0 - g.cx, dy = g.y0 - g.cy, c = Math.cos(an), sn = Math.sin(an), k = 1 - e;
     drawItem({ k: 'c', tier: g.tier, v: g.v, r: g.r }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, Math.max(0.05, 1 - e * 0.9), e * 3);
   }
-  if (gh && !G.nop) { ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of gh.G.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
+  const og = gh && !G.nop ? gh.G : G.duel && duel && duel.op ? duel.op.G : null;
+  if (og) { ctx.lineWidth = 1.4; ctx.strokeStyle = G.duel ? 'rgba(255,170,90,.42)' : 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of og.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
   // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
   if (!G.sandbox) {
   ctx.lineCap = 'round'; ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.8 + 0.2 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.75 + 0.25 * Math.sin(T * 6)) : 'rgba(255,255,255,.55)';
@@ -463,16 +466,18 @@ function draw() {
   ctx.drawImage(hud, 0, ty - 44, W, 64);
   txt(`SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
   if (G.chal) { const left = Math.max(0, G.chal[2] - G.t), m = Math.floor(left / 60); txt(`DÉFI · ${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`, cx, ty + 37, 13, left < 15 ? '#ff6a8a' : '#ffc247', 'center', 'Orbitron', 900); }
+  else if (G.duel && duel) txt(duel.phase === 'done' ? 'DUEL TERMINÉ' : 'DUEL · ' + fmtT(Math.max(0, duel.dur - G.n / 120)), cx, ty + 35, 11, AM, 'center', 'Orbitron', 900);
   else if (G.rep) txt('REDIFFUSION · ' + G.rep.run.name.toUpperCase(), cx, ty + 35, 9.5, AM, 'center', 'Orbitron', 700);
   else if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
   }
-  if (!G.nop && !G.chal && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
+  if (G.duel && duel && duel.op) { const o = duel.op, os = o.final != null ? o.final : o.G.score, d = G.score - os; txt(`VS ${duel.oppName.toUpperCase()} · ${fmt(os)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
+  else if (!G.nop && !G.chal && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
     if (gh) { const d = G.score - gh.G.score; txt(`FANTÔME ${gh.name.toUpperCase()} · ${fmt(gh.G.score)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
     else if (rv && !rvDone) txt(`CIBLE · ${rv.name.toUpperCase()} · encore ${fmt(rv.score - G.score)}`, cx, ty + 52, 9.5, '#ffc247', 'center', 'Orbitron', 700);
   }
   // barre du bas : réserve à gauche, suivants à droite
-  if (!G.nop) {
+  if (!(G.sandbox || G.rep)) {
   const hr = holdR, by = hr.y;
   txt('RÉSERVE', hr.x + hr.w / 2, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
   glassBox(hr.x, by, hr.w, hr.h, 20, G.swapped ? 0.14 : 0.45);
@@ -494,7 +499,7 @@ const miniU = (it) => Math.min(B.u, 20 / (it.k === 'c' ? F.TIERS[it.tier].r : F.
 /* ============================== boucle ============================== */
 function update(dt) {
   T += dt;
-  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else { F.tick(G, slow > 0 ? dt * 0.3 : dt); if (gh) stepGhost(); } onEvents(); }
+  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else if (G.duel) duelTick(dt); else { F.tick(G, slow > 0 ? dt * 0.3 : dt); if (gh) stepGhost(); } onEvents(); }
   if (slow > 0) slow -= dt;
   if (warp > 0) { const w0 = warp; warp = Math.max(0, warp - dt / 1.8); if (w0 > 1 - BANG && warp <= 1 - BANG) bang(); }
   if (G.danger > 0 && !ended && !paused && T - beatT > 0.62 - 0.3 * G.danger) { beatT = T; A.chestBeat(G.danger); H.vib(6); } // le cœur s'emballe près de la ligne
@@ -514,7 +519,7 @@ function update(dt) {
     if (val >= c[1]) { G.won = true; endRun(); } else if (G.t >= c[2]) endRun();
   }
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
-  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); } } // un relâché pendant le temps de recharge est mémorisé
+  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (!(G.duel && duel.phase !== 'play') && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); if (G.duel) dsendDrop(); } } if (G.duel && duel.phase !== 'play') want = false; // un relâché pendant le temps de recharge est mémorisé
 }
 function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisie ; les lâchers tombent exactement au pas où ils ont eu lieu
   const R = G.rep; if (R.done) return;
@@ -550,7 +555,7 @@ const pt = (e) => ({ x: e.clientX, y: e.clientY }); // le canvas couvre tout l'�
 const inZone = (p) => p.x > B.x - 18 && p.x < B.x + B.w + 18 && p.y > B.y - 60 && p.y < B.y + B.h + 20; // la cuve, avec une petite marge
 function onDown(e) { // appuie dans la cuve (même pendant qu'un astre tombe), glisse, relâche ; sortir de la cuve annule
   if (!G || G.over || G.rep) return; if (reveal) { if (reveal.l > 1.6) { reveal.l = reveal.d; slow = 0; } return; } const p = pt(e);
-  if (!G.nop && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (F.swapHold(G)) { A.select(); H.vib(8); } return; }
+  if (!G.sandbox && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (!(G.duel && duel.phase !== 'play') && F.swapHold(G)) { A.select(); H.vib(8); if (G.duel) dsendDrop(); } return; }
   if (!inZone(p)) return;
   aiming = true; aimT = (p.x - B.x) / B.u; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
 }
@@ -580,6 +585,8 @@ const CSS = `
 #mn-sb{position:absolute;left:12px;right:12px;display:none;gap:8px;align-items:center}#mn.sbx #mn-sb{display:flex}#mn-sbl{flex:1;display:flex;gap:6px;overflow-x:auto;padding:4px 2px;scrollbar-width:none}#mn-sbl::-webkit-scrollbar{display:none}
 #mn-sbl button{flex:none;width:54px;height:54px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);display:grid;place-items:center;padding:0}#mn-sbl button.on{border-color:#4df3ff;background:rgba(77,243,255,.16);box-shadow:0 0 14px rgba(77,243,255,.4)}#mn-sbc{flex:none;height:54px;padding:0 14px;border-radius:18px;color:#fff;font:700 12px Orbitron,system-ui,sans-serif;border:1px solid rgba(255,255,255,.14)}
 #mn-rp{position:absolute;left:12px;right:12px;display:none;align-items:center;gap:8px;justify-content:center}#mn.rpl #mn-rp{display:flex}#mn-rpn{display:none;flex:1;font:700 12px Orbitron,system-ui,sans-serif;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#mn-rp button{height:44px;min-width:44px;border-radius:16px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:700 12px Orbitron,system-ui,sans-serif}#mn-rp div{display:flex;gap:6px}#mn-rp div button.on{border-color:#4df3ff;background:rgba(77,243,255,.18)}
+#dl-code{font:900 44px Orbitron,system-ui,sans-serif;letter-spacing:.16em;text-align:center;min-height:0;color:#4df3ff}#dl-code:empty{display:none}#dl-in{width:100%;height:52px;border-radius:18px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#fff;font:700 20px Orbitron,system-ui,sans-serif;text-align:center;letter-spacing:.2em;text-transform:uppercase;outline:none;user-select:text;-webkit-user-select:text}
+#mn-m-duel:not([data-s=menu]) #dl-in,#mn-m-duel:not([data-s=menu]) #dl-join,#mn-m-duel[data-s=wait] #dl-new,#mn-m-duel[data-s=end] #dl-code{display:none}#mn-m-duel[data-s=end] #dl-new{display:block}
 #mn-ht{font-size:13px;color:rgba(255,255,255,.7);text-align:center;margin:0}#mn-lad{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin:6px 0 4px}#mn-lad canvas{opacity:.92}
 `;
 const HTML = `
@@ -591,7 +598,8 @@ const HTML = `
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Pause</h2><p class="sub" id="mn-ht">Deux astres identiques qui se touchent fusionnent.</p><div id="mn-lad"></div><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
-const HTML2 = `<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
+const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-new">Créer un salon</button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
+<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
   ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '', info: powerText(i, 0) })),
@@ -723,7 +731,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   }, 900);
 }
 function newRun(seed, keep, opt) {
-  if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep)); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
@@ -738,6 +746,78 @@ function stepGhost() { // le fantôme rejoue la partie du rival, calée sur le t
     else if (R.G.n < R.steps && !R.G.over) F.step(R.G); else R.done = true;
   }
   R.G.ev.length = 0;
+}
+/* ============================== duel 1v1 (salon par code, Supabase Realtime) ============================== */
+const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const dsend = (m) => { if (duel && duel.ch) duel.ch.send({ ...m, id: duel.id }); };
+function dsendDrop() { const L = G.log; dsend({ e: 'd', n: L[L.length - 2], x: L[L.length - 1] }); }
+function dview(state, title, sub) { // une seule fenêtre : salon, attente, résultat
+  const m = $('#mn-m-duel'); m.classList.add('on'); m.dataset.s = state; $('#dl-t').textContent = title; $('#dl-s').textContent = sub || ''; $('#dl-new').textContent = state === 'end' ? 'Nouveau duel' : 'Créer un salon'; if (state === 'menu') $('#dl-code').textContent = '';
+}
+export function openDuel() {
+  if (!H.online()) return H.toast('Le duel demande une connexion');
+  duelClose(); dview('menu', 'Duel 1v1', 'Même graine, 2 minutes, le meilleur score gagne.'); $('#dl-code').textContent = ''; $('#dl-in').value = '';
+}
+function duelClose() { if (duel) { clearInterval(duel.tm); if (duel.ch) { try { duel.ch.send({ e: 'bye', id: duel.id }); } catch (e) { /* ignore */ } const c = duel.ch; setTimeout(() => c.close(), 300); } } duel = null; }
+function duelNew(role, code) {
+  duelClose(); duel = { role, code, id: Math.random().toString(36).slice(2, 8), name: H.name() || 'Invité', oppName: '', dur: 120, phase: 'lobby', op: null, me: null, lastMsg: 0, ch: null };
+  duel.ch = channel('duel-' + code, duelMsg, () => { if (duel && duel.phase !== 'done') { const was = duel.phase; if (was === 'lobby') dview('menu', 'Connexion impossible', 'Vérifie ta connexion puis réessaie.'); else if (was === 'play' || was === 'count') duelResult('forfait'); } });
+  return duel;
+}
+function duelHost() {
+  const code = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b & 31]).join(''), d = duelNew('host', code);
+  d.seed = (Math.random() * 2 ** 32) >>> 0; dview('wait', 'Salon créé', 'Donne ce code à ton adversaire :'); $('#dl-code').textContent = code;
+  d.tm = setInterval(() => dsend({ e: 'hello', name: d.name }), 1500); dsend({ e: 'hello', name: d.name });
+}
+function duelJoin(code) {
+  code = code.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length !== 4) return H.toast('Le code a 4 caractères');
+  const d = duelNew('guest', code); dview('wait', 'Connexion au salon…', 'Code ' + code); $('#dl-code').textContent = code;
+  dsend({ e: 'join', name: d.name }); d.tm = setTimeout(() => { if (duel === d && d.phase === 'lobby') { duelClose(); dview('menu', 'Salon introuvable', 'Aucun joueur n\'attend avec ce code.'); } }, 12000);
+}
+function duelMsg(m) {
+  if (!duel || !m || m.id === duel.id) return; const d = duel;
+  if (d.phase === 'lobby') {
+    if (d.role === 'host' && m.e === 'join' && !d.guest) { d.guest = m.id; d.oppName = String(m.name || 'Joueur').slice(0, 16); dsend({ e: 'go', to: m.id, seed: d.seed, dur: d.dur, name: d.name }); duelStart(); }
+    else if (d.role === 'guest' && m.e === 'hello' && !d.helloSeen) { d.helloSeen = true; dsend({ e: 'join', name: d.name }); }
+    else if (d.role === 'guest' && m.e === 'go' && m.to === d.id) { d.oppName = String(m.name || 'Joueur').slice(0, 16); d.seed = m.seed >>> 0; d.dur = Math.min(300, Math.max(30, +m.dur || 120)); duelStart(); }
+    else if (d.role === 'guest' && m.e === 'go' && m.to !== d.id) { duelClose(); dview('menu', 'Salon complet', 'Cet adversaire a déjà quelqu\'un.'); }
+    return;
+  }
+  d.lastMsg = performance.now(); const o = d.op; if (!o) return;
+  if (m.e === 'd') { o.ev.push([m.n | 0, m.x | 0]); o.known = Math.max(o.known, m.n | 0); }
+  else if (m.e === 's') { o.known = Math.max(o.known, m.n | 0); if (m.ov) o.over = true; }
+  else if (m.e === 'f') { o.final = m.sc | 0; o.known = Math.max(o.known, m.n | 0); duelCheck(); }
+  else if (m.e === 'bye' && o.final == null && d.phase !== 'done') duelResult('forfait');
+}
+function duelStart() {
+  const d = duel; clearInterval(d.tm); d.phase = 'count'; d.cd = 3.2; d.lastCd = 4; d.hb = 0; d.lastMsg = performance.now();
+  $('#mn-m-duel').classList.remove('on'); open(true); newRun(d.seed, true, { duel: true }); ended = false;
+  d.op = { G: F.newGame(d.seed), ev: [], i: 0, known: 0, final: null, over: false };
+}
+function stepOpp() { // l'adversaire rejoue ses lâchers, calé sur mon nombre de pas (jamais plus loin que ce qu'il m'a annoncé)
+  const o = duel.op, tgt = Math.min(duel.me != null ? o.known : G.n, o.known); let k = 0;
+  while (o.G.n < tgt && k++ < 800 && !o.G.over) { const ev = o.ev[o.i]; if (ev && o.G.n >= ev[0]) { if (ev[1] < 0) F.swapHold(o.G); else F.drop(o.G, ev[1] / 1000); o.i++; } else F.step(o.G); }
+  o.G.ev.length = 0;
+}
+function duelTick(dt) {
+  const d = duel; if (!d) return;
+  if (d.phase === 'count') { d.cd -= dt; const c = Math.ceil(d.cd); if (c !== d.lastCd && c >= 1) { d.lastCd = c; say(String(c), 'DUEL · ' + d.oppName.toUpperCase(), CY); A.select(); } if (d.cd <= 0) { d.phase = 'play'; d.lastMsg = performance.now(); say('GO !', '', AM); A.win(); } return; }
+  if (d.phase !== 'play') { if (d.phase === 'done') stepOpp(); return; }
+  F.tick(G, slow > 0 ? dt * 0.3 : dt); stepOpp();
+  if ((d.hb += dt) >= 1) { d.hb = 0; dsend({ e: 's', n: G.n, sc: G.score, ov: G.over }); }
+  if (G.n >= d.dur * 120) duelFinish();
+  if (d.me == null && performance.now() - d.lastMsg > 15000) duelResult('forfait'); // plus aucun signe de l'adversaire
+}
+function duelFinish() {
+  const d = duel; if (!d || d.me != null) return; d.me = G.score; dsend({ e: 'f', sc: G.score, n: G.n });
+  if (d.op.final == null) say('EN ATTENTE…', 'LA PARTIE DE L\'ADVERSAIRE SE TERMINE', CY); duelCheck();
+  d.wait = setTimeout(() => { if (duel === d && d.phase !== 'done') duelResult('forfait'); }, 20000);
+}
+function duelCheck() { const d = duel; if (d && d.me != null && d.op.final != null && d.phase !== 'done') duelResult(d.me > d.op.final ? 'win' : d.me < d.op.final ? 'lose' : 'draw'); }
+function duelResult(r) {
+  const d = duel; if (!d || d.phase === 'done') return; d.phase = 'done'; clearTimeout(d.wait); ended = true;
+  const mine = d.me != null ? d.me : G.score, theirs = d.op.final != null ? d.op.final : d.op.G.score;
+  setTimeout(() => { if (duel !== d) return; (r === 'win' || r === 'forfait' ? A.win : A.fail)(); dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : r === 'lose' ? 'Défaite' : 'Égalité', `Toi ${fmt(mine)} · ${d.oppName} ${fmt(theirs)}`); }, 500);
 }
 export const ghostOn = () => !!sv.ghost;
 export const setGhost = (v) => { sv.ghost = !!v; save(); };
@@ -756,7 +836,7 @@ export function open(fresh) { // fresh : on va lancer autre chose qu'une partie 
   else newRun();
   last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
-function close() { save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
+function close() { if (duel) duelClose(); save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
   Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -768,6 +848,9 @@ export function init(opts) {
   const click = (el, f) => $(el).addEventListener('click', () => { A.ui(); H.vib(9); f(); });
   document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.addEventListener('click', () => { if (G && G.rep) { rpSpeed(+b.dataset.s); A.select(); } }));
   click('#mn-rpp', () => { const R = G && G.rep; if (!R) return; if (R.done) { const run = R.run; openReplay(run); } else { R.speed = R.speed ? 0 : +(document.querySelector('#mn-rp [data-s].on') || { dataset: { s: 2 } }).dataset.s; $('#mn-rpp').textContent = R.speed ? '❚❚' : '▶'; } });
+  click('#dl-new', () => { if ($('#mn-m-duel').dataset.s === 'end') { duelClose(); close(); openDuel(); } else duelHost(); });
+  click('#dl-join', () => duelJoin($('#dl-in').value));
+  click('#dl-x', () => { $('#mn-m-duel').classList.remove('on'); if (isOpen && G && G.duel) close(); else duelClose(); });
   click('#mn-sbc', () => { if (G && G.sandbox) { G.bodies.length = 0; A.select(); } });
   click('#mn-back', () => { saveRun(); close(); }); // la partie est gardée : on la reprend en revenant
   click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !G.nop && !ended && G.drops > 0) endRun(); else close(); });
