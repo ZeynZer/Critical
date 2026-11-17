@@ -20,6 +20,9 @@ alter table public.players add column if not exists profile_at timestamptz;
 -- temps de jeu actif en secondes (déclaré par l'appareil, mais borné par le temps réellement écoulé : voir report_playtime)
 alter table public.players add column if not exists playtime integer not null default 0;
 alter table public.players add column if not exists play_at timestamptz;
+-- présence (vu en ligne il y a moins de 100 s) et « ne pas déranger » pour les invitations de duel
+alter table public.players add column if not exists seen_at timestamptz;
+alter table public.players add column if not exists no_duel boolean not null default false;
 create unique index if not exists players_name_key on public.players (lower(name));
 
 create table if not exists public.scores (
@@ -84,13 +87,36 @@ begin
   return json_build_object('rank', v_rank, 'total', v_total, 'best', v_best);
 end $$;
 
+-- ===== Social : likes, présence, invitations de duel =====
+create table if not exists public.likes (
+  from_id uuid not null references public.players (id) on delete cascade,
+  to_id uuid not null references public.players (id) on delete cascade,
+  at timestamptz not null default now(),
+  primary key (from_id, to_id)
+);
+create index if not exists likes_to on public.likes (to_id);
+-- une seule invitation en attente par joueur invité ; le journal sert aux limites anti-spam
+create table if not exists public.challenges (
+  to_id uuid primary key references public.players (id) on delete cascade,
+  from_id uuid not null references public.players (id) on delete cascade,
+  code text not null, at timestamptz not null default now()
+);
+create table if not exists public.challenge_log (
+  from_id uuid not null references public.players (id) on delete cascade,
+  to_id uuid not null references public.players (id) on delete cascade,
+  at timestamptz not null default now(), declined boolean not null default false
+);
+create index if not exists challenge_log_from on public.challenge_log (from_id, at);
+alter table public.likes enable row level security; alter table public.challenges enable row level security; alter table public.challenge_log enable row level security;
+revoke all on public.likes, public.challenges, public.challenge_log from anon, authenticated;
+
 -- Lire une page du classement (50 lignes par défaut, 100 au plus). badge = premier astre de la vitrine du joueur.
 drop function if exists public.leaderboard(text, integer, integer); -- le type de retour a changé (colonne badge)
 create or replace function public.leaderboard(p_board text, p_offset integer default 0, p_limit integer default 50)
-returns table (rank bigint, name text, score integer, sector integer, tier integer, badge text)
+returns table (rank bigint, name text, score integer, sector integer, tier integer, badge text, online boolean)
 language sql stable security definer set search_path = public as $$
-  select r.rank, r.name, r.score, r.sector, r.tier, r.badge from (
-    select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier, p.featured[1] as badge
+  select r.rank, r.name, r.score, r.sector, r.tier, r.badge, r.online from (
+    select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier, p.featured[1] as badge, coalesce(p.seen_at > now() - interval '100 seconds', false) as online
     from scores s join players p on p.id = s.player_id where s.board = p_board
   ) r order by r.rank offset greatest(p_offset, 0) limit least(greatest(p_limit, 1), 100)
 $$;
@@ -125,14 +151,18 @@ begin
 end $$;
 
 -- Voir le profil public d'un joueur (par pseudo) : null s'il n'existe pas.
-create or replace function public.get_profile(p_name text) returns json
+drop function if exists public.get_profile(text); -- la signature a changé (pour savoir si je l'ai liké)
+create or replace function public.get_profile(p_name text, p_secret text default null) returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object('name', p.name, 'motto', p.motto, 'featured', to_json(p.featured), 'codex', p.codex, 'since', p.created_at,
     'score', s.score, 'sector', s.sector,
     'tier', (select max(m.tier) from scores m where m.player_id = p.id), 'playtime', p.playtime,
     'rank', case when s.score is null then null else (select count(*) + 1 from scores o where o.board = 'all' and o.score > s.score) end,
     'total', (select count(*) from scores o where o.board = 'all'),
-    'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'))
+    'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'),
+    'likes', (select count(*) from likes l where l.to_id = p.id),
+    'liked', exists (select 1 from likes l join players me on me.id = l.from_id where l.to_id = p.id and me.secret_hash = critical_hash(p_secret)),
+    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel)
   from players p left join scores s on s.player_id = p.id and s.board = 'all'
   where lower(p.name) = lower(btrim(p_name))
 $$;
@@ -182,5 +212,80 @@ begin
   return json_build_object('playtime', v_new);
 end $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity() to anon, authenticated;
+
+-- « Je suis là » (toutes les ~30 s tant que l'appli est ouverte) : renvoie l'invitation de duel éventuelle (valable 2 minutes).
+create or replace function public.pulse(p_secret text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_out json;
+begin
+  update players set seen_at = now() where secret_hash = critical_hash(p_secret) returning id into v_id;
+  if v_id is null then return null; end if;
+  delete from challenges where at < now() - interval '2 minutes';
+  select json_build_object('from', pf.name, 'code', c.code, 'age', extract(epoch from now() - c.at)) into v_out
+    from challenges c join players pf on pf.id = c.from_id where c.to_id = v_id;
+  return json_build_object('duel', v_out);
+end $$;
+
+-- Liker / ne plus liker le profil d'un joueur (pas soi-même ; 30 changements par heure au plus).
+create or replace function public.like_player(p_secret text, p_name text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid; v_to uuid; v_liked boolean;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret); if v_me is null then raise exception 'no_profile'; end if;
+  select id into v_to from players where lower(name) = lower(btrim(p_name)); if v_to is null then raise exception 'not_found'; end if;
+  if v_to = v_me then raise exception 'self'; end if;
+  if (select count(*) from likes where from_id = v_me and at > now() - interval '1 hour') >= 30 then raise exception 'too_fast'; end if;
+  if exists (select 1 from likes where from_id = v_me and to_id = v_to) then delete from likes where from_id = v_me and to_id = v_to; v_liked := false;
+  else insert into likes (from_id, to_id) values (v_me, v_to); v_liked := true; end if;
+  return json_build_object('liked', v_liked, 'likes', (select count(*) from likes where to_id = v_to));
+end $$;
+
+-- Inviter un joueur en ligne à un duel (le code de salon est créé par l'appelant). Limites : joueur en ligne et ouvert aux invitations,
+-- une invitation en attente à la fois chez lui, 60 s entre deux invitations au même joueur, 8 par heure, 15 min de pause après un refus.
+create or replace function public.challenge(p_secret text, p_name text, p_code text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid; v_to uuid; v_seen timestamptz; v_off boolean;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret); if v_me is null then raise exception 'no_profile'; end if;
+  if p_code is null or p_code !~ '^[A-Z0-9]{4}$' then raise exception 'invalid_code'; end if;
+  select id, seen_at, no_duel into v_to, v_seen, v_off from players where lower(name) = lower(btrim(p_name)); if v_to is null then raise exception 'not_found'; end if;
+  if v_to = v_me then raise exception 'self'; end if;
+  if v_seen is null or v_seen < now() - interval '100 seconds' then raise exception 'offline'; end if;
+  if v_off then raise exception 'no_duel'; end if;
+  delete from challenge_log where at < now() - interval '1 day';
+  if exists (select 1 from challenge_log where from_id = v_me and to_id = v_to and declined and at > now() - interval '15 minutes') then raise exception 'declined_recently'; end if;
+  if exists (select 1 from challenge_log where from_id = v_me and to_id = v_to and not declined and at > now() - interval '60 seconds') then raise exception 'too_fast'; end if;
+  if (select count(*) from challenge_log where from_id = v_me and not declined and at > now() - interval '1 hour') >= 8 then raise exception 'too_many'; end if;
+  if exists (select 1 from challenges where to_id = v_to and from_id <> v_me and at > now() - interval '2 minutes') then raise exception 'busy'; end if;
+  insert into challenges (to_id, from_id, code) values (v_to, v_me, p_code) on conflict (to_id) do update set from_id = excluded.from_id, code = excluded.code, at = now();
+  insert into challenge_log (from_id, to_id) values (v_me, v_to);
+  return json_build_object('ok', true);
+end $$;
+
+-- Répondre à l'invitation reçue : accepter renvoie le code du salon, refuser prévient l'expéditeur de ne pas insister (15 min).
+create or replace function public.challenge_reply(p_secret text, p_accept boolean) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid; c challenges; v_from text;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret); if v_me is null then raise exception 'no_profile'; end if;
+  delete from challenges where to_id = v_me and at > now() - interval '2 minutes' returning * into c;
+  if c.to_id is null then raise exception 'expired'; end if;
+  if p_accept then select name into v_from from players where id = c.from_id; return json_build_object('code', c.code, 'from', v_from); end if;
+  insert into challenge_log (from_id, to_id, declined) values (c.from_id, v_me, true);
+  return json_build_object('declined', true);
+end $$;
+
+-- L'expéditeur annule son invitation (il ferme le salon avant réponse).
+create or replace function public.challenge_cancel(p_secret text) returns void
+language sql security definer set search_path = public as $$
+  delete from challenges where from_id = (select id from players where secret_hash = critical_hash(p_secret))
+$$;
+
+-- Accepter ou non les invitations de duel (« ne pas déranger »).
+create or replace function public.set_no_duel(p_secret text, p_value boolean) returns void
+language sql security definer set search_path = public as $$
+  update players set no_duel = coalesce(p_value, false) where secret_hash = critical_hash(p_secret)
+$$;
+
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean) to anon, authenticated;

@@ -27,6 +27,7 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 - **Cible et fantôme** : en partie, le joueur juste au-dessus de ton record sert de cible (« encore N pts »), dépassée = annonce. Option « Fantôme du rival » (réglages) : contours de sa partie rejouée en parallèle. Fil d'activité et part réelle des joueurs ayant atteint trou noir/galaxie dans le classement (schema.sql : `rival`, `activity`, `rarity`).
 - **Duel 1v1** : un joueur crée un salon (code à 4 caractères), l'autre le rejoint. Même graine, 2 minutes, chacun joue sa cuve ; les lâchers sont échangés par Supabase Realtime (broadcast, sans dépendance : `js/realtime.js`) et rejoués en contours chez l'adversaire. Score comparé à la fin, forfait si déconnexion. Aucun gain ni déblocage.
 - **Accueil** : trois pages qui glissent (Social · Jouer · Collection), le trou noir est le bouton Jouer. **Éclats** : monnaie du jeu (gain ×10 par rapport à l'ancienne poussière d'étoile, ancien solde converti une fois), dépensée en thèmes ; seuls puits actuels : les thèmes.
+- **Social** : likes sur les profils (mission « Like le profil d'un joueur »), point vert « en ligne » (classement et profil, présence par `pulse` toutes les 30 s), invitation à un duel depuis le profil d'un joueur en ligne. Anti-spam côté serveur : une invitation en attente par joueur, 60 s entre deux au même joueur, 8 par heure, 15 min de pause après un refus, option « Invitations de duel » dans les réglages, bannière discrète, jamais pendant une partie. Portrait uniquement (consigne « tourne ton téléphone » en paysage).
 - **Missions** (trois onglets) : missions du jour ; jours de connexion (« Jour N » = N-ᵉ jour joué, pas de série à ne pas casser, récompenses sans limite de temps) ; paliers de temps de jeu actif (20 min, 1 h, 5 h…). Récompenses : poussière d'étoile et thèmes (un thème déjà possédé est converti en poussière).
 - **Thèmes d'arrière-plan** achetés en poussière d'étoile (✦), gagnée en jouant ou offerte par les missions. Le **temps de jeu** apparaît sur le profil public.
 - **Classement mondial**, classement du défi du jour et **profils publics** : on touche un joueur pour voir sa vitrine (jusqu'à 3 astres découverts, animés), sa devise et ses stats ; chacun peut modifier son profil.
@@ -37,7 +38,7 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 ## Structure
 - `js/fusion.js` : moteur pur et déterministe (physique, règles, `replay()`), testé dans Node
 - `js/mine.js` : rendu canvas, effets, écrans du jeu, thèmes, tutoriel, défi du jour, codex
-- `js/home.js` : écran d'accueil · `js/blackhole.js` : le trou noir de l'accueil (rayons de lumière courbés par la gravité, calculés une fois en WebGL puis animés ; l'image `assets/blackhole.webp` s'affiche d'abord et reste seule sans WebGL ou en mouvement réduit) · `js/app.js` : démarrage, réglages, branchement des modules
+- `js/home.js` : écran d'accueil · `js/app.js` : démarrage, réglages, branchement des modules
 - `js/quests.js` : missions du jour · `js/rank.js` + `js/config.js` : classement · `js/audio.js` : sons synthétisés, session « ambiance » (respecte le mode silencieux, se mélange aux autres sons), mise en veille en arrière-plan
 
 ## Classement en ligne (Supabase)
@@ -49,8 +50,8 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 
 Les tables sont fermées (RLS sans policy) : la clé publique ne peut appeler que 7 fonctions (`register`, `submit_score`, `leaderboard`, `my_rank`, `set_profile`, `get_profile`, `report_playtime`) qui valident leurs entrées. La vitrine d'un profil est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu. Le temps de jeu est déclaré par l'appareil mais borné par le temps réellement écoulé depuis le dernier envoi. Chaque score est stocké avec sa graine et son journal de lâchers, que `replay()` peut rejouer à l'identique pour une vérification côté serveur.
 
-## Image du trou noir
-`assets/blackhole.webp` est générée avec le même moteur que l'animation, en très haute définition : lance un serveur local puis `node tools/bake-blackhole.mjs` (nécessite playwright) pour la régénérer après une modification de `js/blackhole.js`.
+## Logo et icônes
+`icons/logo.png` est le logo (1024 px) ; toutes les tailles (`icons/icon-*.png`, versions maskable, `favicon.ico`, `assets/social.png`) en sont dérivées, et `assets/hole.webp` (le trou noir de l'accueil) en est l'anneau détouré.
 
 ## Icône
 Remplace `assets-src/icon-master.png` (1024×1024) puis lance `python3 tools/make-icons.py` (pip install pillow).

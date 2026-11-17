@@ -136,3 +136,9 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 #splash.out{opacity:0;pointer-events:none}
 @keyframes sp-in{to{opacity:1}}@keyframes sp-pu{50%{opacity:.35}}
 .credits{font-size:11px!important;line-height:1.6;color:rgba(238,244,255,.38)!important;margin-top:4px!important}.credits a{color:inherit;text-decoration:none}
+/* portrait uniquement : en paysage (téléphone), tout est masqué derrière une consigne */
+#rot{position:fixed;inset:0;z-index:99;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#05060f;color:#fff;text-align:center}
+#rot svg{width:54px;height:54px;stroke:#fff;fill:none;stroke-width:1.6;margin-bottom:6px;animation:rotp 2.4s ease-in-out infinite}
+@keyframes rotp{0%,100%{transform:rotate(90deg)}45%,60%{transform:rotate(0)}}
+#rot span{color:rgba(238,244,255,.65);font-size:14px}
+@media (orientation:landscape) and (max-height:520px){#rot{display:flex}}

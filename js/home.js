@@ -1,7 +1,6 @@
 // Critical — écran d'accueil « Liquid Glass ».
 // Non destructif : il réorganise les boutons EXISTANTS (mêmes identifiants, mêmes actions) et ajoute des décors.
 // Il doit être lancé après CH.init() et ED.init() (qui ajoutent leurs boutons au menu).
-import { createBlackHole } from './blackhole.js';
 const $ = (s, r = document) => r.querySelector(s);
 const make = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
 const ico = (p) => `<svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -24,7 +23,8 @@ const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path 
 
 const CSS = `
 #s-title.hm{padding:0;overflow:hidden}
-.hm-bh{position:absolute;pointer-events:none;display:block;transition:opacity .9s ease}.hm-bh-gl{opacity:0}.hm-bh-gl.on{opacity:1}
+.hm-bh{position:absolute;pointer-events:none;display:block;filter:drop-shadow(0 0 46px rgba(200,90,255,.38));animation:hm-hb 7s ease-in-out infinite}
+@keyframes hm-hb{50%{transform:scale(1.035);filter:drop-shadow(0 0 70px rgba(255,120,220,.55)) brightness(1.08)}}
 #s-title.hm>*{z-index:1}
 #s-title.hm .hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .hm-space{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -75,17 +75,13 @@ const CSS = `
 .hm-pg:nth-child(2) .logo{margin:calc(clamp(0px,100vh - 700px,40px)) 0 0;text-align:center;font:900 min(13vw,50px)/1 var(--disp);letter-spacing:.03em;background:linear-gradient(100deg,#fff 0%,#7ff6ff 28%,#ff7be5 52%,#fff 76%,#7ff6ff 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:hm-lg 9s linear infinite}
 .hm-pg:nth-child(2) .tag{margin:6px 0 0;text-align:center;color:rgba(238,244,255,.7);font-size:14px}
 @keyframes hm-lg{to{background-position:-250% 0}}
-.hm-hole{position:absolute;inset:0;pointer-events:none;opacity:var(--ho,1);transform:translate3d(var(--hx,0),0,0) scale(var(--hs,1));transition:transform .35s cubic-bezier(.2,.9,.2,1);will-change:transform,opacity}
+.hm-hole{position:absolute;inset:0;pointer-events:none;opacity:var(--ho,1);transform:translate3d(var(--hx,0),0,0) rotate(var(--hr,0deg)) scale(var(--hs,1));transition:transform .35s cubic-bezier(.2,.9,.2,1);will-change:transform,opacity}
 #s-title.hm:has(#b-mine:active){--hs:1.08}
 .hm-slot{position:relative;flex:none;width:min(80vw,340px,40vh);height:min(80vw,340px,40vh);margin:2px 0 0}
 .hm-core-btn{position:absolute;inset:27%;border-radius:50%;border:0;background:none;color:#fff;cursor:pointer;display:grid;place-items:center;transition:transform .5s cubic-bezier(.2,1.6,.4,1);-webkit-tap-highlight-color:transparent}
 .hm-core-btn:active{transform:scale(.9)}
 .hm-core-btn .hm-t{position:relative;font:900 clamp(15px,5.2vw,21px)/1 var(--disp);letter-spacing:.2em;padding-left:.2em;text-transform:uppercase;text-shadow:0 0 14px rgba(255,190,110,.9),0 0 30px rgba(255,120,60,.55);animation:hm-bt 3.6s ease-in-out infinite}
 @keyframes hm-bt{50%{opacity:.72;letter-spacing:.26em}}
-.hm-ev{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 1.5px rgba(255,214,160,.5),0 0 28px rgba(255,150,70,.5),inset 0 0 34px rgba(0,0,0,.85);animation:hm-ev 3.6s ease-in-out infinite}
-.hm-ev::after{content:'';position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(from 0deg,rgba(255,255,255,0) 0 62%,rgba(255,226,170,.95) 80%,rgba(255,255,255,0) 92%);-webkit-mask:radial-gradient(circle,transparent 62%,#000 64%,#000 70%,transparent 72%);mask:radial-gradient(circle,transparent 62%,#000 64%,#000 70%,transparent 72%);animation:hm-sp 5s linear infinite}
-@keyframes hm-ev{50%{box-shadow:0 0 0 1.5px rgba(255,214,160,.8),0 0 46px rgba(255,150,70,.8),inset 0 0 34px rgba(0,0,0,.85)}}
-@keyframes hm-sp{to{transform:rotate(360deg)}}
 .hm-rec{margin:0;text-align:center;font:600 13px var(--font);color:rgba(238,244,255,.72)}.hm-rec small{font-size:13px}
 .hm-chips{display:flex;gap:12px;margin-top:18px}.hm-chips>*{flex:1;min-width:0}
 .hm-chip{height:64px;display:flex;align-items:center;gap:10px;padding:0 14px 0 10px;border-radius:24px;text-align:left}
@@ -109,7 +105,7 @@ const CSS = `
 @keyframes hm-gm{50%{transform:rotate(-8deg) scale(1.08)}}
 #s-title.hm .hm-pill.pop{animation:hm-pop .7s cubic-bezier(.2,1.6,.4,1)}@keyframes hm-pop{30%{transform:scale(1.16);box-shadow:0 0 34px rgba(120,200,255,.8)}}
 @media (max-height:700px){.hm-pg{padding-top:calc(env(safe-area-inset-top,0px) + 68px);gap:10px}.hm-camp{height:72px!important}.hm-pg:nth-child(2) .tag{display:none}.hm-chips{margin-top:10px}.hm-chip,#s-title.hm #b-quests{height:56px}.hm-hd{margin-top:2px}}
-@media (prefers-reduced-motion:reduce){.hm-core-btn .hm-t,.hm-ev,.hm-ev::after,.hm-gem{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.hm-core-btn .hm-t,.hm-bh,.hm-gem{animation:none!important}}
 `;
 
 
@@ -167,20 +163,14 @@ const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return 
 // en s'approchant : la lumière est courbée). Un seul canvas, 30 images/s, à l'arrêt dès que l'écran n'est pas visible.
 function space(cv, scr) {
   const x = cv.getContext('2d', { alpha: false }), TAU = Math.PI * 2; let W = 0, H = 0, last = 0;
-  // Trou noir : l'image pré-rendue en très haute qualité est là dès la première image ; la version animée (WebGL, cuite en arrière-plan
-  // par petites tranches) la remplace en fondu quand elle est prête. Sans WebGL, ou si l'on préfère moins de mouvement : l'image seule.
-  const still = document.createElement('img'); still.className = 'hm-bh'; still.alt = ''; still.src = 'assets/blackhole.webp'; still.decoding = 'async'; const hole = make('div', 'hm-hole'); cv.after(hole); hole.append(still);
-  const glc = document.createElement('canvas'); glc.className = 'hm-bh hm-bh-gl'; hole.append(glc);
-  let bh = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? null : createBlackHole(glc);
-  if (!bh) glc.remove();
-  const DS = [640, 480, 360, 270]; // tailles d'affichage, abaissées si l'appareil peine ; la physique cuite, elle, ne change pas
-  let ds = 0, bad = 0, ema = 33, cx = 0, cy = 0, tcy = 0, SZ = 340, since = 99, shown = false;
+  // Trou noir : l'image du logo (assets/hole.webp), posée sur le bouton Jouer ; elle respire doucement et glisse avec les pages.
+  const still = document.createElement('img'); still.className = 'hm-bh'; still.alt = ''; still.src = 'assets/hole.webp'; still.decoding = 'async'; const hole = make('div', 'hm-hole'); cv.after(hole); hole.append(still);
+  let cx = 0, cy = 0, tcy = 0, SZ = 340, since = 99;
   const S = Array.from({ length: 230 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
   const place = () => { // le trou noir se pose sur l'emplacement du bouton Jouer
-    const sl = document.querySelector('.hm-slot'), r = sl && sl.getBoundingClientRect(); SZ = Math.min(W * 0.98, 440, sl && sl.clientWidth ? sl.clientWidth * 1.22 : 340);
+    const sl = document.querySelector('.hm-slot'), r = sl && sl.getBoundingClientRect(); SZ = Math.min(W * 0.98, 440, sl && sl.clientWidth ? sl.clientWidth * 1.04 : 340);
     cx = W / 2; tcy = r && r.height ? r.top + r.height / 2 : H * 0.3; if (!cy) cy = tcy;
-    for (const e of [still, bh && glc]) if (e) { e.style.width = e.style.height = SZ + 'px'; e.style.left = cx - SZ / 2 + 'px'; }
-    if (bh) bh.size(Math.min(DS[ds], Math.round(SZ * Math.min(window.devicePixelRatio || 1, 2.5))));
+    still.style.width = still.style.height = SZ + 'px'; still.style.left = cx - SZ / 2 + 'px';
   };
   const fit = () => { const k = Math.min(1.5, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); }; // l'échelle suit la taille réelle en pixels : la dernière rangée est couverte en entier même avec un ratio fractionnaire (2,625…)
   window.addEventListener('resize', () => { W = 0; since = 99; });
@@ -192,15 +182,7 @@ function space(cv, scr) {
     const gap = t - last, dt = Math.min(0.1, gap / 1000) || 0.033; last = t;
     if (++since > 20) { since = 0; place(); } // se recale sur le titre (qui bouge à l'ouverture et selon la taille de l'écran)
     if (Math.abs(tcy - cy) > 0.3) cy += (tcy - cy) * 0.2; // glisse vers sa place au lieu de sauter quand le titre finit son animation
-    still.style.top = cy - SZ / 2 + 'px'; if (bh) glc.style.top = cy - SZ / 2 + 'px';
-    if (bh && !bh.lost) {
-      if (!bh.ready) bh.step(); // cuisson : une petite tranche par image
-      else {
-        if (gap < 200) ema += (gap - ema) * 0.05; // cadence réelle : sous ~18 images/s, on réduit la taille d'affichage, puis on revient à l'image fixe
-        if (ema > 55) { if (++bad > 60) { bad = 0; ema = 33; if (++ds >= DS.length) { bh = null; glc.remove(); still.style.opacity = 1; } else since = 99; } } else bad = 0;
-        if (bh) { bh.draw(t / 1000); if (!shown) { shown = true; glc.classList.add('on'); setTimeout(() => { still.style.opacity = 0; }, 900); } }
-      }
-    } else if (bh && bh.lost) { bh = null; glc.remove(); still.style.opacity = 1; }
+    still.style.top = cy - SZ / 2 + 'px';
     const U = H * 0.8, T = t / 1000;
     const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0a0b22'); bg.addColorStop(0.55, '#070818'); bg.addColorStop(1, '#03030c'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
     x.globalCompositeOperation = 'lighter';
@@ -248,7 +230,7 @@ export function init() {
   const tag = $('.tag', wrap); if (tag) tag.classList.add('hm-in');
   const slot = make('div', 'hm-slot'), play = $('#b-mine') || $('#b-endless');
   const rec = play && ($('#b-mine-s', play) || $('#b-endless-s', play)), title = play && titleOf(play);
-  if (play) { reskin(play, ['hm-core-btn']); play.textContent = ''; play.setAttribute('aria-label', 'Jouer'); play.append(make('i', 'hm-ev'), title || make('span', 'hm-t', 'Jouer')); if (title) title.textContent = 'Jouer'; slot.append(play); }
+  if (play) { reskin(play, ['hm-core-btn']); play.textContent = ''; play.setAttribute('aria-label', 'Jouer'); play.append(title || make('span', 'hm-t', 'Jouer')); if (title) title.textContent = 'Jouer'; slot.append(play); }
   const chips = make('div', 'hm-chips'), daily = $('#b-daily'), qb = $('#b-quests');
   if (daily) { reskin(daily, ['gl', 'hm-chip', 'hm-in']); const t = titleOf(daily), s = daily.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); daily.textContent = ''; daily.append(make('span', 'hm-sbi', ico(ICONS.cal)), tx); live = make('span', 'hm-live'); daily.append(live); chips.append(daily); }
   if (qb) { qb.classList.remove('glass'); qb.classList.add('gl', 'hm-chip', 'hm-in'); chips.append(qb); }
@@ -259,7 +241,7 @@ export function init() {
   const tabs = make('nav', 'gl hm-tabs hm-in', '<i class="hm-ind"></i>'); tabs.setAttribute('aria-label', 'Navigation');
   PAGES.forEach(([n, ic], i) => { const b = make('button', 'hm-tab', ico(ic) + `<span>${n}</span>`); b.addEventListener('click', () => pager.scrollTo({ left: i * pager.clientWidth, behavior: 'smooth' })); tabs.append(b); });
   scr.append(tabs);
-  const go = () => { const p = pager.scrollLeft / (pager.clientWidth || 1); scr.style.setProperty('--p', p.toFixed(3)); scr.style.setProperty('--ho', Math.max(0, 1 - Math.abs(p - 1) * 1.5).toFixed(3)); scr.style.setProperty('--hx', ((1 - p) * 34).toFixed(1) + 'vw'); tabs.querySelectorAll('.hm-tab').forEach((b, i) => b.classList.toggle('on', Math.abs(p - i) < 0.5)); };
+  const go = () => { const p = pager.scrollLeft / (pager.clientWidth || 1); scr.style.setProperty('--p', p.toFixed(3)); scr.style.setProperty('--ho', Math.max(0, 1 - Math.abs(p - 1) * 1.5).toFixed(3)); scr.style.setProperty('--hr', ((1 - p) * 26).toFixed(1) + 'deg'); scr.style.setProperty('--hx', ((1 - p) * 34).toFixed(1) + 'vw'); tabs.querySelectorAll('.hm-tab').forEach((b, i) => b.classList.toggle('on', Math.abs(p - i) < 0.5)); };
   pager.addEventListener('scroll', go, { passive: true });
   const center = () => { pager.style.scrollBehavior = 'auto'; pager.scrollLeft = pager.clientWidth; go(); pager.style.scrollBehavior = ''; };
   window.addEventListener('resize', center); requestAnimationFrame(center); setTimeout(center, 300);
