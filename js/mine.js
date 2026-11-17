@@ -544,10 +544,11 @@ function bang() { // milieu du saut : le nouveau secteur naît
   burst(cx, cy, 70, [220, 240, 255], B.u * 18, 1.1, 3.5); say(m[0], m[1], CY);
   A.rumble(); A.mult(Math.min(8, m[2])); H.vib([30, 40, 70]);
 }
+const land = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
 function frame(now) {
   raf = 0; if (!isOpen) return; FN++;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  update(dt); draw();
+  if (!land.matches) { update(dt); draw(); } // en paysage (téléphone) le jeu se fige derrière la consigne « tourne ton téléphone »
   raf = requestAnimationFrame(frame);
 }
 

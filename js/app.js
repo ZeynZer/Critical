@@ -19,6 +19,7 @@ const refresh = () => HOME.update({ dust: MINE.dust(), daily: MINE.daily(), code
 // son : débloqué par le premier geste (l'écran de démarrage en demande un) ; mise en veille et reprise gérées par audio.js
 A.setSfx(S.sfx); A.setMusic(S.mus);
 ['pointerdown', 'pointerup', 'click'].forEach((ev) => document.addEventListener(ev, () => { A.init(); A.resume(); }, { passive: true }));
+document.addEventListener('pointerdown', () => { try { screen.orientation.lock('portrait').catch(() => {}); } catch (e) { /* non supporté (iOS, bureau) : la consigne CSS prend le relais */ } }, { once: true });
 
 // réglages
 const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f(); });
