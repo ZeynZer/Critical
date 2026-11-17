@@ -10,14 +10,15 @@ export const NEUTRON = 9, HOLE = 10, GIANT = 8, SUN = 7;
 // Variantes rares : chance, à chaque création d'un astre de ce rang, d'obtenir sa version rare
 export const RARE = { 3: 1 / 120, 4: 1 / 150, 5: 1 / 150, 7: 1 / 120, 8: 1 / 110, 9: 1 / 90, 10: 1 / 40, 11: 1 / 25 };
 // Pouvoirs d'absorption : [rang maximum avalé, secondes entre deux repas, portée au-delà du contact].
-// Le trou noir avale les poussières et les orbes ; le quasar jusqu'aux astéroïdes ; la galaxie jusqu'aux lunes, de plus en plus loin, vite et gros selon sa rareté.
+// L'étoile bleue (soleil rare) brûle les poussières et les orbes. Le trou noir avale les poussières et les orbes ; le quasar jusqu'aux astéroïdes ; la galaxie jusqu'aux lunes, de plus en plus loin, vite et gros selon sa rareté.
 export const ABSORB = {
+  7: [null, [1, 4.0, 0]],                                                                              // soleil (aucun pouvoir) · étoile bleue : brûle poussières et orbes au contact
   10: [[1, 3.0, 0], [2, 1.6, 0.12]],                                                                  // trou noir · trou blanc
   11: [[2, 2.0, 0.15], [3, 1.2, 0.3]],                                                                // quasar · blazar
   12: [[3, 1.6, 0.2], [3, 1.3, 0.35], [4, 1.1, 0.5], [4, 0.9, 0.65], [5, 0.7, 0.85], [6, 0.5, 1.1]], // galaxies, de la plus courante à la critique
 };
 export const PULSE = [[4, 2.7, 8], [2.6, 3.4, 15]]; // étoile à neutrons · magnétar : [secondes entre deux impulsions, portée en rayons, force]
-export const absorbOf = (b) => { const t = b.k === 'c' && ABSORB[b.tier]; return t ? t[b.tier === MAX_TIER ? Math.min(b.v | 0, t.length - 1) : b.v ? 1 : 0] : null; };
+export const absorbOf = (b) => { const t = b.k === 'c' && ABSORB[b.tier]; return t ? t[b.tier === MAX_TIER ? Math.min(b.v | 0, t.length - 1) : b.v ? 1 : 0] || null : null; };
 // Une galaxie tire toujours sa rareté : spirale, barrée dorée, émeraude, annulaire, prismatique, critique
 export const GALAXY = [0.62, 0.25, 0.09, 0.03, 0.009, 0.001];
 const SLOP = 0.012; // chevauchement toléré : sans lui, la correction de position fait trembler et ramper les piles
@@ -178,7 +179,7 @@ function collide(G) {
 // Les absorbeurs (trou noir, quasar, galaxie) avalent le plus proche de leurs petits voisins, puis doivent attendre. Jamais un autre absorbeur.
 function absorb(G) {
   for (const a of G.bodies) {
-    if (a.dead || a.tier < HOLE || a.et > 0) continue; const pw = absorbOf(a); if (!pw) continue;
+    if (a.dead || a.et > 0) continue; const pw = absorbOf(a); if (!pw) continue;
     let best = null, bd = 1e9;
     for (const o of G.bodies) {
       if (o === a || o.dead || o.k !== 'c' || o.tier > pw[0]) continue;

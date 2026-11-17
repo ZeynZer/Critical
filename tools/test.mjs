@@ -94,7 +94,8 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
     for (let k = 0; k < secs * 60; k++) F.tick(g, 1 / 60); return !g.bodies.some((o) => o.id === 2);
   };
   const CASES = [[10, 0, 0, 1], [10, 0, 1, 1], [10, 0, 2, 0], [10, 1, 2, 1], [10, 1, 3, 0], [11, 0, 2, 1], [11, 0, 3, 0], [11, 1, 3, 1], [11, 1, 4, 0],
-    [12, 0, 3, 1], [12, 0, 4, 0], [12, 2, 4, 1], [12, 2, 5, 0], [12, 5, 6, 1], [12, 5, 7, 0]];
+    [12, 0, 3, 1], [12, 0, 4, 0], [12, 2, 4, 1], [12, 2, 5, 0], [12, 5, 6, 1], [12, 5, 7, 0],
+    [7, 0, 1, 0], [7, 1, 1, 1], [7, 1, 2, 0]]; // le soleil ordinaire n'avale rien, l'étoile bleue brûle les orbes
   for (const [t, v, prey, ok] of CASES) assert.equal(eats(t, v, prey), !!ok, `absorbeur ${t}:${v} / proie de rang ${prey} : attendu ${ok ? 'avalée' : 'épargnée'}`);
   assert.ok(!eats(11, 0, 10) && !eats(12, 5, 11) && !eats(10, 1, 12), 'un absorbeur n\'en avale jamais un autre');
   // portée : une galaxie critique avale à distance, un trou noir ordinaire seulement au contact
