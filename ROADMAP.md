@@ -7,6 +7,8 @@ Fait : trou noir de l'accueil (physique cuite une fois en haute définition, ani
 
 Profondeur : absorbeurs (trou noir, quasar, galaxies selon leur rareté), étoiles rares (supergéante, magnétar, étoile bleue), Big Bang qui vide la cuve, centre de missions (jours de connexion, temps de jeu), temps de jeu sur le profil public. À équilibrer sur de vrais joueurs : puissances d'absorption, probabilités des nouvelles raretés, valeur des récompenses de missions.
 
+Bac à sable (tous les astres débloqués, sans mort ni score ni déblocage), révélation rare cinématique jouée une seule fois par variante (ensuite simple éclat), menu « ? » réduit à une frise visuelle et des boutons.
+
 Son : session « ambiance » (mode silencieux respecté, mélange avec la musique de l'utilisateur), suspension complète en arrière-plan et reprise en fondu, plus de battement de cœur en pause. Reste à faire : curseurs de volume, mixage (limiteur, plafond de voix, tampons réutilisés, baisse de la musique pendant les moments forts), musique liée au menu / jeu / danger / fin, catalogue de sons d'interface ; tests sur de vrais iPhone et Android.
 
 ## À faire, par priorité

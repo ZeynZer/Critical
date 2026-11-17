@@ -22,6 +22,7 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 - **Big Bang** : deux galaxies qui se touchent font disparaître tous les astres (points compris) : secteur vierge, puis saut de secteur.
 - **Raretés** : variantes rares de certains astres et six raretés de galaxie, probabilités affichées dans le codex.
 - **Défi du jour** : un objectif chronométré, le même pour tous (ex. « Crée une Géante rouge en moins de 2 min »).
+- **Bac à sable** : tous les astres débloqués (et ceux de base) en illimité ; pas de défaite, pas de score, aucun déblocage ni récompense. Les variantes rares ne se tirent pas au sort.
 - **Missions** (trois onglets) : missions du jour ; jours de connexion (« Jour N » = N-ᵉ jour joué, pas de série à ne pas casser, récompenses sans limite de temps) ; paliers de temps de jeu actif (20 min, 1 h, 5 h…). Récompenses : poussière d'étoile et thèmes (un thème déjà possédé est converti en poussière).
 - **Thèmes d'arrière-plan** achetés en poussière d'étoile (✦), gagnée en jouant ou offerte par les missions. Le **temps de jeu** apparaît sur le profil public.
 - **Classement mondial**, classement du défi du jour et **profils publics** : on touche un joueur pour voir sa vitrine (jusqu'à 3 astres découverts, animés), sa devise et ses stats ; chacun peut modifier son profil.

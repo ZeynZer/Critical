@@ -68,6 +68,7 @@ const CSS = `
 
 .hm-camp{width:100%;height:84px;display:flex;align-items:center;gap:16px;padding:0 20px 0 16px;border-radius:28px}
 .hm-camp .hm-tx .hm-t{font-size:15px;letter-spacing:.03em;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm-sbi{flex:none;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}.hm-sbi .hm-ic{width:26px;height:26px}
 .hm-ring{flex:none;position:relative;width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--c,#9b8cff) 0 var(--p,0%),rgba(255,255,255,.14) 0);display:grid;place-items:center;filter:drop-shadow(0 0 10px var(--c,#9b8cff))}
 .hm-ring::before{content:'';position:absolute;inset:5px;border-radius:50%;background:rgba(14,16,40,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
 .hm-ring b{position:relative;font:900 17px/1 var(--disp)}
@@ -241,6 +242,13 @@ export function init() {
     const t = titleOf(play, '#b-play-t'), s = $('#b-play-s', play), tx = make('span', 'hm-tx');
     ring = make('span', 'hm-ring', '<b>1</b>');
     tx.append(...grab(t, s)); play.textContent = ''; play.append(ring, tx); play.insertAdjacentHTML('beforeend', CHEV);
+  }
+
+  // Bac à sable : même rangée que l'ancienne campagne
+  const sbx = $('#b-sandbox');
+  if (sbx) {
+    reskin(sbx, ['gl', 'hm-camp', 'hm-in']); sbx.style.setProperty('--e', '.36s'); sbx.style.setProperty('--d', '2s');
+    const t = titleOf(sbx), s = sbx.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); sbx.textContent = ''; sbx.append(make('span', 'hm-sbi', ico(ICONS.casc)), tx); sbx.insertAdjacentHTML('beforeend', CHEV);
   }
 
   // Défi du jour + Noyaux : deux tuiles
