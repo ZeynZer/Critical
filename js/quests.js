@@ -1,5 +1,5 @@
 // Critical — centre de missions : missions du jour, jours de connexion, paliers de temps de jeu.
-//  • Missions du jour : trois missions tirées de la date (les mêmes pour tous), payées en poussière d'étoile (✦) ; les trois = 100 ✦ en plus.
+//  • Missions du jour : trois missions tirées de la date (les mêmes pour tous), payées en Éclats ; les trois = 1 000 Éclats en plus.
 //  • Connexion : « Jour N » = le N-ᵉ jour où tu as lancé le jeu. Pas de série à ne pas casser : sauter un jour ne fait rien perdre.
 //  • Temps de jeu : paliers de jeu réellement actif (20 min, 1 h, 5 h…).
 // Toute récompense reste récupérable sans limite de temps. Un thème déjà possédé est converti en poussière (moitié de son prix).
@@ -12,17 +12,17 @@ const $ = (s, r = document) => r.querySelector(s);
 const H = { today: () => '', grant: () => {}, toast: () => {}, vib: () => {}, playtime: () => 0, giveTheme: () => '', themeName: (id) => id };
 // [type, cible, récompense, libellé]
 const POOL = [
-  ['fusions', 80, 20, 'Réalise 80 fusions'], ['fusions', 160, 35, 'Réalise 160 fusions'],
-  ['depth', 4, 25, 'Atteins le secteur 4'], ['depth', 7, 40, 'Atteins le secteur 7'],
-  ['chain', 4, 20, 'Déclenche une chaîne ×4'], ['chain', 6, 35, 'Déclenche une chaîne ×6'],
-  ['score', 15000, 25, 'Marque 15 000 points en une partie'], ['score', 40000, 40, 'Marque 40 000 points en une partie'],
-  ['tier', 9, 25, 'Crée une Géante rouge'], ['tier', 11, 45, 'Crée un Trou noir'],
-  ['runs', 3, 20, 'Termine 3 parties'], ['daily', 1, 30, 'Réussis le défi du jour'],
+  ['fusions', 80, 200, 'Réalise 80 fusions'], ['fusions', 160, 350, 'Réalise 160 fusions'],
+  ['depth', 4, 250, 'Atteins le secteur 4'], ['depth', 7, 400, 'Atteins le secteur 7'],
+  ['chain', 4, 200, 'Déclenche une chaîne ×4'], ['chain', 6, 350, 'Déclenche une chaîne ×6'],
+  ['score', 15000, 250, 'Marque 15 000 points en une partie'], ['score', 40000, 400, 'Marque 40 000 points en une partie'],
+  ['tier', 9, 250, 'Crée une Géante rouge'], ['tier', 11, 450, 'Crée un Trou noir'],
+  ['runs', 3, 200, 'Termine 3 parties'], ['daily', 1, 300, 'Réussis le défi du jour'],
 ];
-// Récompenses : { d: poussière d'étoile } ou { t: identifiant de thème }
-const DAY_REWARDS = { 1: { d: 50 }, 2: { d: 60 }, 3: { t: 'aurore' }, 4: { d: 80 }, 5: { d: 100 }, 6: { d: 120 }, 7: { t: 'braise' }, 10: { d: 150 }, 14: { t: 'abysse' }, 21: { d: 300 }, 30: { t: 'quartz' }, 50: { d: 500 }, 75: { d: 700 }, 100: { t: 'or' } };
-export const dayReward = (n) => DAY_REWARDS[n] || { d: n % 7 === 0 ? 100 : 25 };
-export const TIME = [[1200, { d: 60 }], [3600, { d: 120 }], [7200, { d: 250 }], [18000, { t: 'prisme' }], [36000, { d: 800 }], [86400, { d: 1500 }], [180000, { d: 3000 }], [360000, { d: 5000 }]]; // [secondes de jeu, récompense]
+// Récompenses : { d: Éclats } ou { t: identifiant de thème }
+const DAY_REWARDS = { 1: { d: 500 }, 2: { d: 600 }, 3: { t: 'aurore' }, 4: { d: 800 }, 5: { d: 1000 }, 6: { d: 1200 }, 7: { t: 'braise' }, 10: { d: 1500 }, 14: { t: 'abysse' }, 21: { d: 3000 }, 30: { t: 'quartz' }, 50: { d: 5000 }, 75: { d: 7000 }, 100: { t: 'or' } };
+export const dayReward = (n) => DAY_REWARDS[n] || { d: n % 7 === 0 ? 1000 : 250 };
+export const TIME = [[1200, { d: 600 }], [3600, { d: 1200 }], [7200, { d: 2500 }], [18000, { t: 'prisme' }], [36000, { d: 8000 }], [86400, { d: 15000 }], [180000, { d: 30000 }], [360000, { d: 50000 }]]; // [secondes de jeu, récompense]
 const st = { day: '', q: [], bonus: false, days: 0, dc: [], tc: [] }; // days : jours de jeu ; dc : jours récupérés ; tc : paliers de temps récupérés
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
@@ -48,15 +48,15 @@ export function track(type, n, max = false) {
     const [ty, goal, e, lbl] = POOL[q.i]; if (ty !== type || q.done) continue;
     const p = Math.min(goal, max ? Math.max(q.p, n) : q.p + n); if (p === q.p) continue;
     q.p = p; ch = true;
-    if (p >= goal) { q.done = true; H.toast('Mission accomplie : ' + lbl); H.vib([12, 40, 12]); const all = st.q.every((x) => x.done) && !st.bonus; if (all) st.bonus = true; H.grant(e + (all ? 100 : 0), all ? 'Trois missions terminées' : 'Mission'); }
+    if (p >= goal) { q.done = true; H.toast('Mission accomplie : ' + lbl); H.vib([12, 40, 12]); const all = st.q.every((x) => x.done) && !st.bonus; if (all) st.bonus = true; H.grant(e + (all ? 1000 : 0), all ? 'Trois missions terminées' : 'Mission'); }
   }
   if (ch) { save(); refresh(); }
 }
 export function html() { // missions du jour (aussi affichées sur l'écran de fin de partie)
   roll();
-  return st.q.map((q) => { const [, goal, e, lbl] = POOL[q.i]; return `<div class="q${q.done ? ' ok' : ''}"><i style="--p:${Math.round((q.p / goal) * 100)}%"></i><span>${lbl}</span><em>${q.done ? 'fait' : '+' + e + ' ✦'}</em></div>`; }).join('');
+  return st.q.map((q) => { const [, goal, e, lbl] = POOL[q.i]; return `<div class="q${q.done ? ' ok' : ''}"><i style="--p:${Math.round((q.p / goal) * 100)}%"></i><span>${lbl}</span><em>${q.done ? 'fait' : '+' + e + ' Éclats'}</em></div>`; }).join('');
 }
-const rewardText = (r) => (r.t ? `Thème « ${H.themeName(r.t)} »` : `${r.d} ✦`);
+const rewardText = (r) => (r.t ? `Thème « ${H.themeName(r.t)} »` : `${r.d.toLocaleString('fr-FR')} Éclats`);
 let tab = 'day';
 function claim(kind, key) {
   const r = kind === 'd' ? dayReward(key) : (TIME.find(([s]) => s === key) || [])[1]; if (!r) return;
@@ -86,7 +86,7 @@ function refresh() {
   b.innerHTML = `<span>Missions</span><em>${c ? `<u>${c} à récupérer</u> · ` : ''}${n}/3</em>`;
   const p = $('#qs-list'); if (!p || !$('#qs').classList.contains('on')) return;
   p.innerHTML = rows(); document.querySelectorAll('#qs .rk-tabs button').forEach((x) => x.classList.toggle('on', x.dataset.t === tab));
-  $('#qs-sub').textContent = tab === 'day' ? 'Trois missions par jour, les mêmes pour tout le monde. Les trois terminées : 100 ✦ en plus.' : tab === 'days' ? `Tu as joué ${st.days} jour${st.days > 1 ? 's' : ''}. Aucune série à garder : chaque récompense t'attend sans limite de temps.` : `Temps de jeu actif : ${duration(Math.max(60, Math.round(H.playtime() / 60) * 60))}. Ni la pause, ni l'écran de fin, ni l'arrière-plan ne comptent.`;
+  $('#qs-sub').textContent = tab === 'day' ? 'Trois missions par jour, les mêmes pour tout le monde. Les trois terminées : 1 000 Éclats en plus.' : tab === 'days' ? `Tu as joué ${st.days} jour${st.days > 1 ? 's' : ''}. Aucune série à garder : chaque récompense t'attend sans limite de temps.` : `Temps de jeu actif : ${duration(Math.max(60, Math.round(H.playtime() / 60) * 60))}. Ni la pause, ni l'écran de fin, ni l'arrière-plan ne comptent.`;
 }
 export const time = () => refresh(); // appelé régulièrement par le jeu : met à jour le badge et la liste
 export function init(opts) {

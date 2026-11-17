@@ -14,7 +14,7 @@ const vib = (p) => { if (S.vib && navigator.vibrate) try { navigator.vibrate(p);
 let toastT = 0;
 const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200); };
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-const refresh = () => HOME.update({ dust: MINE.dust(), daily: MINE.daily() });
+const refresh = () => HOME.update({ dust: MINE.dust(), daily: MINE.daily(), codex: MINE.codexN(), themes: MINE.themeStat() });
 
 // son : débloqué par le premier geste (l'écran de démarrage en demande un) ; mise en veille et reprise gérées par audio.js
 A.setSfx(S.sfx); A.setMusic(S.mus);
@@ -22,7 +22,8 @@ A.setSfx(S.sfx); A.setMusic(S.mus);
 
 // réglages
 const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f(); });
-tap('#b-set2', () => { $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#m-settings').classList.add('on'); });
+tap('#o-prof', () => { $('#m-settings').classList.remove('on'); RANK.openMyProfile(); });
+tap('#b-set2', () => { $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#m-settings').classList.add('on'); });
 tap('#o-close', () => $('#m-settings').classList.remove('on'));
 $('#o-sfx').onchange = (e) => { S.sfx = e.target.checked; A.setSfx(S.sfx); save(); };
 $('#o-mus').onchange = (e) => { S.mus = e.target.checked; A.setMusic(S.mus); save(); };
@@ -36,11 +37,11 @@ const menu = $('#s-title .menu');
 for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec un code', MINE.openDuel], ['b-sandbox', 'Bac à sable', 'Tous tes astres, sans limite', MINE.openSandbox], ['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex], ['b-profile', 'Profil', '', RANK.openMyProfile]]) {
   const b = document.createElement('button'); b.id = id; b.className = 'big glass'; b.innerHTML = `<span>${label}</span>` + (sub ? `<small>${sub}</small>` : ''); menu.appendChild(b); b.addEventListener('click', () => { A.ui(); vib(9); f(); });
 }
+QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
 HOME.init();
 // l'icône du bouton Profil devient l'astre de profil choisi
-const avatar = () => { const d = $('#b-profile'), k = RANK.avatarKey(); if (!d) return; let c = d.querySelector('canvas.hm-av'); if (!MINE.astreInfo(k)) { if (c) c.remove(); const ic = d.querySelector('.hm-ic'); if (ic) ic.style.display = ''; return; } if (!c) { c = document.createElement('canvas'); c.className = 'hm-av'; d.prepend(c); } d.querySelector('.hm-ic').style.display = 'none'; MINE.paintAstre(c, k, 26); };
+const avatar = () => { const d = $('#b-profile'), k = RANK.avatarKey(); if (!d) return; const box = d.querySelector('.hm-sbi') || d; let c = d.querySelector('canvas.hm-av'); if (!MINE.astreInfo(k)) { if (c) c.remove(); const ic = d.querySelector('.hm-ic'); if (ic) ic.style.display = ''; return; } if (!c) { c = document.createElement('canvas'); c.className = 'hm-av'; box.prepend(c); } d.querySelector('.hm-ic').style.display = 'none'; MINE.paintAstre(c, k, 44); };
 RANK.whenProfile(avatar); avatar();
-QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
 refresh();
 
 // démarrage : « Zeyn's Games » en fondu, puis un appui pour entrer (c'est aussi lui qui débloque le son)

@@ -8,6 +8,7 @@ import { channel } from './realtime.js';
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
 const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
+if (!sv.eco) { sv.eco = 1; sv.dust = Math.round((sv.dust || 0) * 10); } // l'économie est passée à l'échelle ×10 (Éclats) : on convertit l'ancien solde une seule fois
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch (e) { /* ignore */ } };
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -26,15 +27,15 @@ export const BODIES = [
   ['Naine orange', [255, 150, 60]], ['Soleil', [255, 226, 110]], ['Géante rouge', [255, 84, 66]], ['Étoile à neutrons', [170, 212, 255]], ['Trou noir', [190, 110, 255]], ['Quasar', [255, 214, 130]], ['Galaxie', [200, 215, 255]],
 ];
 const CY = [77, 243, 255], MG = [255, 79, 216], AM = [255, 194, 71];
-// Thèmes d'arrière-plan : la récompense du jeu, achetée en poussière d'étoile (✦). h = teinte de la nébuleuse pour chacun des 9 secteurs.
+// Thèmes d'arrière-plan : la récompense du jeu, achetée en Éclats. h = teinte de la nébuleuse pour chacun des 9 secteurs.
 export const THEMES = [
   { id: 'base', n: 'Nébuleuse', cost: 0, h: [215, 280, 330, 190, 20, 260, 160, 300, 45], s: 55, a: 0.2, sp: 45 },
-  { id: 'aurore', n: 'Aurore', cost: 300, h: [150, 170, 130, 190, 160, 140, 180, 120, 165], s: 65, a: 0.24, sp: 60 },
-  { id: 'braise', n: 'Braise', cost: 600, h: [10, 25, 0, 35, 15, 350, 30, 5, 20], s: 70, a: 0.24, sp: 25 },
-  { id: 'abysse', n: 'Abysse', cost: 1000, h: [200, 210, 190, 220, 205, 195, 215, 185, 200], s: 80, a: 0.13, sp: 20 },
-  { id: 'quartz', n: 'Rose quartz', cost: 1500, h: [320, 300, 340, 310, 330, 290, 345, 305, 325], s: 55, a: 0.26, sp: 40 },
-  { id: 'or', n: 'Or noir', cost: 2500, h: [45, 40, 50, 38, 48, 42, 52, 36, 46], s: 75, a: 0.16, sp: 12 },
-  { id: 'prisme', n: 'Prisme', cost: 4000, h: [0, 40, 80, 120, 160, 200, 240, 280, 320], s: 90, a: 0.3, sp: 110 },
+  { id: 'aurore', n: 'Aurore', cost: 3000, h: [150, 170, 130, 190, 160, 140, 180, 120, 165], s: 65, a: 0.24, sp: 60 },
+  { id: 'braise', n: 'Braise', cost: 6000, h: [10, 25, 0, 35, 15, 350, 30, 5, 20], s: 70, a: 0.24, sp: 25 },
+  { id: 'abysse', n: 'Abysse', cost: 10000, h: [200, 210, 190, 220, 205, 195, 215, 185, 200], s: 80, a: 0.13, sp: 20 },
+  { id: 'quartz', n: 'Rose quartz', cost: 15000, h: [320, 300, 340, 310, 330, 290, 345, 305, 325], s: 55, a: 0.26, sp: 40 },
+  { id: 'or', n: 'Or noir', cost: 25000, h: [45, 40, 50, 38, 48, 42, 52, 36, 46], s: 75, a: 0.16, sp: 12 },
+  { id: 'prisme', n: 'Prisme', cost: 40000, h: [0, 40, 80, 120, 160, 200, 240, 280, 320], s: 90, a: 0.3, sp: 110 },
 ];
 const theme = () => THEMES.find((t) => t.id === sv.theme) || THEMES[0];
 // Défis du jour : [objectif, valeur, secondes, texte]. Durées réglées sur un joueur simulé rapide (tools/test.mjs ne les couvre pas).
@@ -638,16 +639,17 @@ function showCodex() {
     d.addEventListener('click', () => { $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.'; });
   }
   $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.';
-  $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent de la poussière d'étoile.`;
+  $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent des Éclats.`;
   $('#mn-m-codex').classList.add('on');
 }
-export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} ✦ ${label}`.trim()); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
+export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} Éclats${label ? ' · ' + label : ''}`); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
 export const dust = () => sv.dust;
+export const themeStat = () => [Object.keys(sv.themes).length, THEMES.length];
 // Récompense de mission : un thème offert ; si on le possède déjà, la moitié de son prix en poussière d'étoile
 export function giveTheme(id) {
   const t = THEMES.find((x) => x.id === id); if (!t) return '';
   if (!sv.themes[id]) { sv.themes[id] = 1; save(); H.refresh(); return `Thème « ${t.n} » débloqué`; }
-  const back = Math.round(t.cost / 2); grant(back, 'Thème déjà possédé'); return `Thème déjà possédé : +${fmt(back)} ✦`;
+  const back = Math.round(t.cost / 2); grant(back, 'Thème déjà possédé'); return `Thème déjà possédé : +${fmt(back)} Éclats`;
 }
 const todayChal = () => CHAL[hash('critical:defi:' + H.today()) % CHAL.length];
 export const daily = () => ({ txt: todayChal()[3], done: sv.daily.day === H.today() && sv.daily.done });
@@ -670,12 +672,12 @@ function share() {
   if (navigator.share) navigator.share({ text: t }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => H.toast('Résultat copié'), () => {});
 }
 export function openThemes() {
-  const g = $('#mn-th'); g.innerHTML = ''; $('#mn-ths').textContent = `Tu as ${fmt(sv.dust)} ✦. La poussière d'étoile se gagne en jouant, avec les missions et le défi du jour.`;
+  const g = $('#mn-th'); g.innerHTML = ''; $('#mn-ths').textContent = `Tu as ${fmt(sv.dust)} Éclats. Ils se gagnent en jouant, avec les missions, le défi du jour et le temps de jeu.`;
   for (const t of THEMES) {
     const own = !!sv.themes[t.id], b = document.createElement('button'); b.className = 'th' + (sv.theme === t.id ? ' on' : own ? '' : ' lock');
-    b.append(makeTex(1, t, 160, 84)); b.insertAdjacentHTML('beforeend', `<b>${t.n}</b><small>${sv.theme === t.id ? 'Équipé' : own ? 'Équiper' : fmt(t.cost) + ' ✦'}</small>`);
+    b.append(makeTex(1, t, 160, 84)); b.insertAdjacentHTML('beforeend', `<b>${t.n}</b><small>${sv.theme === t.id ? 'Équipé' : own ? 'Équiper' : fmt(t.cost) + ' Éclats'}</small>`);
     b.addEventListener('click', () => {
-      if (!own) { if (sv.dust < t.cost) return H.toast(`Il te manque ${fmt(t.cost - sv.dust)} ✦`); sv.dust -= t.cost; sv.themes[t.id] = 1; A.rare(2); H.vib([20, 40, 40]); }
+      if (!own) { if (sv.dust < t.cost) return H.toast(`Il te manque ${fmt(t.cost - sv.dust)} Éclats`); sv.dust -= t.cost; sv.themes[t.id] = 1; A.rare(2); H.vib([20, 40, 40]); }
       sv.theme = t.id; save(); H.refresh(); if (G && W) texB = makeTex(G.depth); openThemes();
     });
     g.append(b);
@@ -703,7 +705,7 @@ function endRun() {
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
   H.track('score', G.score, true); H.track('runs', 1);
-  const gain = Math.min(80, Math.round(G.depth * 5 + G.score / 2000)) + G.bonus; // proportionnel au jeu réel : rien à gagner à saborder une partie
+  const gain = Math.min(800, Math.round(G.depth * 50 + G.score / 200)) + G.bonus * 10; // proportionnel au jeu réel : rien à gagner à saborder une partie
   if (G.over) A.fail();
   const rvTxt = rvDone ? `Tu as dépassé ${rv.name} !` : rv ? `À ${fmt(rv.score - G.score)} points de ${rv.name}.` : '';
   setTimeout(() => {
@@ -724,7 +726,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   if (won) { sv.daily = { day: G.day, done: true, best: sv.daily.day === G.day ? Math.max(sv.daily.best, left) : left }; save(); A.win(); } else A.fail();
   rankLine(null); if (won) H.submit({ daily: G.day, score: Math.round(left * 100), sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n });
   setTimeout(() => {
-    if (first) { grant(150, 'Défi du jour'); H.track('daily', 1); }
+    if (first) { grant(1500, 'Défi du jour'); H.track('daily', 1); }
     $('#mn-ot').textContent = won ? 'Défi réussi !' : 'Défi manqué'; $('#mn-share').hidden = !won; $('#mn-again').textContent = won ? 'Rejouer le défi' : 'Réessayer';
     $('#mn-os').textContent = won ? `Il te restait ${left.toLocaleString('fr-FR')} s. ${first ? '' : 'Récompense déjà reçue aujourd\'hui.'}` : c[3] + '.';
     overPanel({}); H.refresh();
