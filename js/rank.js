@@ -81,7 +81,7 @@ const CSS = `
 #pf-show{display:flex;gap:10px;justify-content:center;width:100%;align-items:stretch}#pf-show:empty{display:none}.pf-load{align-self:center;color:rgba(255,255,255,.6);font-size:14px;text-align:center;padding:14px 0}
 .pf-cell{flex:1;max-width:112px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 8px;border-radius:20px;text-align:center;border:1.5px solid var(--c);background:radial-gradient(120% 80% at 50% 0,color-mix(in srgb,var(--c) 28%,transparent),rgba(255,255,255,.03));box-shadow:0 0 22px color-mix(in srgb,var(--c) 40%,transparent)}
 .pf-cell b{font-size:11px;line-height:1.2}.pf-cell small{font-size:9.5px;line-height:1.2;color:rgba(255,255,255,.65)}.pf-cell em{font:700 9px var(--disp);font-style:normal;letter-spacing:.8px;color:var(--c)}
-#pf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#pf-name{margin:2px 0 0}#pf-motto{min-height:0;font-style:italic;color:rgba(255,255,255,.8)}#pf-motto:empty{display:none}#pf-meta{font-size:12px}
+#pf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#pf-stats b{font-size:19px}#pf-stats span{font-size:10.5px}#pf-av{animation:pf-halo 4s ease-in-out infinite}@keyframes pf-halo{50%{box-shadow:0 0 44px color-mix(in srgb,var(--c,#fff) 70%,transparent)}}#pf-name{font-size:26px}#pf-name{margin:2px 0 0}#pf-motto{min-height:0;font-style:italic;color:rgba(255,255,255,.8)}#pf-motto:empty{display:none}#pf-meta{font-size:12px}
 #ed-grid{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:36vh;overflow-y:auto;touch-action:pan-y}
 .ed-cell{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:16px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.12);color:#fff}
 .ed-cell b{font-size:10.5px;line-height:1.15}.ed-cell small{font-size:9px;color:rgba(255,255,255,.55)}.ed-cell.on{border-color:#5dffc0;background:rgba(93,255,192,.12)}
@@ -94,7 +94,7 @@ const HTML = `
 <div id="rk-feed"></div><div id="rk-list"></div><p id="rk-hint">Touche un joueur pour voir son profil.</p><p id="rk-me"></p>
 <div class="btns"><button class="big glass" id="rk-name"></button><button class="big primary" id="rk-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-prof"><div class="card glass"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-motto"></p>
-<div class="stats" id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div></div>
+<div class="stats" id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div><div><b id="pf-cdx">–</b><span>découvertes</span></div></div>
 <p class="pf-lab" id="pf-lab" hidden>Vitrine</p><div id="pf-show"></div>
 <p id="pf-meta"></p><div class="btns"><button class="big glass" id="pf-replay" hidden>▶ Revoir sa meilleure partie</button><button class="big glass" id="pf-edit" hidden>Modifier mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-edit"><div class="card glass"><h2>Mon profil</h2><div id="ed-av"></div><p>Touche tes astres découverts : le <b>★ 1er</b> devient ton astre de profil (affiché partout), les 2 suivants vont dans ta vitrine.</p>
@@ -184,8 +184,8 @@ function renderProfile(p, me, offline) {
   clearInterval(pfTimer); if (keys.length) pfTimer = setInterval(() => document.querySelectorAll('#rk-prof canvas[data-key]').forEach((c) => H.paint(c, c.dataset.key, c.closest('#pf-av') ? 96 : 84, true)), 100); // astres animés
   $('#pf-rank').textContent = p.rank ? 'n° ' + fmt(p.rank) : '–'; $('#pf-score').textContent = p.score ? fmt(p.score) : '–';
   $('#pf-tier').textContent = p.tier != null ? H.tierName(p.tier) : '–'; $('#pf-wins').textContent = p.wins != null ? fmt(p.wins) : '–';
-  const pt = me ? Math.max(p.playtime || 0, H.local().playtime || 0) : p.playtime || 0; $('#pf-time').textContent = pt ? fmtTime(pt) : '–'; $('#pf-stats').hidden = false;
-  $('#pf-meta').textContent = offline ? 'Hors connexion : profil enregistré sur cet appareil.' : `${p.codex} découverte${p.codex > 1 ? 's' : ''} au codex${p.since ? ' · membre depuis ' + fmtMonth(p.since) : ''}`;
+  const pt = me ? Math.max(p.playtime || 0, H.local().playtime || 0) : p.playtime || 0; $('#pf-time').textContent = pt ? fmtTime(pt) : '–'; $('#pf-cdx').textContent = p.codex != null ? fmt(p.codex) : '–'; $('#pf-stats').hidden = false;
+  $('#pf-meta').textContent = offline ? 'Hors connexion : profil enregistré sur cet appareil.' : (p.since ? 'Membre depuis ' + fmtMonth(p.since) : '');
   $('#pf-edit').hidden = !me; $('#pf-replay').hidden = offline || !p.score;
 }
 async function openProfile(name) {
