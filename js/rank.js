@@ -6,11 +6,11 @@ const KEY = 'critical.rank.v1', PAGE = 50;
 const $ = (s, r = document) => r.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); // les pseudos viennent d'autres joueurs
-const H = { toast: () => {}, vib: () => {}, today: () => '', astres: () => [], astreInfo: () => null, paint: () => {}, codexN: () => 0, tierName: () => '?', local: () => ({}) };
+const H = { track: () => {}, invite: () => {}, joinDuel: () => {}, canNotify: () => false, toast: () => {}, vib: () => {}, today: () => '', astres: () => [], astreInfo: () => null, paint: () => {}, codexN: () => 0, tierName: () => '?', local: () => ({}) };
 const st = { secret: '', name: '', pending: [], prof: { featured: [], motto: '' }, dirty: false }; // pending : scores pas encore envoyés (pas de pseudo, ou hors connexion)
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
-const ERR = { name_taken: 'Ce pseudo est déjà pris.', invalid_name: '3 à 16 caractères : lettres, chiffres, espace, point, tiret.', too_fast: 'Deux envois trop rapprochés, réessaie dans un instant.', implausible: 'Score refusé par le serveur.', network: 'Connexion impossible. Réessaie plus tard.', invalid_motto: 'La devise ne peut pas contenir de < ou >.', invalid_featured: 'Vitrine invalide.' };
+const ERR = { name_taken: 'Ce pseudo est déjà pris.', invalid_name: '3 à 16 caractères : lettres, chiffres, espace, point, tiret.', too_fast: 'Deux envois trop rapprochés, réessaie dans un instant.', implausible: 'Score refusé par le serveur.', network: 'Connexion impossible. Réessaie plus tard.', invalid_motto: 'La devise ne peut pas contenir de < ou >.', invalid_featured: 'Vitrine invalide.', no_profile: 'Choisis d\'abord un pseudo.', not_found: 'Joueur introuvable.', self: 'Impossible sur ton propre profil.', offline: 'Ce joueur n\'est plus en ligne.', no_duel: 'Ce joueur ne reçoit pas d\'invitations.', busy: 'Ce joueur a déjà une invitation en attente.', declined_recently: 'Ce joueur a refusé il y a peu : réessaie plus tard.', too_many: 'Trop d\'invitations pour le moment.', expired: 'L\'invitation a expiré.' };
 export const ready = () => !!(SUPABASE_URL && SUPABASE_KEY);
 export const name = () => st.name;
 
@@ -72,6 +72,12 @@ const CSS = `
 #rk-err{min-height:18px;color:#ff8aa0;font-size:13px}
 .rk-row{cursor:pointer}.rk-row:active{background:rgba(255,255,255,.1)}.rk-ic{flex:none;width:26px;height:26px;display:block}.rk-ic[data-key='']{visibility:hidden}
 #rk-feed{width:100%;font-size:11.5px;line-height:1.5;color:rgba(255,255,255,.72);text-align:left}#rk-feed:empty{display:none}#rk-feed b{color:#fff}#rk-feed .rf-s{color:#ffc247;margin-bottom:3px}
+#pf-soc{display:flex;align-items:center;justify-content:center;gap:14px;min-height:0}#pf-on{font:700 12px var(--font);color:#5dffc0;display:flex;align-items:center;gap:6px}#pf-on:empty{display:none}
+.pf-like{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:19px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font:800 14px var(--disp);transition:transform .4s cubic-bezier(.2,1.6,.4,1)}.pf-like svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linejoin:round;transition:fill .2s,stroke .2s}
+.pf-like.on{background:rgba(255,79,140,.2);border-color:rgba(255,120,170,.6)}.pf-like.on svg{fill:#ff4f8c;stroke:#ff4f8c;filter:drop-shadow(0 0 8px rgba(255,79,140,.8))}.pf-like:active{transform:scale(.9)}.pf-like:disabled{opacity:.9}
+.on-dot{display:inline-block;width:8px;height:8px;margin-left:7px;border-radius:50%;background:#5dffc0;box-shadow:0 0 8px #5dffc0;vertical-align:middle}
+#rk-inv{position:fixed;left:14px;right:14px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:60;display:none;justify-content:center;pointer-events:none}#rk-inv.on{display:flex;animation:invin .5s cubic-bezier(.2,1.3,.3,1)}@keyframes invin{from{transform:translateY(-120%);opacity:0}}
+#rk-inv .glass{pointer-events:auto;display:flex;align-items:center;gap:12px;max-width:420px;width:100%;padding:12px 12px 12px 16px;border-radius:26px}#rk-inv b{flex:1;font:700 13px/1.3 var(--font)}#rk-inv button{height:36px;padding:0 14px;border-radius:18px;font:800 12px var(--disp);color:#fff;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1)}#rk-inv #inv-ok{background:linear-gradient(135deg,rgba(77,243,255,.5),rgba(255,79,216,.45))}
 #rk-hint{font-size:11px;color:rgba(255,255,255,.45);margin:-4px 0 0}
 #rk-prof .card,#rk-edit .card{max-width:420px;max-height:calc(100vh - 32px);overflow-y:auto;touch-action:pan-y;scrollbar-width:none}
 #pf-av{width:112px;height:112px;flex:none;border-radius:50%;display:grid;place-items:center;border:2px solid var(--c,rgba(255,255,255,.25));background:radial-gradient(circle at 50% 35%,color-mix(in srgb,var(--c,#fff) 30%,transparent),rgba(255,255,255,.03));box-shadow:0 0 28px color-mix(in srgb,var(--c,#fff) 45%,transparent)}
@@ -89,14 +95,16 @@ const CSS = `
 #ed-motto{width:100%;height:46px;border-radius:16px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#fff;font:600 15px var(--font);text-align:center;outline:none;user-select:text;-webkit-user-select:text}
 #ed-err{min-height:16px;color:#ff8aa0;font-size:13px;margin:0}`;
 const HTML = `
+<div id="rk-inv"><div class="glass"><b id="inv-t"></b><button id="inv-no">Refuser</button><button id="inv-ok">Accepter</button></div></div>
 <div class="modal" id="rk"><div class="card glass"><h2>Classement</h2>
 <div class="rk-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Défi du jour</button></div>
 <div id="rk-feed"></div><div id="rk-list"></div><p id="rk-hint">Touche un joueur pour voir son profil.</p><p id="rk-me"></p>
 <div class="btns"><button class="big glass" id="rk-name"></button><button class="big primary" id="rk-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-prof"><div class="card glass"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-motto"></p>
+<div id="pf-soc"><button class="pf-like" id="pf-like" aria-label="Liker ce profil"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.7 8 3.4 5 6.6 5c2 0 3.6 1.1 5.4 3.2C13.8 6.100 15.400 5 17.400 5c3.200 0 4.900 3 3.800 6.200-1.700 4.700-9.200 9.300-9.200 9.300z"/></svg><b id="pf-lk">0</b></button><span id="pf-on"></span></div>
 <div class="stats" id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div><div><b id="pf-cdx">–</b><span>découvertes</span></div></div>
 <p class="pf-lab" id="pf-lab" hidden>Vitrine</p><div id="pf-show"></div>
-<p id="pf-meta"></p><div class="btns"><button class="big glass" id="pf-replay" hidden>▶ Revoir sa meilleure partie</button><button class="big glass" id="pf-edit" hidden>Modifier mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div>
+<p id="pf-meta"></p><div class="btns"><button class="big primary" id="pf-duel" hidden>⚔ Défier en duel</button><button class="big glass" id="pf-replay" hidden>▶ Revoir sa meilleure partie</button><button class="big glass" id="pf-edit" hidden>Modifier mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-edit"><div class="card glass"><h2>Mon profil</h2><div id="ed-av"></div><p>Touche tes astres découverts : le <b>★ 1er</b> devient ton astre de profil (affiché partout), les 2 suivants vont dans ta vitrine.</p>
 <div id="ed-grid"></div><input id="ed-motto" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Ta devise (facultatif)" enterkeyhint="done"><p id="ed-err"></p>
 <div class="btns"><button class="big primary" id="ed-ok">Enregistrer</button><button class="big glass" id="ed-name">Changer de pseudo</button><button class="big glass" id="ed-cancel">Annuler</button></div></div></div>
@@ -115,7 +123,7 @@ async function more() { // charge la page suivante (défilement infini)
     const rows = await rpc('leaderboard', { p_board: boardId(), p_offset: off, p_limit: PAGE });
     if (t !== token) return;
     if (!off && !rows.length) list.innerHTML = '<div id="rk-msg">Personne ici pour l\'instant.<br>Sois le premier à y entrer.</div>';
-    list.insertAdjacentHTML('beforeend', rows.map((r) => `<div class="rk-row${r.name === st.name ? ' me' : ''}" data-name="${esc(r.name)}"><i>${r.rank}</i><canvas class="rk-ic" data-key="${esc(r.badge || '')}"></canvas><span>${esc(r.name)}</span><b>${pts(r.score)}</b><small>${board === 'all' ? 'S' + r.sector : ''}</small></div>`).join(''));
+    list.insertAdjacentHTML('beforeend', rows.map((r) => `<div class="rk-row${r.name === st.name ? ' me' : ''}" data-name="${esc(r.name)}"><i>${r.rank}</i><canvas class="rk-ic" data-key="${esc(r.badge || '')}"></canvas><span>${esc(r.name)}${r.online ? '<u class="on-dot" title="En ligne"></u>' : ''}</span><b>${pts(r.score)}</b><small>${board === 'all' ? 'S' + r.sector : ''}</small></div>`).join(''));
     list.querySelectorAll('.rk-ic:not([data-done])').forEach((c) => { c.dataset.done = 1; if (c.dataset.key) H.paint(c, c.dataset.key, 26); });
     off += rows.length; done = rows.length < PAGE;
   } catch (e) { if (t === token && !off) list.innerHTML = `<div id="rk-msg">${ERR.network}</div>`; done = true; }
@@ -141,6 +149,29 @@ async function feed(t) { // faits réels uniquement : dernières parties classé
 }
 export const rival = (score) => (ready() ? rpc('rival', { p_score: Math.round(score || 0) }) : Promise.resolve(null));
 export const runOf = (name) => rpc('get_run', { p_name: name });
+/* ---------- présence et invitations de duel ---------- */
+let pulseT = 0, lastInv = '', invT = 0;
+const hideInv = () => { clearTimeout(invT); $('#rk-inv').classList.remove('on'); };
+async function pulse() { // « je suis là » toutes les 30 s ; renvoie une éventuelle invitation, montrée une seule fois et seulement hors partie
+  if (!ready() || !st.name || document.hidden) return;
+  try {
+    const r = await rpc('pulse', { p_secret: secret() }), d = r && r.duel;
+    if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; $('#inv-t').textContent = `${d.from} te défie en duel 1v1`; $('#rk-inv').classList.add('on'); H.vib(12); invT = setTimeout(hideInv, 20000); }
+  } catch (e) { /* hors connexion : on réessaiera */ }
+}
+function startPulse() {
+  if (pulseT || !ready()) return; pulseT = setInterval(pulse, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) pulse(); });
+  if (st.noDuel) rpc('set_no_duel', { p_secret: secret(), p_value: true }).catch(() => {}); pulse();
+}
+async function answer(ok) {
+  hideInv();
+  try { const r = await rpc('challenge_reply', { p_secret: secret(), p_accept: ok }); if (ok && r && r.code) H.joinDuel(r.code); }
+  catch (e) { H.toast(ERR[e.message] || ERR.network); }
+}
+export const noDuel = () => !!st.noDuel;
+export function setNoDuel(v) { st.noDuel = !!v; save(); if (st.name && ready()) rpc('set_no_duel', { p_secret: secret(), p_value: !!v }).catch(() => {}); }
+export async function challenge(name, code) { try { await rpc('challenge', { p_secret: secret(), p_name: name, p_code: code }); } catch (e) { throw new Error(ERR[e.message] || ERR.network); } }
+export const challengeCancel = () => { if (st.name && ready()) rpc('challenge_cancel', { p_secret: secret() }).catch(() => {}); };
 export function open() {
   if (!ready()) return H.toast('Le classement en ligne n\'est pas encore activé');
   $('#rk').classList.add('on'); show('all');
@@ -153,7 +184,7 @@ async function confirmName() {
   const v = $('#rk-in').value.trim(), ok = $('#rk-ok'); if (ok.disabled) return;
   if (!/^[\p{L}\p{N} ._-]{3,16}$/u.test(v)) { $('#rk-err').textContent = ERR.invalid_name; return; }
   ok.disabled = true; $('#rk-err').textContent = '';
-  try { await rpc('register', { p_secret: secret(), p_name: v }); st.name = v; save(); $('#rk-ask').classList.remove('on'); H.toast('Bienvenue dans le classement, ' + v); const r = await flush(); onName(r); if (openAfterName) { openAfterName = false; openProfile(st.name); } if ($('#rk').classList.contains('on')) show(board); }
+  try { await rpc('register', { p_secret: secret(), p_name: v }); st.name = v; save(); startPulse(); $('#rk-ask').classList.remove('on'); H.toast('Bienvenue dans le classement, ' + v); const r = await flush(); onName(r); if (openAfterName) { openAfterName = false; openProfile(st.name); } if ($('#rk').classList.contains('on')) show(board); }
   catch (e) { $('#rk-err').textContent = ERR[e.message] || ERR.network; }
   finally { ok.disabled = false; }
 }
@@ -186,6 +217,8 @@ function renderProfile(p, me, offline) {
   $('#pf-tier').textContent = p.tier != null ? H.tierName(p.tier) : '–'; $('#pf-wins').textContent = p.wins != null ? fmt(p.wins) : '–';
   const pt = me ? Math.max(p.playtime || 0, H.local().playtime || 0) : p.playtime || 0; $('#pf-time').textContent = pt ? fmtTime(pt) : '–'; $('#pf-cdx').textContent = p.codex != null ? fmt(p.codex) : '–'; $('#pf-stats').hidden = false;
   $('#pf-meta').textContent = offline ? 'Hors connexion : profil enregistré sur cet appareil.' : (p.since ? 'Membre depuis ' + fmtMonth(p.since) : '');
+  const lk = $('#pf-like'); lk.classList.toggle('on', !!p.liked); lk.disabled = !!me || !!offline; $('#pf-lk').textContent = fmt(p.likes || 0); $('#pf-soc').hidden = !!offline;
+  $('#pf-on').innerHTML = p.online ? '<u class="on-dot" style="margin:0"></u>En ligne' : ''; $('#pf-duel').hidden = !!me || !!offline || !p.online || p.duel === false;
   $('#pf-edit').hidden = !me; $('#pf-replay').hidden = offline || !p.score;
 }
 async function openProfile(name) {
@@ -193,7 +226,7 @@ async function openProfile(name) {
   const me = !!st.name && name.toLowerCase() === st.name.toLowerCase();
   $('#pf-name').textContent = name; $('#pf-motto').textContent = ''; $('#pf-av').innerHTML = ''; $('#pf-show').innerHTML = ''; $('#pf-lab').hidden = true; $('#pf-stats').hidden = true; $('#pf-meta').textContent = 'Chargement…'; $('#pf-edit').hidden = true;
   let p = null;
-  try { p = await rpc('get_profile', { p_name: name }); }
+  try { p = await rpc('get_profile', { p_name: name, p_secret: st.secret || null }); }
   catch (e) {
     if (pfName !== name) return;
     if (me) return renderProfile({ name: st.name, motto: st.prof.motto, featured: st.prof.featured, codex: H.codexN(), ...H.local() }, true, true); // le serveur ne répond pas : on montre le profil local
@@ -255,6 +288,14 @@ export function init(opts) {
   $('#rk-name').addEventListener('click', () => (st.name ? openProfile(st.name) : askName()));
   $('#rk-list').addEventListener('click', (e) => { const r = e.target.closest('.rk-row'); if (r && r.dataset.name) { H.vib(6); openProfile(r.dataset.name); } });
   $('#pf-close').addEventListener('click', closeProfile); $('#pf-edit').addEventListener('click', openEditor);
+  $('#pf-like').addEventListener('click', async () => {
+    if (!st.name) return H.toast(ERR.no_profile); const b = $('#pf-like'); if (b.disabled) return; b.disabled = true;
+    try { const r = await rpc('like_player', { p_secret: secret(), p_name: pfName }); b.classList.toggle('on', r.liked); $('#pf-lk').textContent = fmt(r.likes); H.vib(r.liked ? [10, 30, 10] : 6); if (r.liked) H.track('likes', 1); }
+    catch (e) { H.toast(ERR[e.message] || ERR.network); } b.disabled = false;
+  });
+  $('#pf-duel').addEventListener('click', () => { if (!st.name) return H.toast(ERR.no_profile); const n = pfName; closeProfile(); $('#rk').classList.remove('on'); H.invite(n); });
+  $('#inv-no').addEventListener('click', () => answer(false)); $('#inv-ok').addEventListener('click', () => answer(true));
+  if (ready() && st.name) startPulse();
   $('#pf-replay').addEventListener('click', async () => { const b = $('#pf-replay'); b.disabled = true; try { const run = await rpc('get_run', { p_name: pfName }); if (!run || !Array.isArray(run.log)) H.toast('Aucune rediffusion disponible'); else { closeProfile(); H.replay(run); } } catch (e) { H.toast(ERR.network); } b.disabled = false; });
   $('#ed-ok').addEventListener('click', saveProfile); $('#ed-cancel').addEventListener('click', () => $('#rk-edit').classList.remove('on')); $('#ed-name').addEventListener('click', askName);
   $('#ed-motto').addEventListener('input', () => { $('#ed-err').textContent = ''; });

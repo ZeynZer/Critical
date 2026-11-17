@@ -15,7 +15,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -761,7 +761,7 @@ export function openDuel() {
   if (!H.online()) return H.toast('Le duel demande une connexion');
   duelClose(); dview('menu', 'Duel 1v1', 'Même graine, 2 minutes, le meilleur score gagne.'); $('#dl-code').textContent = ''; $('#dl-in').value = '';
 }
-function duelClose() { if (duel) { clearInterval(duel.tm); if (duel.ch) { try { duel.ch.send({ e: 'bye', id: duel.id }); } catch (e) { /* ignore */ } const c = duel.ch; setTimeout(() => c.close(), 300); } } duel = null; }
+function duelClose() { if (duel && duel.invited && !duel.guest) H.challengeCancel(); if (duel) { clearInterval(duel.tm); if (duel.ch) { try { duel.ch.send({ e: 'bye', id: duel.id }); } catch (e) { /* ignore */ } const c = duel.ch; setTimeout(() => c.close(), 300); } } duel = null; }
 function duelNew(role, code) {
   duelClose(); duel = { role, code, id: Math.random().toString(36).slice(2, 8), name: H.name() || 'Invité', oppName: '', dur: 120, phase: 'lobby', op: null, me: null, lastMsg: 0, ch: null };
   duel.ch = channel('duel-' + code, duelMsg, () => { if (duel && duel.phase !== 'done') { const was = duel.phase; if (was === 'lobby') dview('menu', 'Connexion impossible', 'Vérifie ta connexion puis réessaie.'); else if (was === 'play' || was === 'count') duelResult('forfait'); } });
@@ -776,6 +776,12 @@ function duelJoin(code) {
   code = code.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length !== 4) return H.toast('Le code a 4 caractères');
   const d = duelNew('guest', code); dview('wait', 'Connexion au salon…', 'Code ' + code); $('#dl-code').textContent = code;
   dsend({ e: 'join', name: d.name }); d.tm = setTimeout(() => { if (duel === d && d.phase === 'lobby') { duelClose(); dview('menu', 'Salon introuvable', 'Aucun joueur n\'attend avec ce code.'); } }, 12000);
+}
+export const canNotify = () => !isOpen && !duel && !$('#mn-m-duel').classList.contains('on'); // pas d'invitation pendant une partie ni un duel
+export const joinDuel = (code) => { $('#dl-in').value = code; duelJoin(code); };
+export function inviteDuel(name) { // salon créé pour toi + invitation envoyée au joueur (en ligne) depuis son profil
+  duelHost(); const d = duel; d.invited = true;
+  H.challenge(name, d.code).then(() => { if (duel === d) dview('wait', 'Invitation envoyée', `${name} a 2 minutes pour répondre. Code du salon :`); }).catch((e) => { if (duel === d) { duelClose(); dview('menu', 'Invitation impossible', e.message); } });
 }
 function duelMsg(m) {
   if (!duel || !m || m.id === duel.id) return; const d = duel;

@@ -24,16 +24,17 @@ document.addEventListener('pointerdown', () => { try { screen.orientation.lock('
 // réglages
 const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f(); });
 tap('#o-prof', () => { $('#m-settings').classList.remove('on'); RANK.openMyProfile(); });
-tap('#b-set2', () => { $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#m-settings').classList.add('on'); });
+tap('#b-set2', () => { $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
 tap('#o-close', () => $('#m-settings').classList.remove('on'));
 $('#o-sfx').onchange = (e) => { S.sfx = e.target.checked; A.setSfx(S.sfx); save(); };
 $('#o-mus').onchange = (e) => { S.mus = e.target.checked; A.setMusic(S.mus); save(); };
+$('#o-duel').onchange = (e) => RANK.setNoDuel(!e.target.checked);
 $('#o-gh').onchange = (e) => MINE.setGhost(e.target.checked);
 $('#o-vib').onchange = (e) => { S.vib = e.target.checked; save(); vib([14, 40, 14]); };
 
 // modules (chacun ajoute ses boutons au menu, home.js les met en page)
-MINE.init({ vib, toast, today, time: (sec) => { QS.time(); RANK.reportTime(sec); }, track: QS.track, quests: QS.html, refresh, submit: RANK.submit, rank: RANK.open, name: RANK.name, rival: RANK.rival, runOf: RANK.runOf, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready });
-RANK.init({ replay: MINE.openReplay, toast, vib, today, astres: MINE.astres, astreInfo: MINE.astreInfo, paint: MINE.paintAstre, codexN: MINE.codexN, tierName: MINE.tierName, local: MINE.localStats }); RANK.whenNamed(MINE.rankLine);
+MINE.init({ vib, toast, today, time: (sec) => { QS.time(); RANK.reportTime(sec); }, track: QS.track, quests: QS.html, refresh, submit: RANK.submit, rank: RANK.open, challenge: RANK.challenge, challengeCancel: RANK.challengeCancel, name: RANK.name, rival: RANK.rival, runOf: RANK.runOf, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready });
+RANK.init({ replay: MINE.openReplay, invite: MINE.inviteDuel, joinDuel: MINE.joinDuel, canNotify: MINE.canNotify, track: (...a) => QS.track(...a), toast, vib, today, astres: MINE.astres, astreInfo: MINE.astreInfo, paint: MINE.paintAstre, codexN: MINE.codexN, tierName: MINE.tierName, local: MINE.localStats }); RANK.whenNamed(MINE.rankLine);
 const menu = $('#s-title .menu');
 for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec un code', MINE.openDuel], ['b-sandbox', 'Bac à sable', 'Tous tes astres, sans limite', MINE.openSandbox], ['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex], ['b-profile', 'Profil', '', RANK.openMyProfile]]) {
   const b = document.createElement('button'); b.id = id; b.className = 'big glass'; b.innerHTML = `<span>${label}</span>` + (sub ? `<small>${sub}</small>` : ''); menu.appendChild(b); b.addEventListener('click', () => { A.ui(); vib(9); f(); });

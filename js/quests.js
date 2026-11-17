@@ -17,7 +17,7 @@ const POOL = [
   ['chain', 4, 200, 'Déclenche une chaîne ×4'], ['chain', 6, 350, 'Déclenche une chaîne ×6'],
   ['score', 15000, 250, 'Marque 15 000 points en une partie'], ['score', 40000, 400, 'Marque 40 000 points en une partie'],
   ['tier', 9, 250, 'Crée une Géante rouge'], ['tier', 11, 450, 'Crée un Trou noir'],
-  ['runs', 3, 200, 'Termine 3 parties'], ['daily', 1, 300, 'Réussis le défi du jour'],
+  ['runs', 3, 200, 'Termine 3 parties'], ['likes', 1, 200, 'Like le profil d\'un joueur'], ['daily', 1, 300, 'Réussis le défi du jour'],
 ];
 // Récompenses : { d: Éclats } ou { t: identifiant de thème }
 const DAY_REWARDS = { 1: { d: 500 }, 2: { d: 600 }, 3: { t: 'aurore' }, 4: { d: 800 }, 5: { d: 1000 }, 6: { d: 1200 }, 7: { t: 'braise' }, 10: { d: 1500 }, 14: { t: 'abysse' }, 21: { d: 3000 }, 30: { t: 'quartz' }, 50: { d: 5000 }, 75: { d: 7000 }, 100: { t: 'or' } };
