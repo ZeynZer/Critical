@@ -137,6 +137,14 @@ language sql stable security definer set search_path = public as $$
   where lower(p.name) = lower(btrim(p_name))
 $$;
 
+-- Rediffusion : graine + journal de la meilleure partie d'un joueur (le moteur est déterministe : on la rejoue à l'identique).
+create or replace function public.get_run(p_name text) returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('name', p.name, 'score', s.score, 'sector', s.sector, 'seed', s.seed, 'log', s.log, 'steps', s.steps)
+  from players p join scores s on s.player_id = p.id and s.board = 'all'
+  where lower(p.name) = lower(btrim(p_name)) and s.log is not null
+$$;
+
 -- Envoyer son temps de jeu cumulé (secondes). Valeur jamais diminuée, et progression bornée par le temps réellement écoulé depuis le
 -- dernier envoi (+ 2 min de marge) : impossible de s'attribuer 500 heures d'un coup. Premier envoi : jusqu'à 72 h déjà jouées avant l'inscription.
 create or replace function public.report_playtime(p_secret text, p_seconds integer) returns json
@@ -152,5 +160,5 @@ begin
   return json_build_object('playtime', v_new);
 end $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer) to anon, authenticated;
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text), public.report_playtime(text, integer), public.get_run(text) to anon, authenticated;

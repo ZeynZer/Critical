@@ -95,7 +95,7 @@ const HTML = `
 <div class="modal" id="rk-prof"><div class="card glass"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-motto"></p>
 <div class="stats" id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div></div>
 <p class="pf-lab" id="pf-lab" hidden>Vitrine</p><div id="pf-show"></div>
-<p id="pf-meta"></p><div class="btns"><button class="big glass" id="pf-edit" hidden>Modifier mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div>
+<p id="pf-meta"></p><div class="btns"><button class="big glass" id="pf-replay" hidden>▶ Revoir sa meilleure partie</button><button class="big glass" id="pf-edit" hidden>Modifier mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div>
 <div class="modal" id="rk-edit"><div class="card glass"><h2>Mon profil</h2><div id="ed-av"></div><p>Touche tes astres découverts : le <b>★ 1er</b> devient ton astre de profil (affiché partout), les 2 suivants vont dans ta vitrine.</p>
 <div id="ed-grid"></div><input id="ed-motto" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Ta devise (facultatif)" enterkeyhint="done"><p id="ed-err"></p>
 <div class="btns"><button class="big primary" id="ed-ok">Enregistrer</button><button class="big glass" id="ed-name">Changer de pseudo</button><button class="big glass" id="ed-cancel">Annuler</button></div></div></div>
@@ -174,7 +174,7 @@ function renderProfile(p, me, offline) {
   $('#pf-tier').textContent = p.tier != null ? H.tierName(p.tier) : '–'; $('#pf-wins').textContent = p.wins != null ? fmt(p.wins) : '–';
   const pt = me ? Math.max(p.playtime || 0, H.local().playtime || 0) : p.playtime || 0; $('#pf-time').textContent = pt ? fmtTime(pt) : '–'; $('#pf-stats').hidden = false;
   $('#pf-meta').textContent = offline ? 'Hors connexion : profil enregistré sur cet appareil.' : `${p.codex} découverte${p.codex > 1 ? 's' : ''} au codex${p.since ? ' · membre depuis ' + fmtMonth(p.since) : ''}`;
-  $('#pf-edit').hidden = !me;
+  $('#pf-edit').hidden = !me; $('#pf-replay').hidden = offline || !p.score;
 }
 async function openProfile(name) {
   const m = $('#rk-prof'); pfName = name; m.classList.add('on'); clearInterval(pfTimer);
@@ -243,6 +243,7 @@ export function init(opts) {
   $('#rk-name').addEventListener('click', () => (st.name ? openProfile(st.name) : askName()));
   $('#rk-list').addEventListener('click', (e) => { const r = e.target.closest('.rk-row'); if (r && r.dataset.name) { H.vib(6); openProfile(r.dataset.name); } });
   $('#pf-close').addEventListener('click', closeProfile); $('#pf-edit').addEventListener('click', openEditor);
+  $('#pf-replay').addEventListener('click', async () => { const b = $('#pf-replay'); b.disabled = true; try { const run = await rpc('get_run', { p_name: pfName }); if (!run || !Array.isArray(run.log)) H.toast('Aucune rediffusion disponible'); else { closeProfile(); H.replay(run); } } catch (e) { H.toast(ERR.network); } b.disabled = false; });
   $('#ed-ok').addEventListener('click', saveProfile); $('#ed-cancel').addEventListener('click', () => $('#rk-edit').classList.remove('on')); $('#ed-name').addEventListener('click', askName);
   $('#ed-motto').addEventListener('input', () => { $('#ed-err').textContent = ''; });
   $('#ed-motto').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveProfile(); }); $('#rk-ok').addEventListener('click', confirmName); $('#rk-later').addEventListener('click', () => { openAfterName = false; $('#rk-ask').classList.remove('on'); });

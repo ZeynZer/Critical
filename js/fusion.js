@@ -266,6 +266,7 @@ function sub(G) {
   if (G.danger >= 1 && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; G.ev.push({ t: 'over' }); }
 }
 
+export const step = sub; // un pas de simulation (utilisé par la rediffusion)
 export function tick(G, dt) {
   if (G.over) return;
   G.acc += Math.min(dt, 0.05);
