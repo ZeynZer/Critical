@@ -10,7 +10,7 @@ const H = { track: () => {}, invite: () => {}, joinDuel: () => {}, canNotify: ()
 const st = { secret: '', name: '', pending: [], prof: { featured: [], motto: '' }, dirty: false }; // pending : scores pas encore envoyés (pas de pseudo, ou hors connexion)
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
-const ERR = { name_taken: 'Ce pseudo est déjà pris.', invalid_name: '3 à 16 caractères : lettres, chiffres, espace, point, tiret.', too_fast: 'Deux envois trop rapprochés, réessaie dans un instant.', implausible: 'Score refusé par le serveur.', network: 'Connexion impossible. Réessaie plus tard.', invalid_motto: 'La devise ne peut pas contenir de < ou >.', invalid_featured: 'Vitrine invalide.', no_profile: 'Choisis d\'abord un pseudo.', not_found: 'Joueur introuvable.', self: 'Impossible sur ton propre profil.', offline: 'Ce joueur n\'est plus en ligne.', no_duel: 'Ce joueur ne reçoit pas d\'invitations.', busy: 'Ce joueur a déjà une invitation en attente.', declined_recently: 'Ce joueur a refusé il y a peu : réessaie plus tard.', too_many: 'Trop d\'invitations pour le moment.', expired: 'L\'invitation a expiré.' };
+const ERR = { name_taken: 'Ce pseudo est déjà pris.', invalid_name: '3 à 16 caractères : lettres, chiffres, espace, point, tiret.', too_fast: 'Deux envois trop rapprochés, réessaie dans un instant.', implausible: 'Score refusé par le serveur.', network: 'Connexion impossible. Réessaie plus tard.', invalid_motto: 'La devise ne peut pas contenir de < ou >.', invalid_featured: 'Vitrine invalide.', no_profile: 'Choisis d\'abord un pseudo.', not_found: 'Joueur introuvable.', self: 'Impossible sur ton propre profil.', offline: 'Ce joueur n\'est plus en ligne.', no_duel: 'Ce joueur ne reçoit pas d\'invitations.', busy: 'Ce joueur a déjà une invitation en attente.', declined_recently: 'Ce joueur a refusé il y a peu : réessaie plus tard.', too_many: 'Trop d\'invitations pour le moment.', expired: 'L\'invitation a expiré.', not_claimable: 'Ce pseudo n\'est pas ouvert à la reprise (ou le délai est dépassé). Contacte l\'administrateur.' };
 export const ready = () => !!(SUPABASE_URL && SUPABASE_KEY);
 export const name = () => st.name;
 
@@ -110,7 +110,7 @@ const HTML = `
 <div class="btns"><button class="big primary" id="ed-ok">Enregistrer</button><button class="big glass" id="ed-name">Changer de pseudo</button><button class="big glass" id="ed-cancel">Annuler</button></div></div></div>
 <div class="modal" id="rk-ask"><div class="card glass"><h2>Ton pseudo</h2><p>Il apparaîtra dans le classement mondial. Demandé une seule fois, modifiable ensuite.</p>
 <input id="rk-in" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pseudo" enterkeyhint="done">
-<p id="rk-err"></p><div class="btns"><button class="big primary" id="rk-ok">Valider</button><button class="big glass" id="rk-later">Plus tard</button></div></div></div>`;
+<p id="rk-err"></p><div class="btns"><button class="big primary" id="rk-ok">Valider</button><button class="big glass" id="rk-later">Plus tard</button><button class="big glass" id="rk-claim">J'avais déjà un compte</button></div></div></div>`;
 const pts = (v) => (board === 'all' ? fmt(v) : (v / 100).toLocaleString('fr-FR') + ' s d\'avance'); // défi : temps restant
 const fmtTime = (sec) => (sec < 60 ? '< 1 min' : sec < 3600 ? `${Math.floor(sec / 60)} min` : `${Math.floor(sec / 3600)} h ${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}`);
 const fmtMonth = (iso) => { try { return new Date(iso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); } catch (e) { return ''; } };
@@ -179,6 +179,15 @@ export function open() {
 export function askName() {
   if (!ready()) return H.toast('Le classement en ligne n\'est pas encore activé');
   $('#rk-in').value = st.name; $('#rk-err').textContent = ''; $('#rk-ask').classList.add('on'); setTimeout(() => $('#rk-in').focus(), 50);
+}
+async function claimAccount() { // ancien compte : le pseudo doit avoir été ouvert à la reprise par l'administrateur ; un nouveau secret remplace l'ancien
+  const v = $('#rk-in').value.trim(), b = $('#rk-claim'); if (b.disabled) return; if (v.length < 3) { $('#rk-err').textContent = 'Écris ton ancien pseudo ci-dessus.'; return; }
+  b.disabled = true; $('#rk-err').textContent = '';
+  try {
+    const sec = Array.from(crypto.getRandomValues(new Uint8Array(24)), (x) => x.toString(16).padStart(2, '0')).join(''), r = await rpc('claim_player', { p_secret: sec, p_name: v });
+    st.secret = sec; st.name = r.name; save(); startPulse(); $('#rk-ask').classList.remove('on'); H.toast('Compte retrouvé : ' + r.name); onName(await flush()); onProf();
+  } catch (e) { $('#rk-err').textContent = ERR[e.message] || ERR.network; }
+  b.disabled = false;
 }
 async function confirmName() {
   const v = $('#rk-in').value.trim(), ok = $('#rk-ok'); if (ok.disabled) return;
@@ -299,7 +308,7 @@ export function init(opts) {
   $('#pf-replay').addEventListener('click', async () => { const b = $('#pf-replay'); b.disabled = true; try { const run = await rpc('get_run', { p_name: pfName }); if (!run || !Array.isArray(run.log)) H.toast('Aucune rediffusion disponible'); else { closeProfile(); H.replay(run); } } catch (e) { H.toast(ERR.network); } b.disabled = false; });
   $('#ed-ok').addEventListener('click', saveProfile); $('#ed-cancel').addEventListener('click', () => $('#rk-edit').classList.remove('on')); $('#ed-name').addEventListener('click', askName);
   $('#ed-motto').addEventListener('input', () => { $('#ed-err').textContent = ''; });
-  $('#ed-motto').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveProfile(); }); $('#rk-ok').addEventListener('click', confirmName); $('#rk-later').addEventListener('click', () => { openAfterName = false; $('#rk-ask').classList.remove('on'); });
+  $('#ed-motto').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveProfile(); }); $('#rk-ok').addEventListener('click', confirmName); $('#rk-claim').addEventListener('click', claimAccount); $('#rk-later').addEventListener('click', () => { openAfterName = false; $('#rk-ask').classList.remove('on'); });
   $('#rk-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmName(); });
   document.querySelectorAll('.rk-tabs button').forEach((x) => x.addEventListener('click', () => show(x.dataset.b)));
   $('#rk-list').addEventListener('scroll', (e) => { const l = e.currentTarget; if (l.scrollTop + l.clientHeight > l.scrollHeight - 120) more(); }, { passive: true });

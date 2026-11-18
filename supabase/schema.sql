@@ -23,6 +23,8 @@ alter table public.players add column if not exists play_at timestamptz;
 -- présence (vu en ligne il y a moins de 100 s) et « ne pas déranger » pour les invitations de duel
 alter table public.players add column if not exists seen_at timestamptz;
 alter table public.players add column if not exists no_duel boolean not null default false;
+-- reprise de compte après un changement de domaine : ouverte à la main, par pseudo, pour une durée limitée (voir claim_player)
+alter table public.players add column if not exists claim_until timestamptz;
 create unique index if not exists players_name_key on public.players (lower(name));
 
 create table if not exists public.scores (
@@ -281,11 +283,24 @@ language sql security definer set search_path = public as $$
   delete from challenges where from_id = (select id from players where secret_hash = critical_hash(p_secret))
 $$;
 
+-- Reprendre un ancien compte (secret perdu) : possible seulement si l'administrateur a ouvert ce pseudo (claim_until dans le futur), une fois.
+--   update players set claim_until = now() + interval '30 minutes' where lower(name) = lower('Pseudo');
+create or replace function public.claim_player(p_secret text, p_name text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_name text;
+begin
+  if p_secret is null or length(p_secret) < 20 or length(p_secret) > 200 then raise exception 'invalid_secret'; end if;
+  update players set secret_hash = critical_hash(p_secret), claim_until = null
+   where lower(name) = lower(btrim(p_name)) and claim_until > now() returning id, name into v_id, v_name;
+  if v_id is null then raise exception 'not_claimable'; end if;
+  return json_build_object('name', v_name);
+end $$;
+
 -- Accepter ou non les invitations de duel (« ne pas déranger »).
 create or replace function public.set_no_duel(p_secret text, p_value boolean) returns void
 language sql security definer set search_path = public as $$
   update players set no_duel = coalesce(p_value, false) where secret_hash = critical_hash(p_secret)
 $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean) to anon, authenticated;
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text) to anon, authenticated;
