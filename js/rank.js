@@ -6,7 +6,7 @@ const KEY = 'critical.rank.v1', PAGE = 50;
 const $ = (s, r = document) => r.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); // les pseudos viennent d'autres joueurs
-const H = { track: () => {}, invite: () => {}, joinDuel: () => {}, canNotify: () => false, toast: () => {}, vib: () => {}, today: () => '', astres: () => [], astreInfo: () => null, paint: () => {}, codexN: () => 0, tierName: () => '?', local: () => ({}) };
+const H = { level: () => 1, track: () => {}, invite: () => {}, joinDuel: () => {}, canNotify: () => false, toast: () => {}, vib: () => {}, today: () => '', astres: () => [], astreInfo: () => null, paint: () => {}, codexN: () => 0, tierName: () => '?', local: () => ({}) };
 const st = { secret: '', name: '', pending: [], prof: { featured: [], motto: '' }, dirty: false }; // pending : scores pas encore envoyés (pas de pseudo, ou hors connexion)
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
@@ -25,7 +25,7 @@ const secret = () => { if (!st.secret) { st.secret = (crypto.randomUUID ? crypto
 
 // Envoie les scores en attente (un par tableau, le meilleur). Renvoie le rang mondial, ou null si rien n'a pu partir.
 async function pushProfile() { // profil modifié hors connexion : envoyé dès que possible
-  try { await rpc('set_profile', { p_secret: secret(), p_featured: st.prof.featured, p_motto: st.prof.motto, p_codex: H.codexN() }); st.dirty = false; save(); } catch (e) { if (/^invalid_/.test(e.message)) { st.dirty = false; save(); } }
+  try { await rpc('set_profile', { p_secret: secret(), p_featured: st.prof.featured, p_motto: st.prof.motto, p_codex: H.codexN(), p_level: H.level() }); st.dirty = false; st.lvSent = H.level(); save(); } catch (e) { if (/^invalid_/.test(e.message)) { st.dirty = false; save(); } }
 }
 async function flush() {
   if (ready() && st.name && st.dirty) await pushProfile();
@@ -87,7 +87,7 @@ const CSS = `
 #pf-show{display:flex;gap:10px;justify-content:center;width:100%;align-items:stretch}#pf-show:empty{display:none}.pf-load{align-self:center;color:rgba(255,255,255,.6);font-size:14px;text-align:center;padding:14px 0}
 .pf-cell{flex:1;max-width:112px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 8px;border-radius:20px;text-align:center;border:1.5px solid var(--c);background:radial-gradient(120% 80% at 50% 0,color-mix(in srgb,var(--c) 28%,transparent),rgba(255,255,255,.03));box-shadow:0 0 22px color-mix(in srgb,var(--c) 40%,transparent)}
 .pf-cell b{font-size:11px;line-height:1.2}.pf-cell small{font-size:9.5px;line-height:1.2;color:rgba(255,255,255,.65)}.pf-cell em{font:700 9px var(--disp);font-style:normal;letter-spacing:.8px;color:var(--c)}
-#pf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#pf-stats b{font-size:19px}#pf-stats span{font-size:10.5px}#pf-av{animation:pf-halo 4s ease-in-out infinite}@keyframes pf-halo{50%{box-shadow:0 0 44px color-mix(in srgb,var(--c,#fff) 70%,transparent)}}#pf-name{font-size:26px}#pf-name{margin:2px 0 0}#pf-motto{min-height:0;font-style:italic;color:rgba(255,255,255,.8)}#pf-motto:empty{display:none}#pf-meta{font-size:12px}
+#pf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#pf-stats b{font-size:19px}#pf-stats span{font-size:10.5px}#pf-av{animation:pf-halo 4s ease-in-out infinite}@keyframes pf-halo{50%{box-shadow:0 0 44px color-mix(in srgb,var(--c,#fff) 70%,transparent)}}#pf-name{font-size:26px}#pf-name{margin:2px 0 0}#pf-lvl{margin:-6px 0 0;min-height:0;font:800 11px var(--disp);letter-spacing:.14em;color:#4df3ff}#pf-lvl:empty{display:none}#pf-motto{min-height:0;font-style:italic;color:rgba(255,255,255,.8)}#pf-motto:empty{display:none}#pf-meta{font-size:12px}
 #ed-grid{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:36vh;overflow-y:auto;touch-action:pan-y}
 .ed-cell{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:16px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.12);color:#fff}
 .ed-cell b{font-size:10.5px;line-height:1.15}.ed-cell small{font-size:9px;color:rgba(255,255,255,.55)}.ed-cell.on{border-color:#5dffc0;background:rgba(93,255,192,.12)}
@@ -100,7 +100,7 @@ const HTML = `
 <div class="rk-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Défi du jour</button></div>
 <div id="rk-feed"></div><div id="rk-list"></div><p id="rk-hint">Touche un joueur pour voir son profil.</p><p id="rk-me"></p>
 <div class="btns"><button class="big glass" id="rk-name"></button><button class="big primary" id="rk-close">Fermer</button></div></div></div>
-<div class="modal" id="rk-prof"><div class="card glass"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-motto"></p>
+<div class="modal" id="rk-prof"><div class="card glass"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-lvl"></p><p id="pf-motto"></p>
 <div id="pf-soc"><button class="pf-like" id="pf-like" aria-label="Liker ce profil"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.7 8 3.4 5 6.6 5c2 0 3.6 1.1 5.4 3.2C13.8 6.100 15.400 5 17.400 5c3.200 0 4.900 3 3.800 6.200-1.700 4.700-9.200 9.300-9.200 9.300z"/></svg><b id="pf-lk">0</b></button><span id="pf-on"></span></div>
 <div class="stats" id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div><div><b id="pf-cdx">–</b><span>découvertes</span></div></div>
 <p class="pf-lab" id="pf-lab" hidden>Vitrine</p><div id="pf-show"></div>
@@ -154,6 +154,7 @@ let pulseT = 0, lastInv = '', invT = 0;
 const hideInv = () => { clearTimeout(invT); $('#rk-inv').classList.remove('on'); };
 async function pulse() { // « je suis là » toutes les 30 s ; renvoie une éventuelle invitation, montrée une seule fois et seulement hors partie
   if (!ready() || !st.name || document.hidden) return;
+  if (st.lvSent !== H.level()) pushProfile(); // le niveau a changé : on le republie
   try {
     const r = await rpc('pulse', { p_secret: secret() }), d = r && r.duel;
     if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; $('#inv-t').textContent = `${d.from} te défie en duel 1v1`; $('#rk-inv').classList.add('on'); H.vib(12); invT = setTimeout(hideInv, 20000); }
@@ -211,7 +212,7 @@ function avatar(box, key, px) {
 }
 function renderProfile(p, me, offline) {
   const keys = (p.featured || []).filter((k) => H.astreInfo(k));
-  $('#pf-name').textContent = p.name; $('#pf-motto').textContent = p.motto ? '« ' + p.motto + ' »' : '';
+  $('#pf-lvl').textContent = p.level ? 'NIVEAU ' + p.level : ''; $('#pf-name').textContent = p.name; $('#pf-motto').textContent = p.motto ? '« ' + p.motto + ' »' : '';
   avatar($('#pf-av'), keys[0], 96);
   const show = $('#pf-show'); show.innerHTML = '';
   for (const key of keys.slice(1)) {
@@ -238,11 +239,11 @@ async function openProfile(name) {
   try { p = await rpc('get_profile', { p_name: name, p_secret: st.secret || null }); }
   catch (e) {
     if (pfName !== name) return;
-    if (me) return renderProfile({ name: st.name, motto: st.prof.motto, featured: st.prof.featured, codex: H.codexN(), ...H.local() }, true, true); // le serveur ne répond pas : on montre le profil local
+    if (me) return renderProfile({ name: st.name, motto: st.prof.motto, featured: st.prof.featured, codex: H.codexN(), level: H.level(), ...H.local() }, true, true); // le serveur ne répond pas : on montre le profil local
     $('#pf-meta').textContent = ERR.network; return;
   }
   if (pfName !== name) return; // fermé ou remplacé pendant le chargement
-  if (!p) { $('#pf-meta').textContent = me ? '' : 'Profil introuvable.'; if (me) renderProfile({ name: st.name, motto: st.prof.motto, featured: st.prof.featured, codex: H.codexN(), ...H.local() }, true, true); return; }
+  if (!p) { $('#pf-meta').textContent = me ? '' : 'Profil introuvable.'; if (me) renderProfile({ name: st.name, motto: st.prof.motto, featured: st.prof.featured, codex: H.codexN(), level: H.level(), ...H.local() }, true, true); return; }
   if (me && !st.dirty) { st.prof = { featured: p.featured || [], motto: p.motto || '' }; save(); onProf(); } // le serveur fait foi, sauf modification en attente d'envoi
   renderProfile(me && st.dirty ? { ...p, motto: st.prof.motto, featured: st.prof.featured } : p, me);
 }
@@ -275,7 +276,7 @@ async function saveProfile() {
   ok.disabled = true; $('#ed-err').textContent = '';
   const prof = { featured: sel.slice(), motto };
   try {
-    await rpc('set_profile', { p_secret: secret(), p_featured: prof.featured, p_motto: prof.motto, p_codex: H.codexN() });
+    await rpc('set_profile', { p_secret: secret(), p_featured: prof.featured, p_motto: prof.motto, p_codex: H.codexN(), p_level: H.level() });
     st.prof = prof; st.dirty = false; H.toast('Profil enregistré');
   } catch (e) {
     if (/^invalid_|^too_fast$/.test(e.message)) { $('#ed-err').textContent = ERR[e.message] || ERR.network; ok.disabled = false; return; }

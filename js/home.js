@@ -14,6 +14,7 @@ const ICONS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4.2 4.2-6 8-6s6.8 1.8 8 6"/>',
   rank: '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4"/>',
   more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
+  fuse: '<circle cx="9" cy="12" r="5.2"/><circle cx="15" cy="12" r="5.2"/>',
   hole: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9.5" ry="3.6" transform="rotate(-18 12 12)"/>',
   duel: '<path d="M5 19L16 8M13 5h6v6M19 19L8 8M11 5H5v6"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
@@ -23,8 +24,10 @@ const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path 
 
 const CSS = `
 #s-title.hm{padding:0;overflow:hidden}
-.hm-bh{position:absolute;pointer-events:none;display:block;filter:drop-shadow(0 0 46px rgba(200,90,255,.38));animation:hm-hb 7s ease-in-out infinite}
-@keyframes hm-hb{50%{transform:scale(1.035);filter:drop-shadow(0 0 70px rgba(255,120,220,.55)) brightness(1.08)}}
+.hm-hw{position:absolute;transition:transform .35s cubic-bezier(.2,.9,.2,1)}.hm-hw::before{content:'';position:absolute;inset:-14%;border-radius:50%;background:radial-gradient(circle,rgba(190,90,255,.36),rgba(255,90,200,.12) 46%,rgba(0,0,0,0) 70%);animation:hm-gl 7s ease-in-out infinite}
+.hm-bh{position:relative;display:block;width:100%;height:100%;pointer-events:none;animation:hm-hb 7s ease-in-out infinite}
+@keyframes hm-hb{50%{transform:scale(1.035)}}@keyframes hm-gl{50%{opacity:.55}}
+.hm-hole.press .hm-hw{transform:scale(1.07)}
 #s-title.hm>*{z-index:1}
 #s-title.hm .hm-bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .hm-space{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -35,8 +38,6 @@ const CSS = `
 /* verre liquide */
 .gl{position:relative;display:block;border-radius:30px;background:linear-gradient(145deg,rgba(255,255,255,.24),rgba(255,255,255,.06) 42%,rgba(255,255,255,.12));border:1px solid rgba(255,255,255,.2);background-color:rgba(14,16,46,.5);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(255,255,255,.1),inset 1px 0 0 rgba(255,255,255,.2),inset 0 0 26px rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.42);overflow:hidden;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:transform .55s cubic-bezier(.2,1.6,.4,1),filter .3s}
 .gl::before{content:'';position:absolute;inset:0;border-radius:inherit;background:radial-gradient(120% 70% at 18% -5%,rgba(255,255,255,.42),rgba(255,255,255,0) 55%),radial-gradient(90% 60% at 95% 110%,rgba(255,255,255,.16),rgba(255,255,255,0) 60%);pointer-events:none}
-.gl::after{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(112deg,rgba(255,255,255,0) 36%,rgba(255,255,255,.34) 50%,rgba(255,255,255,0) 64%) 160% 0/260% 100% no-repeat;animation:hm-sh 7s ease-in-out infinite;animation-delay:var(--d,0s);pointer-events:none}
-@keyframes hm-sh{0%,55%{background-position:160% 0}100%{background-position:-60% 0}}
 .gl>*{position:relative;z-index:1}
 .gl:active{transform:scale(.955);filter:brightness(1.22)}
 
@@ -68,15 +69,15 @@ const CSS = `
 /* pager : trois pages qui glissent (aimantées), la page centrale est celle du jeu */
 .hm-pager{position:absolute;inset:0;z-index:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch}
 .hm-pager::-webkit-scrollbar{display:none}
-.hm-pg{flex:none;width:100%;height:100%;scroll-snap-align:center;scroll-snap-stop:always;display:flex;flex-direction:column;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 76px) 20px calc(env(safe-area-inset-bottom,0px) + 112px);overflow-y:auto;scrollbar-width:none;max-width:100vw}
+.hm-pg{flex:none;width:100%;height:100%;scroll-snap-align:center;scroll-snap-stop:always;display:flex;flex-direction:column;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 76px) 20px calc(env(safe-area-inset-bottom,0px) + 112px);overflow:hidden;contain:layout paint;max-width:100vw}
 .hm-pg>*{width:100%;max-width:400px}
 .hm-hd{text-align:left;margin:10px 4px 6px}.hm-hd h2{margin:0;font:900 30px/1 var(--disp);letter-spacing:.04em;text-transform:uppercase;text-shadow:0 0 24px rgba(77,243,255,.4)}.hm-hd p{margin:8px 0 0;color:rgba(238,244,255,.6);font-size:14px}
 .hm-pg:nth-child(2){justify-content:flex-start;gap:0}
-.hm-pg:nth-child(2) .logo{margin:calc(clamp(0px,100vh - 700px,40px)) 0 0;text-align:center;font:900 min(13vw,50px)/1 var(--disp);letter-spacing:.03em;background:linear-gradient(100deg,#fff 0%,#7ff6ff 28%,#ff7be5 52%,#fff 76%,#7ff6ff 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:hm-lg 9s linear infinite}
+.hm-pg:nth-child(3){overflow-y:auto;scrollbar-width:none;justify-content:flex-start}.hm-pg:nth-child(3)::-webkit-scrollbar{display:none}
+.hm-pg:nth-child(2) .logo{margin:calc(clamp(0px,100vh - 700px,40px)) 0 0;text-align:center;font:900 min(13vw,50px)/1 var(--disp);letter-spacing:.03em;background:linear-gradient(100deg,#fff 0%,#7ff6ff 28%,#ff7be5 52%,#fff 76%,#7ff6ff 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
 .hm-pg:nth-child(2) .tag{margin:6px 0 0;text-align:center;color:rgba(238,244,255,.7);font-size:14px}
 @keyframes hm-lg{to{background-position:-250% 0}}
-.hm-hole{position:absolute;inset:0;pointer-events:none;opacity:var(--ho,1);transform:translate3d(var(--hx,0),0,0) rotate(var(--hr,0deg)) scale(var(--hs,1));transition:transform .35s cubic-bezier(.2,.9,.2,1);will-change:transform,opacity}
-#s-title.hm:has(#b-mine:active){--hs:1.08}
+.hm-hole{position:absolute;inset:0;pointer-events:none;will-change:transform,opacity}
 .hm-slot{position:relative;flex:none;width:min(80vw,340px,40vh);height:min(80vw,340px,40vh);margin:2px 0 0}
 .hm-core-btn{position:absolute;inset:27%;border-radius:50%;border:0;background:none;color:#fff;cursor:pointer;display:grid;place-items:center;transition:transform .5s cubic-bezier(.2,1.6,.4,1);-webkit-tap-highlight-color:transparent}
 .hm-core-btn:active{transform:scale(.9)}
@@ -94,8 +95,8 @@ const CSS = `
 .set-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 16px var(--font)}.set-row small{color:rgba(255,255,255,.6);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.set-row:active{transform:scale(.97)}
 .hm-slot{width:min(86vw,400px,44vh)!important;height:min(86vw,400px,44vh)!important}.hm-chips{margin-top:auto!important}.hm-pg:nth-child(2){gap:0}.hm-core-btn .hm-t{text-shadow:0 0 6px rgba(0,0,0,.9),0 0 14px rgba(255,190,110,.9),0 0 30px rgba(255,120,60,.55)}.hm-camp .hm-tx small{white-space:normal}
 /* onglets */
-.hm-tabs{position:absolute;left:18px;right:18px;max-width:400px;margin:0 auto;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:68px;border-radius:34px;display:grid;grid-template-columns:repeat(3,1fr);padding:6px;z-index:3}
-.hm-ind{position:absolute;left:6px;top:6px;bottom:6px;width:calc((100% - 12px) / 3);border-radius:28px;background:linear-gradient(135deg,rgba(77,243,255,.34),rgba(255,79,216,.3));box-shadow:0 0 22px rgba(77,243,255,.3),inset 0 1px 0 rgba(255,255,255,.5);transform:translate3d(calc(var(--p,1) * 100%),0,0);will-change:transform}
+.hm-tabs{position:absolute;left:18px;right:18px;max-width:400px;margin:0 auto;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:68px;border-radius:34px;display:grid;grid-template-columns:repeat(4,1fr);padding:6px;z-index:3}
+.hm-ind{position:absolute;left:6px;top:6px;bottom:6px;width:calc((100% - 12px) / 4);border-radius:28px;background:linear-gradient(135deg,rgba(77,243,255,.34),rgba(255,79,216,.3));box-shadow:0 0 22px rgba(77,243,255,.3),inset 0 1px 0 rgba(255,255,255,.5);will-change:transform}
 .hm-tab{position:relative;z-index:1;border:0;background:none;color:rgba(238,244,255,.62);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;cursor:pointer;transition:color .25s}.hm-tab.on{color:#fff}
 .hm-tab .hm-ic{width:22px;height:22px;stroke-width:1.9}.hm-tab span{font:700 10.5px/1 var(--font);letter-spacing:.3px}
 /* monnaie */
@@ -105,6 +106,14 @@ const CSS = `
 @keyframes hm-gm{50%{transform:rotate(-8deg) scale(1.08)}}
 #s-title.hm .hm-pill.pop{animation:hm-pop .7s cubic-bezier(.2,1.6,.4,1)}@keyframes hm-pop{30%{transform:scale(1.16);box-shadow:0 0 34px rgba(120,200,255,.8)}}
 @media (max-height:700px){.hm-pg{padding-top:calc(env(safe-area-inset-top,0px) + 68px);gap:10px}.hm-camp{height:72px!important}.hm-pg:nth-child(2) .tag{display:none}.hm-chips{margin-top:10px}.hm-chip,#s-title.hm #b-quests{height:56px}.hm-hd{margin-top:2px}}
+.hm-hint{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:22px;font:600 13px var(--font);white-space:nowrap;animation:hmh 1s cubic-bezier(.2,1.4,.3,1);transition:opacity .4s}.hm-hint.out{opacity:0}.hm-hint svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;animation:hmw 1.6s ease-in-out infinite}
+@keyframes hmh{from{opacity:0;transform:translate(-50%,24px)}}@keyframes hmw{50%{transform:translateX(5px)}0%,100%{transform:translateX(-5px)}}
+.set-row span{white-space:nowrap}.set-row small{min-width:0}
+@media (max-width:359px){.hm-chip .hm-sbi{display:none}.hm-chip{padding:0 12px}.hm-chip .hm-t{font-size:11px}.hm-pill span{display:none}.hm-hd h2{font-size:26px}}
+.hm-lv{position:absolute;right:70px;top:calc(env(safe-area-inset-top,0px) + 12px);width:46px;height:46px;border-radius:23px;padding:0;display:grid;place-items:center;z-index:2;font:900 14px var(--disp);color:#fff}
+.hm-lvr{position:absolute;inset:4px;border-radius:50%;background:conic-gradient(var(--c,#4df3ff) calc(var(--p,0) * 1%),rgba(255,255,255,.16) 0);-webkit-mask:radial-gradient(circle,transparent 57%,#000 60%);mask:radial-gradient(circle,transparent 57%,#000 60%)}.hm-lv b{position:relative}
+.hm-lvb{width:100%;height:10px;border-radius:5px;background:rgba(255,255,255,.14);overflow:hidden}.hm-lvb i{display:block;height:100%;border-radius:5px}.hm-lvn{font-size:13px!important;line-height:1.45;color:rgba(255,255,255,.7)!important;text-align:left}
+.hm-tab span{font-size:10px!important}
 @media (prefers-reduced-motion:reduce){.hm-core-btn .hm-t,.hm-bh,.hm-gem{animation:none!important}}
 `;
 
@@ -164,15 +173,15 @@ const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return 
 function space(cv, scr) {
   const x = cv.getContext('2d', { alpha: false }), TAU = Math.PI * 2; let W = 0, H = 0, last = 0;
   // Trou noir : l'image du logo (assets/hole.webp), posée sur le bouton Jouer ; elle respire doucement et glisse avec les pages.
-  const still = document.createElement('img'); still.className = 'hm-bh'; still.alt = ''; still.src = 'assets/hole.webp'; still.decoding = 'async'; const hole = make('div', 'hm-hole'); cv.after(hole); hole.append(still);
+  const still = document.createElement('img'); still.className = 'hm-bh'; still.alt = ''; still.src = 'assets/hole.webp'; still.decoding = 'async'; const hole = make('div', 'hm-hole'), hw = make('div', 'hm-hw'); cv.after(hole); hole.append(hw); hw.append(still);
   let cx = 0, cy = 0, tcy = 0, SZ = 340, since = 99;
-  const S = Array.from({ length: 230 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
+  const S = Array.from({ length: 140 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
   const place = () => { // le trou noir se pose sur l'emplacement du bouton Jouer
     const sl = document.querySelector('.hm-slot'), r = sl && sl.getBoundingClientRect(); SZ = Math.min(W * 0.98, 440, sl && sl.clientWidth ? sl.clientWidth * 1.04 : 340);
     cx = W / 2; tcy = r && r.height ? r.top + r.height / 2 : H * 0.3; if (!cy) cy = tcy;
-    still.style.width = still.style.height = SZ + 'px'; still.style.left = cx - SZ / 2 + 'px';
+    hw.style.width = hw.style.height = SZ + 'px'; hw.style.left = cx - SZ / 2 + 'px';
   };
-  const fit = () => { const k = Math.min(1.5, window.devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); }; // l'échelle suit la taille réelle en pixels : la dernière rangée est couverte en entier même avec un ratio fractionnaire (2,625…)
+  const fit = () => { const k = 1; W = cv.clientWidth; H = cv.clientHeight; cv.width = Math.ceil(W * k); cv.height = Math.ceil(H * k); x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); }; // l'échelle suit la taille réelle en pixels : la dernière rangée est couverte en entier même avec un ratio fractionnaire (2,625…)
   window.addEventListener('resize', () => { W = 0; since = 99; });
   const glow = (px, py, r, col) => { const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); };
   const frame = (t) => {
@@ -182,7 +191,7 @@ function space(cv, scr) {
     const gap = t - last, dt = Math.min(0.1, gap / 1000) || 0.033; last = t;
     if (++since > 20) { since = 0; place(); } // se recale sur le titre (qui bouge à l'ouverture et selon la taille de l'écran)
     if (Math.abs(tcy - cy) > 0.3) cy += (tcy - cy) * 0.2; // glisse vers sa place au lieu de sauter quand le titre finit son animation
-    still.style.top = cy - SZ / 2 + 'px';
+    hw.style.top = cy - SZ / 2 + 'px';
     const U = H * 0.8, T = t / 1000;
     const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0a0b22'); bg.addColorStop(0.55, '#070818'); bg.addColorStop(1, '#03030c'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
     x.globalCompositeOperation = 'lighter';
@@ -200,13 +209,15 @@ function space(cv, scr) {
 const bgLayer = (scr) => { const d = make('div', 'hm-bg', '<canvas class="hm-space"></canvas>'); space(d.firstChild, scr); return d; };
 
 let live = null, pager = null, shownDust = null, dustRaf = 0;
-const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Collection', ICONS.coll]];
+const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Fusion', ICONS.fuse], ['Collection', ICONS.coll]];
+let fg = null, opts = {};
 // Une ligne de verre : icône ronde, titre, sous-titre, valeur à droite
 const row = (b, icon) => {
   reskin(b, ['gl', 'hm-camp', 'hm-in']); const t = titleOf(b), s = b.querySelector('small'), tx = make('span', 'hm-tx');
   tx.append(...grab(t, s || make('small', ''))); b.textContent = ''; b.append(make('span', 'hm-sbi', ico(icon)), tx); b.insertAdjacentHTML('beforeend', CHEV); return b;
 };
-export function init() {
+export function init(o = {}) {
+  opts = o;
   const scr = $('#s-title'); if (!scr || scr.classList.contains('hm')) return;
   const menu = $('.menu', scr), wrap = $('.title-wrap', scr); if (!menu || !wrap) return;
   const st = make('style'); st.textContent = CSS + GCSS; document.head.appendChild(st);
@@ -216,14 +227,18 @@ export function init() {
   const gear = $('#b-set2'); if (gear) { reskin(gear, ['gl', 'hm-in'], ['glass', 'icon']); gear.style.setProperty('--e', '.1s'); }
   const stars = $('#t-stars'); if (stars) { reskin(stars, ['gl', 'hm-pill', 'hm-in'], ['foot']); stars.style.setProperty('--e', '.05s'); scr.appendChild(stars); }
 
+  // niveau : anneau de progression à gauche de la roue des réglages
+  const lv = make('button', 'gl hm-lv hm-in', '<i class="hm-lvr"></i><b>1</b>'); lv.setAttribute('aria-label', 'Niveau'); lv.style.setProperty('--e', '.08s'); scr.append(lv);
+  lv.addEventListener('click', () => { opts.sfx && opts.sfx(); levelModal(); });
   // pages
   pager = make('div', 'hm-pager'); const pg = PAGES.map(() => make('section', 'hm-pg')); pager.append(...pg);
   const head = (p, t, s) => p.append(make('div', 'hm-hd', `<h2>${t}</h2><p>${s}</p>`));
   head(pg[0], 'Social', 'Affronte les autres joueurs');
-  head(pg[2], 'Collection', 'Tes astres, tes décors');
+  head(pg[2], 'Fusion', 'Crée des astres uniques'); head(pg[3], 'Collection', 'Tes astres, tes décors');
+  if (opts.forge) fg = opts.forge(pg[2]);
   const place = (p, id, icon, d) => { const b = $(id); if (b) { row(b, icon); b.style.setProperty('--e', d); p.append(b); } };
   place(pg[0], '#b-rank', ICONS.rank, '.15s'); place(pg[0], '#b-duel', ICONS.duel, '.22s'); place(pg[0], '#b-profile', ICONS.user, '.29s');
-  place(pg[2], '#b-codex', ICONS.coll, '.15s'); place(pg[2], '#b-themes', ICONS.theme, '.22s'); place(pg[2], '#b-sandbox', ICONS.casc, '.29s');
+  place(pg[3], '#b-codex', ICONS.coll, '.15s'); place(pg[3], '#b-themes', ICONS.theme, '.22s'); place(pg[3], '#b-sandbox', ICONS.casc, '.29s');
 
   // page centrale : le trou noir EST le bouton Jouer
   const logo = $('.logo', wrap); if (logo) { logo.textContent = 'CRITICAL'; logo.classList.add('hm-in'); }
@@ -241,15 +256,36 @@ export function init() {
   const tabs = make('nav', 'gl hm-tabs hm-in', '<i class="hm-ind"></i>'); tabs.setAttribute('aria-label', 'Navigation');
   PAGES.forEach(([n, ic], i) => { const b = make('button', 'hm-tab', ico(ic) + `<span>${n}</span>`); b.addEventListener('click', () => pager.scrollTo({ left: i * pager.clientWidth, behavior: 'smooth' })); tabs.append(b); });
   scr.append(tabs);
-  const go = () => { const p = pager.scrollLeft / (pager.clientWidth || 1); scr.style.setProperty('--p', p.toFixed(3)); scr.style.setProperty('--ho', Math.max(0, 1 - Math.abs(p - 1) * 1.5).toFixed(3)); scr.style.setProperty('--hr', ((1 - p) * 26).toFixed(1) + 'deg'); scr.style.setProperty('--hx', ((1 - p) * 34).toFixed(1) + 'vw'); tabs.querySelectorAll('.hm-tab').forEach((b, i) => b.classList.toggle('on', Math.abs(p - i) < 0.5)); };
-  pager.addEventListener('scroll', go, { passive: true });
-  const center = () => { pager.style.scrollBehavior = 'auto'; pager.scrollLeft = pager.clientWidth; go(); pager.style.scrollBehavior = ''; };
-  window.addEventListener('resize', center); requestAnimationFrame(center); setTimeout(center, 300);
+  const hole = $('.hm-hole', scr), ind = $('.hm-ind', tabs), tb = [...tabs.querySelectorAll('.hm-tab')]; let cur = 1, tick = 0, IW = 0; tb[1].classList.add('on');
+  const go = () => { // une seule mise à jour par image, uniquement sur le trou noir et l'indicateur (pas de variables CSS : elles recalculaient tout l'écran)
+    tick = 0; const w = pager.clientWidth || 1, p = pager.scrollLeft / w, n = Math.round(p);
+    hole.style.opacity = Math.max(0, 1 - Math.abs(p - 1) * 1.5).toFixed(3); hole.style.transform = `translate3d(${((1 - p) * 34).toFixed(1)}vw,0,0) rotate(${((1 - p) * 26).toFixed(1)}deg)`;
+    ind.style.transform = `translate3d(${(p * (IW || ind.offsetWidth)).toFixed(1)}px,0,0)`;
+    if (n !== cur) { cur = n; tb.forEach((b, i) => b.classList.toggle('on', i === n)); }
+  };
+  pager.addEventListener('scroll', () => { if (!tick) tick = requestAnimationFrame(go); }, { passive: true });
+  const park = () => { IW = ind.offsetWidth; pager.style.scrollBehavior = 'auto'; pager.scrollLeft = cur * pager.clientWidth; pager.style.scrollBehavior = ''; go(); }; // garde la page courante quand la taille change (barre d'adresse du navigateur, rotation)
+  window.addEventListener('resize', park); requestAnimationFrame(park);
+  const slotBtn = $('#b-mine'); if (slotBtn) { const on = (v) => () => hole.classList.toggle('press', v); slotBtn.addEventListener('pointerdown', on(true)); ['pointerup', 'pointercancel', 'pointerleave'].forEach((e) => slotBtn.addEventListener(e, on(false))); }
 }
 
 // Appelé par refreshTitle() : anneau de progression de la campagne + point « défi disponible »
 // Appelé par app.js : poussière d'étoile possédée et état du défi du jour
-export function update({ dust = 0, daily = null, codex = 0, themes = null } = {}) {
+// Indice unique « glisse pour explorer » sous la barre d'onglets, jusqu'au premier changement de page
+export function hint() {
+  const K = 'critical.hint.v1'; try { if (localStorage.getItem(K)) return; localStorage.setItem(K, '1'); } catch (e) { return; }
+  const scr = $('#s-title'), pg = $('.hm-pager', scr); if (!scr || !pg) return;
+  const el = make('div', 'gl hm-hint', '<svg viewBox="0 0 24 24"><path d="M5 12h14M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg><span>Glisse pour voir Social et Collection</span>'); scr.append(el);
+  const off = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); pg.removeEventListener('scroll', off); };
+  pg.addEventListener('scroll', off, { passive: true, once: true }); setTimeout(off, 7000);
+}
+function levelModal() {
+  const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Éclats. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
+  m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
+}
+export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null } = {}) {
+  if (fg) fg.refresh();
+  const lv = $('.hm-lv'); if (lv && level) { lv.style.setProperty('--p', Math.round(level.pct * 100)); lv.style.setProperty('--c', `rgb(${level.col.join(',')})`); $('b', lv).textContent = level.level; }
   const sub = (id, t) => { const e = $(id + ' small'); if (e && t) e.textContent = t; };
   sub('#b-codex', codex ? `${codex} découverte${codex > 1 ? 's' : ''}` : 'Fusionne pour découvrir'); if (themes) sub('#b-themes', `${themes[0]} sur ${themes[1]} possédés`); sub('#b-rank', 'Mondial et défi du jour'); sub('#b-profile', 'Ton astre, ta vitrine, ta devise');
   const p = $('#t-stars');

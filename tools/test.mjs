@@ -135,3 +135,12 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   const h = F.newGame(36, { sandbox: true }); let rr = 0; for (let n = 0; n < 400; n++) { h.bodies.length = 0; h.bodies.push({ id: 1, k: 'c', tier: 2, v: 0, x: 4, y: 12, vx: 0, vy: 0, r: F.TIERS[2].r, ang: 0, av: 0, age: 5, hit: true, dead: false }, { id: 2, k: 'c', tier: 2, v: 0, x: 4 + F.TIERS[2].r * 1.9, y: 12, vx: 0, vy: 0, r: F.TIERS[2].r, ang: 0, av: 0, age: 5, hit: true, dead: false }); for (let k = 0; k < 10; k++) F.tick(h, 1 / 60); for (const e of h.ev) if (e.t === 'rare') rr++; h.ev.length = 0; }
   assert.equal(rr, 0, 'aucune variante rare dans le bac à sable'); console.log('bac à sable OK');
 }
+{ // variantes de style : fréquentes, purement visuelles, et sans effet sur la partie (anciennes parties rejouables à l'identique)
+  const bot = (seed, n) => { const g = F.newGame(seed); let s = 99; const r = () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32; for (let i = 0; i < n && !g.over; i++) { if (r() < 0.1) F.swapHold(g); F.drop(g, 1 + r() * 8); for (let k = 0; k < 40; k++) F.tick(g, 1 / 60); g.ev.length = 0; } return g; };
+  const g = bot(5, 150); assert.equal(g.score, 27580, 'score identique à celui de l\'ancien moteur (le flux aléatoire de la partie est intact)');
+  assert.equal(F.replay(5, g.log, g.n).score, 27580, 'et la rediffusion aussi');
+  const cnt = {}; let fus = 0; for (let seed = 1; seed <= 25; seed++) { const h = F.newGame(seed); let s = seed; const r = () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32; for (let i = 0; i < 400 && !h.over; i++) { F.drop(h, 1 + r() * 8); for (let k = 0; k < 30; k++) { F.tick(h, 1 / 60); for (const e of h.ev) { if (e.t === 'merge') fus++; if (e.t === 'rare' && e.v >= 2) { assert.ok(e.tier < F.MAX_TIER && F.STYLES[e.tier][e.v - 2] === e.p, 'style valide'); cnt[e.tier] = (cnt[e.tier] || 0) + 1; } } h.ev.length = 0; } } }
+  assert.ok(Object.keys(cnt).length >= 3, 'des variantes de style apparaissent (' + JSON.stringify(cnt) + ' sur ' + fus + ' fusions)');
+  for (const tier of [7, 9, 10, 11]) assert.deepEqual(F.absorbOf({ k: 'c', tier, v: 2 }), F.absorbOf({ k: 'c', tier, v: 0 }), 'un style ne donne aucun pouvoir (rang ' + tier + ')');
+  console.log('variantes de style OK', JSON.stringify(cnt));
+}

@@ -18,8 +18,13 @@ export const ABSORB = {
   12: [[3, 1.6, 0.2], [3, 1.3, 0.35], [4, 1.1, 0.5], [4, 0.9, 0.65], [5, 0.7, 0.85], [6, 0.5, 1.1]], // galaxies, de la plus courante à la critique
 };
 export const PULSE = [[4, 2.7, 8], [2.6, 3.4, 15]]; // étoile à neutrons · magnétar : [secondes entre deux impulsions, portée en rayons, force]
-export const absorbOf = (b) => { const t = b.k === 'c' && ABSORB[b.tier]; return t ? t[b.tier === MAX_TIER ? Math.min(b.v | 0, t.length - 1) : b.v ? 1 : 0] || null : null; };
+export const absorbOf = (b) => { const t = b.k === 'c' && ABSORB[b.tier]; return t ? t[b.tier === MAX_TIER ? Math.min(b.v | 0, t.length - 1) : b.v === 1 ? 1 : 0] || null : null; }; // v = 1 : variante rare à pouvoir ; v ≥ 2 : simple style
 // Une galaxie tire toujours sa rareté : spirale, barrée dorée, émeraude, annulaire, prismatique, critique
+// Variantes de style (v = 2, 3…) : purement visuelles, assez fréquentes. Tirées dans un flux à part (graine + n° de fusion) : la partie,
+// son score et son journal ne changent pas, les anciennes parties se rejouent donc à l'identique.
+export const STYLES = { 3: [1 / 24], 4: [1 / 18, 1 / 36], 5: [1 / 18, 1 / 36], 6: [1 / 16], 7: [1 / 18], 8: [1 / 16], 9: [1 / 14], 10: [1 / 18], 11: [1 / 12] };
+export const MYTHIC = 9; // v = 9 : astre prismatique, obtenu seulement par fusion dans la collection (jamais en partie)
+const roll2 = (a, b) => { let t = (a ^ Math.imul(b + 0x9E3779B9, 0x85EBCA6B)) >>> 0; t = Math.imul(t ^ (t >>> 15), 0x2C1B3C6D); t = Math.imul(t ^ (t >>> 12), 0x297A2D39); return ((t ^ (t >>> 15)) >>> 0) / 4294967296; };
 export const GALAXY = [0.62, 0.25, 0.09, 0.03, 0.009, 0.001];
 const SLOP = 0.012; // chevauchement toléré : sans lui, la correction de position fait trembler et ramper les piles
 const STEP = 1 / 120, GRAV = 34, REST = 0.12, CHAIN_WINDOW = 1.0, DANGER_TIME = 2.6, COOLDOWN = 0.3;
@@ -114,8 +119,11 @@ function fuse(G, a, b) {
   n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(HT - n.r, n.y); n.hit = true; n.age = 0.5;
   if (G.sandbox) { /* aucun tirage : une variante rare ne se débloque pas ici */ }
   else if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
-  else if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
-  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v ? 3 : 1); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
+  else {
+    if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
+    else if (STYLES[tier + 1]) { let u = roll2(G.seed | 0, G.fusions); STYLES[tier + 1].some((p, i) => { if (u < p) { n.v = 2 + i; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: n.v, p }); return true; } u -= p; return false; }); }
+  }
+  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v === 1 || (n.v && tier + 1 === MAX_TIER) ? 3 : 1); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
   if (!G.sandbox && tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
@@ -233,8 +241,8 @@ function sub(G) {
   for (const b of G.bodies) {
     b.px = b.x; b.py = b.y; b.age += dt; b.vy += gy * dt;
     if (b.k === 'c') {
-      if (b.tier === GIANT) { if (!b.v) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); } // la géante rouge enfle tant qu'on ne la fusionne pas ; la supergéante (rare) reste stable
-      else if (b.tier === NEUTRON) { const pu = PULSE[b.v ? 1 : 0]; b.pt = (b.pt || 0) + dt; if (b.pt >= pu[0]) { b.pt = 0; kick(G, b.x, b.y, b.r * pu[1], pu[2]); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: b.v | 0, reach: pu[1] }); } } // l'étoile à neutrons repousse par impulsions ; le magnétar plus souvent et plus fort
+      if (b.tier === GIANT) { if (b.v !== 1) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); } // la géante rouge enfle tant qu'on ne la fusionne pas ; la supergéante (rare) reste stable
+      else if (b.tier === NEUTRON) { const pu = PULSE[b.v === 1 ? 1 : 0]; b.pt = (b.pt || 0) + dt; if (b.pt >= pu[0]) { b.pt = 0; kick(G, b.x, b.y, b.r * pu[1], pu[2]); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: b.v | 0, reach: pu[1] }); } } // l'étoile à neutrons repousse par impulsions ; le magnétar plus souvent et plus fort
       else if (b.et > 0) b.et -= dt;
     }
     const sp = Math.hypot(b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
