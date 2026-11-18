@@ -1,13 +1,14 @@
 // Critical — le jeu : rendu et interface (logique dans fusion.js, pure et testée).
-// On fusionne des astres : orbe → astéroïde → lune → planète → géante gazeuse → étoiles → trou noir.
+// On fusionne des astres : débris → astéroïde → lune → planète → géante gazeuse → étoiles → trou noir.
 // Habillage : le verre liquide du reste du jeu, sur fond d'espace profond.
 import * as A from './audio.js';
 import * as F from './fusion.js';
 import { channel } from './realtime.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
-const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
+const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
+if (!Object.keys(sv.inv).length) for (const k of Object.keys(sv.cx)) if (/^\d+:[1-8]$/.test(k) && !k.startsWith('12:')) sv.inv[k] = 1; // les variantes déjà découvertes comptent pour un exemplaire chacune
 if (!sv.eco) { sv.eco = 1; sv.dust = Math.round((sv.dust || 0) * 10); } // l'économie est passée à l'échelle ×10 (Éclats) : on convertit l'ancien solde une seule fois
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch (e) { /* ignore */ } };
 const $ = (s, r = document) => r.querySelector(s);
@@ -23,7 +24,7 @@ const hash = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h =
 
 // Un astre par rang : [nom, couleur des effets]
 export const BODIES = [
-  ['Poussière d\'étoile', [255, 236, 190]], ['Orbe', [77, 243, 255]], ['Astéroïde', [196, 172, 146]], ['Lune', [206, 214, 230]], ['Planète', [80, 150, 255]], ['Géante gazeuse', [244, 176, 96]],
+  ['Poussière d\'étoile', [255, 236, 190]], ['Débris', [255, 170, 110]], ['Astéroïde', [196, 172, 146]], ['Lune', [206, 214, 230]], ['Planète', [80, 150, 255]], ['Géante gazeuse', [244, 176, 96]],
   ['Naine orange', [255, 150, 60]], ['Soleil', [255, 226, 110]], ['Géante rouge', [255, 84, 66]], ['Étoile à neutrons', [170, 212, 255]], ['Trou noir', [190, 110, 255]], ['Quasar', [255, 214, 130]], ['Galaxie', [200, 215, 255]],
 ];
 const CY = [77, 243, 255], MG = [255, 79, 216], AM = [255, 194, 71];
@@ -80,8 +81,9 @@ function onEvents() {
       shake = Math.max(shake, 1.5 + e.tier * 0.9); if (e.tier >= 6) { hitstop = 0.05; flash = 0.14; flashC = col; }
       A.setMood(Math.min(1, G.maxTier / F.MAX_TIER * 0.8 + G.depth * 0.04));
       if (e.tier === F.HOLE && !G.holeSeen) { G.holeSeen = true; slow = 1.1; ring(x, y, W * 0.7, r, 0.9, col, 5); ring(x, y, W * 0.45, r, 0.7, [255, 255, 255], 3); A.rumble(); }
+      if (!G.nop) addXp(Math.ceil((e.tier + 1) / 2));
       if (G.nop) { /* rien ne se débloque ici */ }
-      else if (!sv.cx[e.tier]) { sv.cx[e.tier] = 1; save(); if (e.tier >= 4) G.bonus += 10; if (e.tier >= 3 && !reveal) { say(BODIES[e.tier][0].toUpperCase(), 'NOUVEL ASTRE · CODEX', col); A.star(2); } }
+      else if (!sv.cx[e.tier]) { sv.cx[e.tier] = 1; save(); addXp(20); if (e.tier >= 4) G.bonus += 10; if (e.tier >= 3 && !reveal) { say(BODIES[e.tier][0].toUpperCase(), 'NOUVEL ASTRE · CODEX', col); A.star(2); } }
       else if (e.chain >= 2) say('×' + Math.min(8, e.chain), e.chain >= 3 ? 'CHAÎNE' : '', e.chain >= 5 ? AM : [255, 255, 255]);
       if (!G.nop) { H.track('fusions', 1); H.track('tier', e.tier + 1, true); H.track('chain', e.chain, true); }
     } else if (e.t === 'land') { if (T - landT > 0.07) { landT = T; A.thud(Math.min(1, e.v / 30)); if (e.v > 9) burst(x, y, 3, [200, 220, 255], B.u * 2, 0.3, 1.6); } }
@@ -115,9 +117,10 @@ function onEvents() {
     else if (e.t === 'rare') { // variante rare ou galaxie : grande révélation la 1re fois seulement, ensuite un simple éclat
       const r = rarOf(e.tier, e.v, e.p), key = e.tier + ':' + e.v;
       if (G.nop) continue;
-      if (sv.cx[key]) { say(nameOf(e.tier, e.v).toUpperCase(), 'RARE · ×3 POINTS', RCOL[r]); ring(x, y, B.u * 3, B.u * 0.6, 0.55, RCOL[r], 3); burst(x, y, 14, RCOL[r], B.u * 6, 0.7, 2.4); A.rare(Math.min(r, 1)); H.vib(18); }
+      sv.inv[key] = (sv.inv[key] | 0) + 1; save(); // un exemplaire de plus pour la fusion de collection
+      if (sv.cx[key]) { say(nameOf(e.tier, e.v).toUpperCase(), e.v === 1 || e.tier === F.MAX_TIER ? 'RARE · ×3 POINTS' : 'VARIANTE DE STYLE', RCOL[r]); ring(x, y, B.u * 3, B.u * 0.6, 0.55, RCOL[r], 3); burst(x, y, 14, RCOL[r], B.u * 6, 0.7, 2.4); A.rare(Math.min(r, 1)); H.vib(18); }
       else {
-        sv.cx[key] = 1; save(); G.bonus += 15 + r * 15;
+        sv.cx[key] = 1; save(); G.bonus += 15 + r * 15; addXp(40);
         reveal = { tier: e.tier, v: e.v, r, p: e.p, pw: powerText(e.tier, e.v), l: 0, d: 3.4 + r * 0.35 }; slow = reveal.d * 0.85; callout = null;
         A.rare(r); H.vib(r >= 3 ? [30, 40, 30, 40, 30, 40, 90] : [20, 40, 40]);
       }
@@ -145,10 +148,10 @@ function makeTex(depth, th = theme(), w = Math.max(64, Math.round(W / 2)), h = M
 //   back  : halo, couronne, jets, moitié arrière des anneaux (peut tourner et pulser)
 //   strip : bande de surface répétable qui défile dans un cercle (la rotation de l'astre) ; strip2 = seconde couche (nuages, plasma)
 //   over  : lumière fixe (ombre, reflet, liseré, moitié avant des anneaux) : l'éclairage ne tourne pas avec l'astre
-const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.ceil(w * DPR); c.height = Math.ceil(h * DPR); const x = c.getContext('2d'); x.scale(DPR, DPR); return [c, x]; };
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.ceil(w * DPR - 1e-6); c.height = Math.ceil(h * DPR - 1e-6); const x = c.getContext('2d'); x.scale(DPR, DPR); return [c, x]; };
 const blob = (x, px, py, rx, ry, rot, col) => { x.fillStyle = col; x.beginPath(); x.ellipse(px, py, rx, ry, rot, 0, TAU); x.fill(); };
 function strip(r, base, n, seed, f) { // n motifs placés au hasard, dessinés 3 fois pour boucler sans couture
-  const w = r * 4, h = r * 2, [c, x] = mk(w, h);
+  const w = Math.ceil(r * 4 * DPR) / DPR, h = Math.ceil(r * 2 * DPR) / DPR, [c, x] = mk(w, h); // taille entière en pixels : sinon la dernière colonne reste transparente et laisse une raie sombre à la jointure
   if (typeof base === 'function') base(x, w, h); else if (base) { x.fillStyle = base; x.fillRect(0, 0, w, h); }
   for (let i = 0; i < n; i++) { const px = rnd(seed + i * 1.7) * w, py = rnd(seed + i * 3.1) * h; for (const d of [-w, 0, w]) f(x, px + d, py, i); }
   return c;
@@ -209,11 +212,23 @@ function galaxy(r, v) {
   return { back: halo(r, P.rainbow ? [255, 255, 255] : P.a, 0.35 + v * 0.09), spinB: -0.1 - v * 0.03, pulse: 0.03 + v * 0.012, disc: layer(v * 9 + 1, 4.6, 1), spinD: 0.22 + v * 0.05, disc2: P.two ? layer(v * 9 + 5, -3.4, 0.7) : null, over: o };
 }
 const KIND = ['dust', 'orb', 'rock', 'moon', 'planet', 'gas', 'dwarf', 'sun', 'giant', 'neutron', 'hole', 'quasar', 'galaxy'];
-// Variantes rares (une seule par rang, la galaxie a les siennes) : [nom, teinte]
-const VAR = { 3: ['Lune de glace', [130, 220, 255]], 4: ['Monde de lave', [255, 84, 36]], 5: ['Géante de saphir', [64, 120, 255]], 7: ['Étoile bleue', [100, 170, 255]], 8: ['Supergéante', [255, 190, 70]], 9: ['Magnétar', [90, 255, 200]], 10: ['Trou blanc', [190, 255, 255]], 11: ['Blazar', [110, 255, 190]] };
-const nameOf = (tier, v) => (tier === F.MAX_TIER ? GAL[v | 0].n : v ? VAR[tier][0] : BODIES[tier][0]);
+// Variantes : VAR[rang][v] = [nom, teinte]. v = 1 : variante rare à pouvoir ; v = 2… : styles fréquents (visuels) ; v = 9 : prismatique (fusion).
+const VAR = {
+  3: { 1: ['Lune de glace', [130, 220, 255]], 2: ['Lune d\'ambre', [255, 190, 90]] },
+  4: { 1: ['Monde de lave', [255, 84, 36]], 2: ['Monde de jade', [70, 230, 150]], 3: ['Monde de cristal', [190, 240, 255]] },
+  5: { 1: ['Géante de saphir', [64, 120, 255]], 2: ['Géante d\'émeraude', [60, 220, 140]], 3: ['Géante pourpre', [190, 90, 255]] },
+  6: { 2: ['Naine violette', [170, 100, 255]] },
+  7: { 1: ['Étoile bleue', [100, 170, 255]], 2: ['Soleil rose', [255, 110, 190]] },
+  8: { 1: ['Supergéante', [255, 190, 70]], 2: ['Géante d\'azur', [90, 200, 255]] },
+  9: { 1: ['Magnétar', [90, 255, 200]], 2: ['Pulsar rose', [255, 120, 220]] },
+  10: { 1: ['Trou blanc', [190, 255, 255]], 2: ['Trou noir écarlate', [255, 80, 80]] },
+  11: { 1: ['Blazar', [110, 255, 190]], 2: ['Quasar azur', [80, 170, 255]] },
+};
+for (const t of Object.keys(VAR)) VAR[t][9] = [BODIES[t][0] + ' prismatique', [255, 255, 255]];
+const vOdds = (t, v) => (v === 1 ? F.RARE[t] : v === 9 ? 0 : (F.STYLES[t] || [])[v - 2] || 0);
+const nameOf = (tier, v) => (tier === F.MAX_TIER ? GAL[v | 0].n : v && VAR[tier] && VAR[tier][v] ? VAR[tier][v][0] : BODIES[tier][0]);
 const RCOL = [[160, 185, 225], [77, 243, 255], [255, 79, 216], [255, 194, 71], [255, 120, 90], [255, 255, 255]];
-const rarOf = (tier, v, p) => (tier === F.MAX_TIER ? v : p > 0.03 ? 2 : p > 0.02 ? 3 : 4); // niveau de mise en scène 0..5
+const rarOf = (tier, v, p) => (tier === F.MAX_TIER ? v : v === 9 ? 5 : p > 0.05 ? 1 : p > 0.03 ? 2 : p > 0.02 ? 3 : 4); // niveau de mise en scène 0..5
 
 function build(tier, r, v) {
   const kind = KIND[tier], s = r * 1.3;
@@ -224,16 +239,39 @@ function build(tier, r, v) {
     x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = Math.max(1, r * 0.12); x.lineCap = 'round'; x.beginPath(); x.moveTo(s - r, s); x.lineTo(s + r, s); x.moveTo(s, s - r); x.lineTo(s, s + r); x.stroke();
     return { spr: c, spin: 1.1 };
   }
-  if (kind === 'orb') { // orbe : une bille de verre
-    const [c, x] = mk(s * 2, s * 2), g = x.createRadialGradient(s - r * 0.3, s - r * 0.35, r * 0.05, s, s, r); g.addColorStop(0, '#f4ffff'); g.addColorStop(0.45, '#4df3ff'); g.addColorStop(1, '#14589c');
-    x.fillStyle = g; x.beginPath(); x.arc(s, s, r, 0, TAU); x.fill(); soft(x, s, s + r * 0.55, r * 0.6, [190, 255, 255], 0.5); blob(x, s - r * 0.36, s - r * 0.5, r * 0.3, r * 0.14, -0.6, 'rgba(255,255,255,.8)');
-    x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 1.2; x.beginPath(); x.arc(s, s, r - 0.6, 0, TAU); x.stroke(); return { spr: c, spin: 0 };
+  if (kind === 'orb') { // débris : un éclat de roche sombre, facetté, fissuré ; la lueur de la fissure prend la couleur du niveau du joueur
+    const [c, x] = mk(s * 2, s * 2), L = lvCol(), N = 9, P = [];
+    for (let i = 0; i < N; i++) { const a = (i / N) * TAU + 0.35, rr = r * (0.93 + rnd(i * 4.1 + 1) * 0.07); P.push([s + Math.cos(a) * rr, s + Math.sin(a) * rr]); }
+    const poly = () => { x.beginPath(); P.forEach((p, i) => (i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]))); x.closePath(); };
+    poly(); const g = x.createLinearGradient(s - r, s - r, s + r, s + r); g.addColorStop(0, '#4a4658'); g.addColorStop(1, '#14121c'); x.fillStyle = g; x.fill();
+    x.save(); poly(); x.clip();
+    for (let i = 0; i < N; i++) { const a = P[i], b = P[(i + 1) % N], mid = Math.atan2((a[1] + b[1]) / 2 - s, (a[0] + b[0]) / 2 - s), lit = Math.cos(mid + 2.35); x.fillStyle = lit > 0 ? `rgba(255,255,255,${lit * 0.16})` : `rgba(0,0,0,${-lit * 0.3})`; x.beginPath(); x.moveTo(s - r * 0.1, s - r * 0.1); x.lineTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.closePath(); x.fill(); }
+    const cr = [[-0.78, -0.5], [-0.42, -0.2], [-0.12, 0.12], [0.2, 0.05], [0.42, 0.35], [0.8, 0.62]].map(([px, py], i) => [s + px * r + (rnd(i * 3.3) - 0.5) * r * 0.16, s + py * r + (rnd(i * 5.7) - 0.5) * r * 0.16]); // fissure en zigzag, d'un bord à l'autre
+    const path = () => { x.beginPath(); cr.forEach((p, i) => (i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]))); };
+    x.lineJoin = 'round'; x.lineCap = 'round';
+    soft(x, s, s, r * 0.95, L, 0.22); // la lumière déborde sur la roche
+    path(); x.strokeStyle = 'rgba(0,0,0,.7)'; x.lineWidth = r * 0.3; x.stroke();
+    x.globalCompositeOperation = 'lighter'; path(); x.strokeStyle = rgba(L, 0.55); x.lineWidth = r * 0.2; x.stroke(); path(); x.strokeStyle = rgba(L, 0.95); x.lineWidth = r * 0.1; x.stroke();
+    x.globalCompositeOperation = 'source-over'; path(); x.strokeStyle = 'rgba(255,255,255,.95)'; x.lineWidth = Math.max(1, r * 0.04); x.stroke();
+    x.restore(); poly(); x.strokeStyle = 'rgba(255,255,255,.2)'; x.lineWidth = 1; x.stroke();
+    return { spr: c, spin: 0.2 };
   }
-  if (kind === 'rock') { // astéroïde : remplit tout son cercle de collision (bosses légères seulement), sinon on voit des vides entre les astres
-    const [c, x] = mk(s * 2, s * 2), g = x.createLinearGradient(s - r, s - r, s + r, s + r); g.addColorStop(0, '#e2cfb4'); g.addColorStop(1, '#4a3d34'); x.fillStyle = g;
-    x.beginPath(); for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU, rr = r * (0.94 + rnd(i * 2.7) * 0.06); x.lineTo(s + Math.cos(a) * rr, s + Math.sin(a) * rr); } x.closePath(); x.fill();
-    for (let i = 0; i < 5; i++) blob(x, s + (rnd(i * 3) - 0.5) * r * 1.1, s + (rnd(i * 5) - 0.5) * r * 1.1, r * 0.17, r * 0.14, i, 'rgba(40,30,25,.42)');
-    blob(x, s - r * 0.35, s - r * 0.45, r * 0.3, r * 0.14, -0.6, 'rgba(255,255,255,.22)');
+  if (kind === 'rock') { // astéroïde : pierre grise anguleuse, cratères nets éclairés par le haut gauche, éclats de minerai
+    const [c, x] = mk(s * 2, s * 2), N = 13, P = [];
+    for (let i = 0; i < N; i++) { const a = (i / N) * TAU, rr = r * (0.935 + rnd(i * 2.7 + 4) * 0.065); P.push([s + Math.cos(a) * rr, s + Math.sin(a) * rr]); }
+    const poly = () => { x.beginPath(); P.forEach((p, i) => (i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]))); x.closePath(); };
+    poly(); const g = x.createLinearGradient(s - r * 0.8, s - r * 0.9, s + r * 0.9, s + r); g.addColorStop(0, '#b9b4b8'); g.addColorStop(0.5, '#7c7479'); g.addColorStop(1, '#2c2730'); x.fillStyle = g; x.fill();
+    x.save(); poly(); x.clip();
+    for (let i = 0; i < N; i++) { const a = P[i], b = P[(i + 1) % N], mid = Math.atan2((a[1] + b[1]) / 2 - s, (a[0] + b[0]) / 2 - s), lit = Math.cos(mid + 2.35); x.fillStyle = lit > 0 ? `rgba(255,255,255,${lit * 0.13})` : `rgba(0,0,0,${-lit * 0.22})`; x.beginPath(); x.moveTo(s - r * 0.15, s - r * 0.15); x.lineTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.closePath(); x.fill(); }
+    for (let i = 0; i < 6; i++) { // cratères : creux sombre + lèvre claire en bas à droite
+      const cx = s + (rnd(i * 3 + 1) - 0.5) * r * 1.15, cy = s + (rnd(i * 5 + 2) - 0.5) * r * 1.15, cr = r * (0.1 + rnd(i * 7 + 3) * 0.13);
+      x.fillStyle = 'rgba(20,16,24,.62)'; x.beginPath(); x.ellipse(cx, cy, cr, cr * 0.86, 0.3, 0, TAU); x.fill();
+      x.strokeStyle = 'rgba(255,255,255,.34)'; x.lineWidth = Math.max(1, cr * 0.2); x.beginPath(); x.ellipse(cx, cy, cr, cr * 0.86, 0.3, 0.2, 1.5); x.stroke();
+      x.strokeStyle = 'rgba(0,0,0,.5)'; x.lineWidth = Math.max(1, cr * 0.18); x.beginPath(); x.ellipse(cx, cy, cr, cr * 0.86, 0.3, 3.4, 4.6); x.stroke();
+    }
+    for (let i = 0; i < 16; i++) { const px = s + (rnd(i * 2.3 + 9) - 0.5) * r * 1.7, py = s + (rnd(i * 4.1 + 8) - 0.5) * r * 1.7; x.fillStyle = i % 4 ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.2)'; x.fillRect(px, py, Math.max(1, r * 0.035), Math.max(1, r * 0.035)); }
+    for (let i = 0; i < 3; i++) { const px = s + (rnd(i * 6.1 + 2) - 0.5) * r * 1.2, py = s + (rnd(i * 8.3 + 5) - 0.5) * r * 1.2; soft(x, px, py, r * 0.12, [255, 200, 120], 0.55); x.fillStyle = '#fff1d0'; x.beginPath(); x.arc(px, py, Math.max(0.8, r * 0.03), 0, TAU); x.fill(); } // minerai qui brille
+    x.restore(); poly(); x.strokeStyle = 'rgba(255,255,255,.22)'; x.lineWidth = 1; x.stroke();
     return { spr: c, spin: 0.35 };
   }
   if (kind === 'moon') { const [o] = light(r, r); A = { R: r, sp: 0.16, over: o, strip: strip(r, '#aab2c4', 16, 3, (x, px, py, i) => { const cr = r * (0.09 + rnd(i * 7) * 0.17); blob(x, px, py, cr, cr, 0, 'rgba(66,72,92,.5)'); blob(x, px - cr * 0.2, py - cr * 0.2, cr * 0.7, cr * 0.7, 0, 'rgba(120,128,148,.5)'); }) }; }
@@ -248,7 +286,7 @@ function build(tier, r, v) {
     A = { R: r, sp: 0.5, over: o, back: b, still: true, strip: strip(r, (x, w, h) => { for (let i = 0; i < 9; i++) { x.fillStyle = ['#f6d9a8', '#d98a48', '#f0c088', '#b9642e', '#f8e4c0', '#cf7d3e', '#eec489', '#a9562a', '#e9b877'][i]; x.fillRect(0, (i / 9) * h, w, h / 9 + 1); } }, 22, 31, (x, px, py, i) => { py = (Math.floor((py / (r * 2)) * 9) + 0.5) * r * 2 / 9; blob(x, px, py, r * (0.2 + rnd(i * 3) * 0.3), r * 0.045, 0, i % 2 ? 'rgba(255,246,220,.5)' : 'rgba(110,46,18,.4)'); if (i === 0) blob(x, px, r * 1.25, r * 0.22, r * 0.12, 0, '#c8442c'); }) };
   } else if (kind === 'dwarf' || kind === 'sun' || kind === 'giant') { // étoiles : deux couches de plasma qui se croisent, halo qui respire
     const P = { dwarf: ['#ff8a34', [255, 224, 150], [150, 30, 10], [150, 30, 10], [255, 140, 60], 0], sun: ['#ffcf40', [255, 255, 225], [255, 120, 20], [230, 110, 10], [255, 220, 90], 16], giant: ['#ee3d2c', [255, 180, 120], [80, 0, 12], [90, 0, 14], [255, 70, 60], 0] }[kind];
-    const [o] = light(r, r, v ? (tier === 7 ? [20, 60, 200] : [120, 70, 10]) : P[3]);
+    const [o] = light(r, r, v === 1 ? (tier === 7 ? [20, 60, 200] : [120, 70, 10]) : P[3]);
     A = { R: r, sp: 0.22, sp2: -0.3, add: true, over: o, back: halo(r, P[4], 0.7, P[5]), spinB: P[5] ? 0.12 : 0, pulse: 0.045, strip: starStrip(r, P[0], P[1], P[2], tier * 7), strip2: starStrip(r, null, P[1], [255, 255, 255], tier * 13) };
   } else if (kind === 'neutron') { // jets qui balayent, surface très rapide
     const [j, jx] = mk(s * 2, s * 2), g = jx.createLinearGradient(0, s, s * 2, s); g.addColorStop(0, 'rgba(160,210,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(160,210,255,0)');
@@ -256,7 +294,7 @@ function build(tier, r, v) {
     const [o] = light(r, r, [40, 80, 220]);
     A = { R: r, sp: 1.6, sp2: -1.1, add: true, over: o, back: halo(r, [150, 200, 255], 0.85), pulse: 0.07, disc: j, spinD: 2.4, strip: starStrip(r, '#a9d0ff', [255, 255, 255], [60, 100, 255], 71), strip2: starStrip(r, null, [255, 255, 255], [140, 180, 255], 83) };
   } else if (kind === 'hole') { // le disque tourne autour d'un horizon immobile ; variante rare : trou blanc, cœur de lumière
-    const [o, ox] = mk(s * 2, s * 2); ox.fillStyle = v ? '#fff' : '#000'; ox.beginPath(); ox.arc(s, s, r * 0.6, 0, TAU); ox.fill(); if (v) soft(ox, s, s, r * 0.9, [255, 255, 255], 0.9);
+    const [o, ox] = mk(s * 2, s * 2); ox.fillStyle = v === 1 ? '#fff' : '#000'; ox.beginPath(); ox.arc(s, s, r * 0.6, 0, TAU); ox.fill(); if (v === 1) soft(ox, s, s, r * 0.9, [255, 255, 255], 0.9);
     ox.strokeStyle = 'rgba(255,255,255,.95)'; ox.lineWidth = Math.max(1.5, r * 0.03); ox.beginPath(); ox.arc(s, s, r * 0.61, 0, TAU); ox.stroke();
     ox.strokeStyle = 'rgba(255,210,140,.9)'; ox.lineWidth = r * 0.06; ox.beginPath(); ox.ellipse(s, s, r * 1.14, r * 0.16, -0.3, 0, Math.PI); ox.stroke();
     A = { over: o, back: halo(r, [170, 90, 255], 0.8), pulse: 0.06, disc: accretion(r, 0.55), spinD: 0.9 };
@@ -266,14 +304,16 @@ function build(tier, r, v) {
     const [o, ox] = mk(s * 2, s * 2); soft(ox, s, s, r * 0.62, [255, 255, 255], 1); ox.fillStyle = '#000'; ox.beginPath(); ox.arc(s, s, r * 0.3, 0, TAU); ox.fill(); ox.strokeStyle = '#fff'; ox.lineWidth = Math.max(1.5, r * 0.03); ox.stroke();
     A = { over: o, back: b, still: true, spinB: 0.25, disc: accretion(r, 0.3, true), spinD: 1.7 };
   }
-  if (v && VAR[tier]) for (const k of ['strip', 'strip2', 'back', 'disc']) A[k] = tint(A[k], VAR[tier][1]);
+  const V = v && VAR[tier] && VAR[tier][v];
+  if (V && v !== 9) for (const k of ['strip', 'strip2', 'back', 'disc']) A[k] = tint(A[k], V[1]);
+  if (v === 9) A.prism = true; // prismatique : un arc-en-ciel tourne sur l'astre (voir compose)
   return A;
 }
 function sprite(tier, v) {
-  const key = B.u.toFixed(2) + ':' + DPR;
+  const key = B.u.toFixed(2) + ':' + DPR + ':' + lvStyle();
   if (key !== spriteKey) { sprites.clear(); spriteKey = key; }
-  let s = sprites.get(tier * 8 + v);
-  if (!s) { const r = F.TIERS[tier].r * B.u; s = build(tier, r, v); s.h = r * 1.3; sprites.set(tier * 8 + v, s); }
+  let s = sprites.get(tier * 16 + v);
+  if (!s) { const r = F.TIERS[tier].r * B.u; s = build(tier, r, v); s.h = r * 1.3; sprites.set(tier * 16 + v, s); }
   return s;
 }
 // Performance : les calques d'un astre animé (halo, surface découpée, lumière) sont assemblés UNE fois par rang toutes les 2 images
@@ -285,16 +325,19 @@ function compose(s, tier) {
   if (s.disc) { x.save(); x.rotate(T * s.spinD); img(s.disc); x.restore(); }
   if (s.disc2) { x.save(); x.rotate(-T * s.spinD * 0.7); img(s.disc2); x.restore(); }
   if (s.strip) {
-    const R = s.R, w = (h / 1.3) * 4, lay = (c, sp) => { const o = ((T * sp * R) % w + w) % w; x.drawImage(c, -R - o, -w / 4, w, w / 2); x.drawImage(c, -R - o + w, -w / 4, w, w / 2); };
+    const R = s.R, w = (h / 1.3) * 4, lay = (c, sp) => { // bande qui défile : un motif répété (pas deux images collées, dont la jointure laissait une raie sombre verticale)
+      const o = ((T * sp * R) % w + w) % w, kx = w / c.width, ky = (w / 2) / c.height; if (!c.pat) c.pat = x.createPattern(c, 'repeat');
+      x.save(); x.translate(-R - o, -w / 4); x.scale(kx, ky); x.fillStyle = c.pat; x.fillRect(o / kx, 0, (2 * R) / kx + 2, c.height); x.restore(); };
     x.save(); x.beginPath(); x.arc(0, 0, R, 0, TAU); x.clip(); lay(s.strip, s.sp);
     if (s.strip2) { if (s.add) x.globalCompositeOperation = 'lighter'; lay(s.strip2, s.sp2); }
     x.restore();
   }
+  if (s.prism && x.createConicGradient) { x.save(); x.beginPath(); x.arc(0, 0, h / 1.3, 0, TAU); x.clip(); const g = x.createConicGradient(T * 0.9, 0, 0); for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsl(${(i * 60) % 360},100%,62%)`); x.globalCompositeOperation = 'color'; x.globalAlpha = 0.72; x.fillStyle = g; x.fillRect(-h, -h, h * 2, h * 2); x.restore(); }
   if (s.over) img(s.over);
 }
 function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
   if (it.k === 'c') {
-    const v = it.v | 0, s = sprite(it.tier, v), k = sc * (u / B.u) * (it.r ? it.r / F.TIERS[it.tier].r : 1), h = s.h * k; // it.r : la géante rouge enfle
+    const v = !it.v && !it.ns && sv.skin[it.tier] ? sv.skin[it.tier] : it.v | 0, s = sprite(it.tier, v), k = sc * (u / B.u) * (it.r ? it.r / F.TIERS[it.tier].r : 1), h = s.h * k; // it.r : la géante rouge enfle
     if (s.spr) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang + T * s.spin); ctx.drawImage(s.spr, -h, -h, h * 2, h * 2); ctx.restore(); }
     else {
       if (!s.comp) { s.comp = document.createElement('canvas'); s.comp.width = s.comp.height = Math.ceil(s.h * 2 * DPR); s.cx = s.comp.getContext('2d'); s.stamp = -1; }
@@ -313,11 +356,11 @@ function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
 const sec = (x) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 // Description d'un pouvoir, construite depuis les tables du moteur (une seule source de vérité)
 export function powerText(tier, v = 0) {
-  const t = F.ABSORB[tier], pw = t && t[tier === F.MAX_TIER ? Math.min(v, 5) : v ? 1 : 0];
+  const t = F.ABSORB[tier], pw = t && t[tier === F.MAX_TIER ? Math.min(v, 5) : v === 1 ? 1 : 0];
   if (pw) return `Avale tout astre jusqu'à « ${BODIES[pw[0]][0]} », un toutes les ${sec(pw[1])} s${pw[2] >= 0.5 ? ', même sans contact' : pw[2] >= 0.1 ? ', à courte distance' : ''}.`;
-  if (tier === F.NEUTRON) return v ? `Impulsions bien plus fortes, toutes les ${sec(F.PULSE[1][0])} s.` : `Repousse ses voisins toutes les ${sec(F.PULSE[0][0])} s.`;
-  if (tier === F.GIANT) return v ? 'Reste stable : ne gonfle jamais.' : 'Gonfle avec le temps : fusionne-la vite.';
-  return '';
+  if (tier === F.NEUTRON) return v === 1 ? `Impulsions bien plus fortes, toutes les ${sec(F.PULSE[1][0])} s.` : `Repousse ses voisins toutes les ${sec(F.PULSE[0][0])} s.`;
+  if (tier === F.GIANT) return v === 1 ? 'Reste stable : ne gonfle jamais.' : 'Gonfle avec le temps : fusionne-la vite.';
+  return v >= 2 && v < 9 ? 'Variante de style : aucun pouvoir, juste beaucoup d\'allure.' : v === 9 ? 'Astre unique obtenu par fusion : il remplace l\'apparence de ce rang quand tu l\'équipes.' : '';
 }
 const RNAME = ['COMMUNE', 'PEU COMMUNE', 'RARE', 'ÉPIQUE', 'LÉGENDAIRE', 'CRITIQUE'];
 const odds = (p) => (p >= 0.05 ? `${(p * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} % de chances` : `1 chance sur ${Math.round(1 / p).toLocaleString('fr-FR')}`);
@@ -596,13 +639,14 @@ const CSS = `
 #mn-rp{position:absolute;left:12px;right:12px;display:none;align-items:center;gap:8px;justify-content:center}#mn.rpl #mn-rp{display:flex}#mn-rpn{display:none;flex:1;font:700 12px Orbitron,system-ui,sans-serif;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#mn-rp button{height:44px;min-width:44px;border-radius:16px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:700 12px Orbitron,system-ui,sans-serif}#mn-rp div{display:flex;gap:6px}#mn-rp div button.on{border-color:#4df3ff;background:rgba(77,243,255,.18)}
 #dl-code{font:900 44px Orbitron,system-ui,sans-serif;letter-spacing:.16em;text-align:center;min-height:0;color:#4df3ff}#dl-code:empty{display:none}#dl-in{width:100%;height:52px;border-radius:18px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#fff;font:700 20px Orbitron,system-ui,sans-serif;text-align:center;letter-spacing:.2em;text-transform:uppercase;outline:none;user-select:text;-webkit-user-select:text}
 #mn-m-duel:not([data-s=menu]) #dl-in,#mn-m-duel:not([data-s=menu]) #dl-join,#mn-m-duel[data-s=wait] #dl-new,#mn-m-duel[data-s=end] #dl-code{display:none}#mn-m-duel[data-s=end] #dl-new{display:block}
+#mn-xp{width:100%;display:flex;flex-direction:column;gap:5px}#mn-xp span{font:800 11px Orbitron,system-ui,sans-serif;letter-spacing:.1em;color:#fff}#mn-xp i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden}#mn-xp b{display:block;height:100%;border-radius:4px;box-shadow:0 0 12px currentColor}#mn-xp small{font-size:12px;color:rgba(255,255,255,.7)}
 #mn-ht{font-size:13px;color:rgba(255,255,255,.7);text-align:center;margin:0}#mn-lad{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin:6px 0 4px}#mn-lad canvas{opacity:.92}
 `;
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
 <button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
-<div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p>
+<div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p><div id="mn-xp"></div>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
@@ -613,7 +657,7 @@ const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id=
 const entries = () => [
   ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '', info: powerText(i, 0) })),
   ...GAL.map((g, v) => ({ key: F.MAX_TIER + ':' + v, name: g.n, tier: F.MAX_TIER, v, p: F.GALAXY[v], ok: !!sv.cx[F.MAX_TIER + ':' + v], sub: odds(F.GALAXY[v]), info: powerText(F.MAX_TIER, v) })),
-  ...Object.keys(VAR).map((t) => ({ key: t + ':1', name: VAR[t][0], tier: +t, v: 1, p: F.RARE[t], ok: !!sv.cx[t + ':1'], sub: odds(F.RARE[t]), info: powerText(+t, 1) })),
+  ...Object.keys(VAR).flatMap((t) => Object.keys(VAR[t]).map(Number).sort().map((v) => ({ key: t + ':' + v, name: VAR[t][v][0], tier: +t, v, p: vOdds(+t, v) || undefined, ok: !!sv.cx[t + ':' + v], sub: v === 9 ? 'Fusion' : odds(vOdds(+t, v)), info: powerText(+t, v) }))),
   ...Object.keys(SECRETS).map((id) => ({ key: id, name: SECRETS[id][0], tier: -1, v: 0, ok: !!sv.cx[id], sub: SECRETS[id][1], info: '' })),
 ];
 const parseKey = (k) => { const m = /^(\d{1,2})(?::(\d))?$/.exec(String(k)); return m && +m[1] <= F.MAX_TIER ? { tier: +m[1], v: +(m[2] || 0) } : null; };
@@ -626,15 +670,15 @@ export const tierName = (t) => (t === F.MAX_TIER ? 'Galaxie' : (BODIES[t] || ['?
 export const astres = () => entries().filter((e) => e.ok && e.tier >= 0).map((e) => ({ ...e, r: e.p ? -Math.log(e.p) : e.tier / 20 })).sort((a, b) => b.r - a.r);
 export function astreInfo(key) { // nom, rareté (-1 = courant) et couleur d'un astre, pour l'affichage d'un profil
   const k = parseKey(key); if (!k) return null;
-  const p = k.tier === F.MAX_TIER ? F.GALAXY[k.v] : k.v ? F.RARE[k.tier] : 0, rar = k.tier === F.MAX_TIER ? k.v : k.v && p ? rarOf(k.tier, 1, p) : -1;
-  return { name: k.tier === F.MAX_TIER ? GAL[k.v].n : nameOf(k.tier, k.v), rar, col: rar >= 0 ? RCOL[rar] : [160, 185, 225], sub: p ? odds(p) : '' };
+  const p = k.tier === F.MAX_TIER ? F.GALAXY[k.v] : k.v ? vOdds(k.tier, k.v) : 0, rar = k.tier === F.MAX_TIER ? k.v : k.v === 9 ? 5 : k.v && p ? rarOf(k.tier, k.v, p) : -1;
+  return { name: k.tier === F.MAX_TIER ? GAL[k.v].n : nameOf(k.tier, k.v), rar, col: rar >= 0 ? RCOL[rar] : [160, 185, 225], sub: p ? odds(p) : k.v === 9 ? 'Fusion' : '' };
 }
 // Dessine un astre dans une vignette carrée de px pixels (profil, classement). live : astre animé, à repeindre régulièrement.
 export function paintAstre(c, key, px, live) {
   const k = parseKey(key); if (!k) return;
   const d = Math.min(window.devicePixelRatio || 1, 2); c.width = c.height = Math.round(px * d); c.style.width = c.style.height = px + 'px';
   const keep = ctx, t0 = T; ctx = c.getContext('2d'); ctx.scale(d, d); if (live) { T = performance.now() / 1000; FN += 2; }
-  drawItem({ k: 'c', tier: k.tier, v: k.v }, px / 2, px / 2, 1, 0, Math.min(B.u, px * 0.36 / F.TIERS[k.tier].r)); // jamais plus grand que le sprite : pas de flou
+  drawItem({ k: 'c', tier: k.tier, v: k.v, ns: true }, px / 2, px / 2, 1, 0, Math.min(B.u, px * 0.36 / F.TIERS[k.tier].r)); // jamais plus grand que le sprite : pas de flou
   ctx = keep; T = t0;
 }
 function showCodex() {
@@ -651,6 +695,28 @@ function showCodex() {
   $('#mn-m-codex').classList.add('on');
 }
 export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} Éclats${label ? ' · ' + label : ''}`); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
+/* ============================== niveaux, expérience, fusion de collection ============================== */
+const LV_COL = [[77, 243, 255], [93, 255, 192], [180, 255, 90], [255, 226, 90], [255, 160, 60], [255, 96, 96], [255, 79, 216], [170, 110, 255], [255, 255, 255]]; // la fissure du débris change de couleur tous les 5 niveaux
+const xpNeed = (l) => 100 + 40 * (l - 1); // expérience pour passer du niveau l au suivant
+function levelOf(xp) { let l = 1; while (xp >= xpNeed(l)) { xp -= xpNeed(l); l++; } return { level: l, cur: xp, need: xpNeed(l) }; }
+const colIdx = () => Math.min(LV_COL.length - 1, Math.floor((levelOf(sv.xp).level - 1) / 5));
+const lvCol = () => LV_COL[colIdx()];
+function lvStyle() { return colIdx(); }
+export const levelInfo = () => { const L = levelOf(sv.xp); return { ...L, pct: L.cur / L.need, col: LV_COL[colIdx()], next: colIdx() < LV_COL.length - 1 ? (colIdx() + 1) * 5 + 1 : 0 }; };
+function addXp(n) { // aucune expérience dans le bac à sable, les rediffusions ni les duels
+  if (!(n > 0) || (G && G.nop)) return; const before = levelOf(sv.xp).level; sv.xp += Math.round(n); if (G) G.xpGain = (G.xpGain || 0) + Math.round(n);
+  const now = levelOf(sv.xp).level; for (let l = before + 1; l <= now; l++) { grant(100 + 50 * l, 'Niveau ' + l); if (isOpen && G && !ended) { say('NIVEAU ' + l, '+' + fmt(100 + 50 * l) + ' ÉCLATS', LV_COL[colIdx()]); A.win(); H.vib([20, 40, 20]); } }
+  save(); H.refresh();
+}
+const FORGE_COPIES = (t) => (t <= 5 ? 6 : t <= 8 ? 4 : 3); // exemplaires de variantes d'un rang à réunir pour fabriquer son prismatique
+const copiesOf = (t) => Object.keys(VAR[t]).map(Number).filter((v) => v < 9).reduce((a, v) => a + (sv.inv[t + ':' + v] | 0), 0);
+export const forgeInfo = () => Object.keys(VAR).map((t) => ({ tier: +t, name: BODIES[t][0], key: t + ':9', copies: copiesOf(t), need: FORGE_COPIES(+t), own: !!sv.inv[t + ':9'], equipped: sv.skin[t] === 9 }));
+export function forge(t) { // consomme d'abord les variantes les plus courantes, jamais le prismatique ; renvoie la clé obtenue
+  const i = forgeInfo().find((f) => f.tier === +t); if (!i || i.own || i.copies < i.need) return null;
+  let need = i.need; for (const v of Object.keys(VAR[t]).map(Number).filter((v) => v < 9).sort((a, b) => b - a)) { const k = t + ':' + v, n = Math.min(need, sv.inv[k] | 0); sv.inv[k] = (sv.inv[k] | 0) - n; need -= n; }
+  sv.inv[t + ':9'] = 1; sv.cx[t + ':9'] = 1; sv.skin[t] = 9; sprites.clear(); addXp(60); save(); H.refresh(); return t + ':9';
+}
+export function equip(t, on) { if (on) sv.skin[t] = 9; else delete sv.skin[t]; sprites.clear(); save(); }
 export const dust = () => sv.dust;
 export const themeStat = () => [Object.keys(sv.themes).length, THEMES.length];
 // Récompense de mission : un thème offert ; si on le possède déjà, la moitié de son prix en poussière d'étoile
@@ -724,11 +790,11 @@ function endRun() {
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
   H.track('score', G.score, true); H.track('runs', 1);
-  const gain = Math.min(800, Math.round(G.depth * 50 + G.score / 200)) + G.bonus * 10; // proportionnel au jeu réel : rien à gagner à saborder une partie
+  const gain = Math.min(800, Math.round(G.depth * 50 + G.score / 200)) + G.bonus * 10, lv0 = levelOf(sv.xp).level; addXp(Math.min(300, Math.round(G.depth * 25 + G.score / 400))); // proportionnel au jeu réel : rien à gagner à saborder une partie
   if (G.over) A.fail();
   const rvTxt = rvDone ? `Tu as dépassé ${rv.name} !` : rv ? `À ${fmt(rv.score - G.score)} points de ${rv.name}.` : '';
   setTimeout(() => {
-    grant(gain);
+    grant(gain); const L = levelInfo(), gx = G.xpGain | 0; $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(gx)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
     $('#mn-ot').textContent = rec.s && sv.runs > 1 ? 'Nouveau record !' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer';
     $('#mn-os').textContent = rvTxt || rec.s ? rvTxt || 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
     overPanel(rec);
@@ -745,7 +811,8 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   if (won) { sv.daily = { day: G.day, done: true, best: sv.daily.day === G.day ? Math.max(sv.daily.best, left) : left }; save(); A.win(); } else A.fail();
   rankLine(null); if (won) H.submit({ daily: G.day, score: Math.round(left * 100), sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n });
   setTimeout(() => {
-    if (first) { grant(1500, 'Défi du jour'); H.track('daily', 1); }
+    if (first) { grant(1500, 'Défi du jour'); addXp(100); H.track('daily', 1); }
+    $('#mn-xp').innerHTML = '';
     $('#mn-ot').textContent = won ? 'Défi réussi !' : 'Défi manqué'; $('#mn-share').hidden = !won; $('#mn-again').textContent = won ? 'Rejouer le défi' : 'Réessayer';
     $('#mn-os').textContent = won ? `Il te restait ${left.toLocaleString('fr-FR')} s. ${first ? '' : 'Récompense déjà reçue aujourd\'hui.'}` : c[3] + '.';
     overPanel({}); H.refresh();

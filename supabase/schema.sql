@@ -23,6 +23,8 @@ alter table public.players add column if not exists play_at timestamptz;
 -- présence (vu en ligne il y a moins de 100 s) et « ne pas déranger » pour les invitations de duel
 alter table public.players add column if not exists seen_at timestamptz;
 alter table public.players add column if not exists no_duel boolean not null default false;
+-- niveau affiché sur le profil (déclaré par l'appareil, borné de 1 à 999)
+alter table public.players add column if not exists level integer not null default 1;
 -- reprise de compte après un changement de domaine : ouverte à la main, par pseudo, pour une durée limitée (voir claim_player)
 alter table public.players add column if not exists claim_until timestamptz;
 create unique index if not exists players_name_key on public.players (lower(name));
@@ -135,7 +137,8 @@ $$;
 
 -- Modifier son profil public : vitrine (0 à 3 astres distincts), devise (40 caractères au plus), nombre de découvertes.
 -- La vitrine est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu.
-create or replace function public.set_profile(p_secret text, p_featured text[], p_motto text, p_codex integer) returns json
+drop function if exists public.set_profile(text, text[], text, integer); -- nouvelle signature : le niveau
+create or replace function public.set_profile(p_secret text, p_featured text[], p_motto text, p_codex integer, p_level integer default 1) returns json
 language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_last timestamptz; v_motto text := btrim(coalesce(p_motto, '')); v_feat text[] := coalesce(p_featured, '{}');
 begin
@@ -143,12 +146,12 @@ begin
   if v_id is null then raise exception 'unknown_player'; end if;
   if v_last is not null and v_last > now() - interval '3 seconds' then raise exception 'too_fast'; end if;
   if coalesce(array_length(v_feat, 1), 0) > 3
-     or exists (select 1 from unnest(v_feat) f where f is null or f !~ '^([0-9]|1[0-2])(:[0-5])?$')
+     or exists (select 1 from unnest(v_feat) f where f is null or f !~ '^([0-9]|1[0-2])(:[0-9])?$')
      or (select count(distinct f) from unnest(v_feat) f) <> coalesce(array_length(v_feat, 1), 0)
   then raise exception 'invalid_featured'; end if;
   if v_motto !~ '^[^[:cntrl:]<>]{0,40}$' then raise exception 'invalid_motto'; end if;
   if p_codex is null or p_codex < 0 or p_codex > 100 then raise exception 'invalid_codex'; end if;
-  update players set featured = v_feat, motto = v_motto, codex = p_codex, profile_at = now() where id = v_id;
+  update players set featured = v_feat, motto = v_motto, codex = p_codex, level = least(greatest(coalesce(p_level, 1), 1), 999), profile_at = now() where id = v_id;
   return json_build_object('ok', true);
 end $$;
 
@@ -164,7 +167,7 @@ language sql stable security definer set search_path = public as $$
     'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'),
     'likes', (select count(*) from likes l where l.to_id = p.id),
     'liked', exists (select 1 from likes l join players me on me.id = l.from_id where l.to_id = p.id and me.secret_hash = critical_hash(p_secret)),
-    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel)
+    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level)
   from players p left join scores s on s.player_id = p.id and s.board = 'all'
   where lower(p.name) = lower(btrim(p_name))
 $$;
@@ -302,5 +305,5 @@ language sql security definer set search_path = public as $$
   update players set no_duel = coalesce(p_value, false) where secret_hash = critical_hash(p_secret)
 $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text) to anon, authenticated;
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text) to anon, authenticated;

@@ -14,6 +14,7 @@ const ICONS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4.2 4.2-6 8-6s6.8 1.8 8 6"/>',
   rank: '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4"/>',
   more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
+  fuse: '<circle cx="9" cy="12" r="5.2"/><circle cx="15" cy="12" r="5.2"/>',
   hole: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9.5" ry="3.6" transform="rotate(-18 12 12)"/>',
   duel: '<path d="M5 19L16 8M13 5h6v6M19 19L8 8M11 5H5v6"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
@@ -72,6 +73,7 @@ const CSS = `
 .hm-pg>*{width:100%;max-width:400px}
 .hm-hd{text-align:left;margin:10px 4px 6px}.hm-hd h2{margin:0;font:900 30px/1 var(--disp);letter-spacing:.04em;text-transform:uppercase;text-shadow:0 0 24px rgba(77,243,255,.4)}.hm-hd p{margin:8px 0 0;color:rgba(238,244,255,.6);font-size:14px}
 .hm-pg:nth-child(2){justify-content:flex-start;gap:0}
+.hm-pg:nth-child(3){overflow-y:auto;scrollbar-width:none;justify-content:flex-start}.hm-pg:nth-child(3)::-webkit-scrollbar{display:none}
 .hm-pg:nth-child(2) .logo{margin:calc(clamp(0px,100vh - 700px,40px)) 0 0;text-align:center;font:900 min(13vw,50px)/1 var(--disp);letter-spacing:.03em;background:linear-gradient(100deg,#fff 0%,#7ff6ff 28%,#ff7be5 52%,#fff 76%,#7ff6ff 100%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
 .hm-pg:nth-child(2) .tag{margin:6px 0 0;text-align:center;color:rgba(238,244,255,.7);font-size:14px}
 @keyframes hm-lg{to{background-position:-250% 0}}
@@ -93,8 +95,8 @@ const CSS = `
 .set-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 16px var(--font)}.set-row small{color:rgba(255,255,255,.6);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.set-row:active{transform:scale(.97)}
 .hm-slot{width:min(86vw,400px,44vh)!important;height:min(86vw,400px,44vh)!important}.hm-chips{margin-top:auto!important}.hm-pg:nth-child(2){gap:0}.hm-core-btn .hm-t{text-shadow:0 0 6px rgba(0,0,0,.9),0 0 14px rgba(255,190,110,.9),0 0 30px rgba(255,120,60,.55)}.hm-camp .hm-tx small{white-space:normal}
 /* onglets */
-.hm-tabs{position:absolute;left:18px;right:18px;max-width:400px;margin:0 auto;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:68px;border-radius:34px;display:grid;grid-template-columns:repeat(3,1fr);padding:6px;z-index:3}
-.hm-ind{position:absolute;left:6px;top:6px;bottom:6px;width:calc((100% - 12px) / 3);border-radius:28px;background:linear-gradient(135deg,rgba(77,243,255,.34),rgba(255,79,216,.3));box-shadow:0 0 22px rgba(77,243,255,.3),inset 0 1px 0 rgba(255,255,255,.5);will-change:transform}
+.hm-tabs{position:absolute;left:18px;right:18px;max-width:400px;margin:0 auto;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:68px;border-radius:34px;display:grid;grid-template-columns:repeat(4,1fr);padding:6px;z-index:3}
+.hm-ind{position:absolute;left:6px;top:6px;bottom:6px;width:calc((100% - 12px) / 4);border-radius:28px;background:linear-gradient(135deg,rgba(77,243,255,.34),rgba(255,79,216,.3));box-shadow:0 0 22px rgba(77,243,255,.3),inset 0 1px 0 rgba(255,255,255,.5);will-change:transform}
 .hm-tab{position:relative;z-index:1;border:0;background:none;color:rgba(238,244,255,.62);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;cursor:pointer;transition:color .25s}.hm-tab.on{color:#fff}
 .hm-tab .hm-ic{width:22px;height:22px;stroke-width:1.9}.hm-tab span{font:700 10.5px/1 var(--font);letter-spacing:.3px}
 /* monnaie */
@@ -108,6 +110,10 @@ const CSS = `
 @keyframes hmh{from{opacity:0;transform:translate(-50%,24px)}}@keyframes hmw{50%{transform:translateX(5px)}0%,100%{transform:translateX(-5px)}}
 .set-row span{white-space:nowrap}.set-row small{min-width:0}
 @media (max-width:359px){.hm-chip .hm-sbi{display:none}.hm-chip{padding:0 12px}.hm-chip .hm-t{font-size:11px}.hm-pill span{display:none}.hm-hd h2{font-size:26px}}
+.hm-lv{position:absolute;right:70px;top:calc(env(safe-area-inset-top,0px) + 12px);width:46px;height:46px;border-radius:23px;padding:0;display:grid;place-items:center;z-index:2;font:900 14px var(--disp);color:#fff}
+.hm-lvr{position:absolute;inset:4px;border-radius:50%;background:conic-gradient(var(--c,#4df3ff) calc(var(--p,0) * 1%),rgba(255,255,255,.16) 0);-webkit-mask:radial-gradient(circle,transparent 57%,#000 60%);mask:radial-gradient(circle,transparent 57%,#000 60%)}.hm-lv b{position:relative}
+.hm-lvb{width:100%;height:10px;border-radius:5px;background:rgba(255,255,255,.14);overflow:hidden}.hm-lvb i{display:block;height:100%;border-radius:5px}.hm-lvn{font-size:13px!important;line-height:1.45;color:rgba(255,255,255,.7)!important;text-align:left}
+.hm-tab span{font-size:10px!important}
 @media (prefers-reduced-motion:reduce){.hm-core-btn .hm-t,.hm-bh,.hm-gem{animation:none!important}}
 `;
 
@@ -203,13 +209,15 @@ function space(cv, scr) {
 const bgLayer = (scr) => { const d = make('div', 'hm-bg', '<canvas class="hm-space"></canvas>'); space(d.firstChild, scr); return d; };
 
 let live = null, pager = null, shownDust = null, dustRaf = 0;
-const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Collection', ICONS.coll]];
+const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Fusion', ICONS.fuse], ['Collection', ICONS.coll]];
+let fg = null, opts = {};
 // Une ligne de verre : icône ronde, titre, sous-titre, valeur à droite
 const row = (b, icon) => {
   reskin(b, ['gl', 'hm-camp', 'hm-in']); const t = titleOf(b), s = b.querySelector('small'), tx = make('span', 'hm-tx');
   tx.append(...grab(t, s || make('small', ''))); b.textContent = ''; b.append(make('span', 'hm-sbi', ico(icon)), tx); b.insertAdjacentHTML('beforeend', CHEV); return b;
 };
-export function init() {
+export function init(o = {}) {
+  opts = o;
   const scr = $('#s-title'); if (!scr || scr.classList.contains('hm')) return;
   const menu = $('.menu', scr), wrap = $('.title-wrap', scr); if (!menu || !wrap) return;
   const st = make('style'); st.textContent = CSS + GCSS; document.head.appendChild(st);
@@ -219,14 +227,18 @@ export function init() {
   const gear = $('#b-set2'); if (gear) { reskin(gear, ['gl', 'hm-in'], ['glass', 'icon']); gear.style.setProperty('--e', '.1s'); }
   const stars = $('#t-stars'); if (stars) { reskin(stars, ['gl', 'hm-pill', 'hm-in'], ['foot']); stars.style.setProperty('--e', '.05s'); scr.appendChild(stars); }
 
+  // niveau : anneau de progression à gauche de la roue des réglages
+  const lv = make('button', 'gl hm-lv hm-in', '<i class="hm-lvr"></i><b>1</b>'); lv.setAttribute('aria-label', 'Niveau'); lv.style.setProperty('--e', '.08s'); scr.append(lv);
+  lv.addEventListener('click', () => { opts.sfx && opts.sfx(); levelModal(); });
   // pages
   pager = make('div', 'hm-pager'); const pg = PAGES.map(() => make('section', 'hm-pg')); pager.append(...pg);
   const head = (p, t, s) => p.append(make('div', 'hm-hd', `<h2>${t}</h2><p>${s}</p>`));
   head(pg[0], 'Social', 'Affronte les autres joueurs');
-  head(pg[2], 'Collection', 'Tes astres, tes décors');
+  head(pg[2], 'Fusion', 'Crée des astres uniques'); head(pg[3], 'Collection', 'Tes astres, tes décors');
+  if (opts.forge) fg = opts.forge(pg[2]);
   const place = (p, id, icon, d) => { const b = $(id); if (b) { row(b, icon); b.style.setProperty('--e', d); p.append(b); } };
   place(pg[0], '#b-rank', ICONS.rank, '.15s'); place(pg[0], '#b-duel', ICONS.duel, '.22s'); place(pg[0], '#b-profile', ICONS.user, '.29s');
-  place(pg[2], '#b-codex', ICONS.coll, '.15s'); place(pg[2], '#b-themes', ICONS.theme, '.22s'); place(pg[2], '#b-sandbox', ICONS.casc, '.29s');
+  place(pg[3], '#b-codex', ICONS.coll, '.15s'); place(pg[3], '#b-themes', ICONS.theme, '.22s'); place(pg[3], '#b-sandbox', ICONS.casc, '.29s');
 
   // page centrale : le trou noir EST le bouton Jouer
   const logo = $('.logo', wrap); if (logo) { logo.textContent = 'CRITICAL'; logo.classList.add('hm-in'); }
@@ -267,7 +279,13 @@ export function hint() {
   const off = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); pg.removeEventListener('scroll', off); };
   pg.addEventListener('scroll', off, { passive: true, once: true }); setTimeout(off, 7000);
 }
-export function update({ dust = 0, daily = null, codex = 0, themes = null } = {}) {
+function levelModal() {
+  const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Éclats. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
+  m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
+}
+export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null } = {}) {
+  if (fg) fg.refresh();
+  const lv = $('.hm-lv'); if (lv && level) { lv.style.setProperty('--p', Math.round(level.pct * 100)); lv.style.setProperty('--c', `rgb(${level.col.join(',')})`); $('b', lv).textContent = level.level; }
   const sub = (id, t) => { const e = $(id + ' small'); if (e && t) e.textContent = t; };
   sub('#b-codex', codex ? `${codex} découverte${codex > 1 ? 's' : ''}` : 'Fusionne pour découvrir'); if (themes) sub('#b-themes', `${themes[0]} sur ${themes[1]} possédés`); sub('#b-rank', 'Mondial et défi du jour'); sub('#b-profile', 'Ton astre, ta vitrine, ta devise');
   const p = $('#t-stars');
