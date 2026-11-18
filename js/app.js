@@ -4,6 +4,7 @@ import * as MINE from './mine.js';
 import * as QS from './quests.js';
 import * as RANK from './rank.js';
 import * as HOME from './home.js';
+import * as INTRO from './intro.js';
 
 const $ = (s) => document.querySelector(s);
 const KEY = 'critical.v1';
@@ -33,7 +34,7 @@ $('#o-gh').onchange = (e) => MINE.setGhost(e.target.checked);
 $('#o-vib').onchange = (e) => { S.vib = e.target.checked; save(); vib([14, 40, 14]); };
 
 // modules (chacun ajoute ses boutons au menu, home.js les met en page)
-MINE.init({ vib, toast, today, time: (sec) => { QS.time(); RANK.reportTime(sec); }, track: QS.track, quests: QS.html, refresh, submit: RANK.submit, rank: RANK.open, challenge: RANK.challenge, challengeCancel: RANK.challengeCancel, name: RANK.name, rival: RANK.rival, runOf: RANK.runOf, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready });
+MINE.init({ back: () => { if (!MINE.isNew()) HOME.hint(); }, vib, toast, today, time: (sec) => { QS.time(); RANK.reportTime(sec); }, track: QS.track, quests: QS.html, refresh, submit: RANK.submit, rank: RANK.open, challenge: RANK.challenge, challengeCancel: RANK.challengeCancel, name: RANK.name, rival: RANK.rival, runOf: RANK.runOf, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready });
 RANK.init({ replay: MINE.openReplay, invite: MINE.inviteDuel, joinDuel: MINE.joinDuel, canNotify: MINE.canNotify, track: (...a) => QS.track(...a), toast, vib, today, astres: MINE.astres, astreInfo: MINE.astreInfo, paint: MINE.paintAstre, codexN: MINE.codexN, tierName: MINE.tierName, local: MINE.localStats }); RANK.whenNamed(MINE.rankLine);
 const menu = $('#s-title .menu');
 for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec un code', MINE.openDuel], ['b-sandbox', 'Bac à sable', 'Tous tes astres, sans limite', MINE.openSandbox], ['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex], ['b-profile', 'Profil', '', RANK.openMyProfile]]) {
@@ -49,6 +50,9 @@ refresh();
 // démarrage : « Zeyn's Games » en fondu, puis un appui pour entrer (c'est aussi lui qui débloque le son)
 const sp = $('#splash');
 setTimeout(() => sp.classList.add('ready'), 1700);
-sp.addEventListener('pointerup', () => { if (!sp.classList.contains('ready')) return; A.init(); A.resume(); A.ui(); sp.classList.add('out'); setTimeout(() => sp.remove(), 700); });
+sp.addEventListener('pointerup', () => { if (!sp.classList.contains('ready')) return; A.init(); A.resume(); A.ui(); sp.classList.add('out'); setTimeout(() => sp.remove(), 700);
+  // premier lancement : présentation animée puis partie guidée ; sinon, simple indice de glissement dans le menu
+  if (MINE.isNew() && !INTRO.seen()) INTRO.show({ paint: MINE.paintAstre, sfx: A.ui, onPlay: () => MINE.open(), onSkip: () => setTimeout(HOME.hint, 600) }); else setTimeout(HOME.hint, 1400);
+});
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* hors-ligne indisponible */ });

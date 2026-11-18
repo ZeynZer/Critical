@@ -142,3 +142,6 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 @keyframes rotp{0%,100%{transform:rotate(90deg)}45%,60%{transform:rotate(0)}}
 #rot span{color:rgba(238,244,255,.65);font-size:14px}
 @media (orientation:landscape) and (max-height:520px){#rot{display:flex}}
+
+/* petites hauteurs : une fenêtre ne dépasse jamais l'écran, elle défile */
+.modal .card{max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px);overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain}.modal .card::-webkit-scrollbar{display:none}

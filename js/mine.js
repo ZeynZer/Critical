@@ -15,7 +15,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', back: () => {}, challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -41,7 +41,8 @@ const theme = () => THEMES.find((t) => t.id === sv.theme) || THEMES[0];
 // Défis du jour : [objectif, valeur, secondes, texte]. Durées réglées sur un joueur simulé rapide (tools/test.mjs ne les couvre pas).
 const CHAL = [['tier', 7, 75, 'Crée un Soleil en moins de 1 min 15'], ['tier', 8, 120, 'Crée une Géante rouge en moins de 2 min'], ['tier', 9, 180, 'Crée une Étoile à neutrons en moins de 3 min'],
   ['chain', 5, 90, 'Déclenche une chaîne ×5 en moins de 1 min 30'], ['depth', 2, 60, 'Atteins le secteur 3 en moins de 1 min'], ['score', 6000, 60, 'Marque 6 000 points en moins de 1 min']];
-const TUT = ['Pose ton doigt dans la cuve, glisse pour viser, puis relâche.', 'Lâche le même astre contre le premier : deux astres identiques fusionnent.', 'Chaque fusion remplit la jauge du bas. Encore deux fusions !', 'Touche RÉSERVE, en bas à gauche, pour garder un astre de côté.', 'Voici le classement mondial. Choisis ton pseudo pour y participer.'];
+const TUT = ['Pose ton doigt dans la cuve, glisse pour viser, puis relâche.', 'Lâche un astre identique contre le premier : ils fusionnent !', 'Bravo ! Chaque fusion remplit la jauge du bas. Encore deux fusions.', 'Touche RÉSERVE pour garder un astre de côté et le ressortir plus tard.', 'Voici le classement mondial. Choisis un pseudo pour y participer.'];
+let tutShown = -1;
 const sectorName = (d) => (d < F.STRATA.length ? F.STRATA[d] : `Origine +${d - F.STRATA.length + 1}`);
 
 /* ============================== état ============================== */
@@ -482,6 +483,7 @@ function draw() {
   const hr = holdR, by = hr.y;
   txt('RÉSERVE', hr.x + hr.w / 2, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
   glassBox(hr.x, by, hr.w, hr.h, 20, G.swapped ? 0.14 : 0.45);
+  if (tut === 3) { ctx.strokeStyle = rgba(CY, 0.55 + 0.45 * Math.sin(T * 6)); ctx.lineWidth = 3; rr(hr.x - 4, by - 4, hr.w + 8, hr.h + 8, 24); ctx.stroke(); } // étape « réserve » : la boîte à toucher clignote
   if (G.hold) { ctx.globalAlpha = G.swapped ? 0.4 : 1; drawItem(G.hold, hr.x + hr.w / 2, by + hr.h / 2, 1, 0, miniU(G.hold)); ctx.globalAlpha = 1; } else txt('⇄', hr.x + hr.w / 2, by + hr.h / 2 + 8, 22, 'rgba(255,255,255,.3)', 'center', 'system-ui', 400);
   const nx = B.x + B.w; txt('SUIVANT', nx - 62, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
   glassBox(nx - 124, by, 124, hr.h, 20);
@@ -571,7 +573,12 @@ const CSS = `
 .mn-open #s-title,.mn-open #cv{visibility:hidden}.mn-open #s-title,.mn-open #s-title *{animation-play-state:paused!important}
 #mn-cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
 #mn .icon{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px)}#mn-back{left:14px}#mn-help{right:14px}#mn.tut .icon{display:none}
-#mn-tut{position:absolute;left:22px;right:22px;top:calc(env(safe-area-inset-top,0px) + 150px);padding:14px 16px;border-radius:22px;text-align:center;font-size:15px;font-weight:600;line-height:1.4;pointer-events:none;display:none}#mn.tut #mn-tut{display:block;animation:fade .3s}
+#mn-tut{position:absolute;left:18px;right:18px;top:calc(env(safe-area-inset-top,0px) + 112px);padding:12px 16px 14px;border-radius:24px;display:none;pointer-events:none;z-index:2}#mn.tut #mn-tut{display:block;animation:fade .3s}
+#mn-tut p{margin:8px 0 0;text-align:center;font-size:15px;font-weight:600;line-height:1.4}.tut-h{display:flex;align-items:center;gap:10px}.tut-h span{font:800 11px Orbitron,system-ui,sans-serif;color:#4df3ff;letter-spacing:.1em}.tut-h em{flex:1;display:flex;gap:5px}.tut-h i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.18);transition:background .3s}.tut-h i.ok{background:#5dffc0}.tut-h i.on{background:linear-gradient(90deg,#4df3ff,#ff4fd8)}
+#mn-tutx{pointer-events:auto;height:30px;padding:0 12px;border-radius:15px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);font:600 12px system-ui,sans-serif}
+#mn-fg{position:absolute;left:0;top:0;width:0;height:0;display:none;pointer-events:none;z-index:2;transition:opacity .25s}#mn.tut #mn-fg{display:block}
+#mn-fg i{position:absolute;left:-24px;top:-24px;width:48px;height:48px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.55),rgba(255,255,255,.15));border:2px solid rgba(255,255,255,.9);box-shadow:0 0 22px rgba(77,243,255,.8);animation:fgt 1.5s ease-in-out infinite}
+#mn-fg.drag i{animation:fgd 2.4s ease-in-out infinite}@keyframes fgt{0%,100%{transform:scale(.85);opacity:.7}50%{transform:scale(1.1);opacity:1}}@keyframes fgd{0%,100%{transform:translateX(-58px) scale(.9)}50%{transform:translateX(58px) scale(1.05)}}
 #mn-th{width:100%;display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:52vh;overflow-y:auto;touch-action:pan-y}
 .th{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#fff;font-size:12px}.th canvas{width:100%;height:84px;border-radius:12px;display:block}.th b{font:700 12px var(--disp)}.th.on{border-color:#5dffc0}.th.lock canvas{opacity:.55}.th small{color:rgba(255,255,255,.7)}
 #mn-cx{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:46vh;overflow-y:auto;touch-action:pan-y}
@@ -594,7 +601,7 @@ const CSS = `
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
@@ -686,13 +693,24 @@ export function openThemes() {
   $('#mn-m-themes').classList.add('on');
 }
 // Première partie guidée : chaque étape attend que le joueur fasse le geste demandé.
+function tutEnd(win) {
+  tut = -1; tutShown = -1; sv.tut = 1; save(); $('#mn').classList.remove('tut');
+  if (win) { grant(500, 'Cadeau de bienvenue'); say('BIEN JOUÉ !', '+500 ÉCLATS OFFERTS', AM); A.win(); H.vib([20, 40, 20]); } else H.toast('Tu peux jouer librement');
+}
 function tutorial() {
   const orb = () => ({ k: 'c', tier: 1 });
   if (tut <= 2) { G.cur = orb(); G.queue = [orb(), orb()]; } // tirage imposé : des orbes, pour que les fusions soient certaines
   const done = [G.drops >= 1, G.fusions >= 1, G.fusions >= 3, !!G.hold, !$('#rk-ask').classList.contains('on')][tut];
-  if (done) { tut++; if (tut === 4) { if (H.online() && !H.named()) H.askName(); else tut = 5; } }
-  if (tut >= 5) { tut = -1; sv.tut = 1; save(); $('#mn').classList.remove('tut'); H.toast('À toi de jouer !'); return; }
-  const e = $('#mn-tut'); if (e.textContent !== TUT[tut]) e.textContent = TUT[tut];
+  if (done) { tut++; if (tut < 5) { A.star(2); H.vib(10); } if (tut === 4) { if (H.online() && !H.named()) H.askName(); else tut = 5; } }
+  if (tut >= 5) return tutEnd(true);
+  if (tutShown !== tut) { // nouvelle étape : carte, indicateur, doigt animé
+    tutShown = tut; $('#mn-tut').innerHTML = `<div class="tut-h"><span>${tut + 1}/5</span><em>${[0, 1, 2, 3, 4].map((i) => `<i class="${i < tut ? 'ok' : i === tut ? 'on' : ''}"></i>`).join('')}</em><button id="mn-tutx">Passer</button></div><p>${TUT[tut]}</p>`;
+    $('#mn-fg').className = tut === 0 ? 'drag' : '';
+    $('#mn-tut').style.top = (tut === 3 ? B.y + B.h * 0.38 : B.y + B.h * 0.5) + 'px'; // la carte reste dans le vide de la cuve, loin de l'astre qui tombe
+  }
+  const fg = $('#mn-fg'), b0 = G.bodies.find((b) => !b.dead);
+  const [fx, fy] = tut === 0 ? [B.x + B.w / 2, B.y + B.h * 0.3] : tut <= 2 ? [b0 ? sx(b0.x) : B.x + B.w / 2, B.y + B.h * 0.3] : tut === 3 ? [holdR.x + holdR.w / 2, holdR.y + holdR.h / 2] : [-99, -99];
+  fg.style.transform = `translate(${fx.toFixed(0)}px,${fy.toFixed(0)}px)`; fg.style.opacity = aiming || fx < 0 ? 0 : 1;
 }
 
 function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
@@ -828,6 +846,7 @@ function duelResult(r) {
   const mine = d.me != null ? d.me : G.score, theirs = d.op.final != null ? d.op.final : d.op.G.score;
   setTimeout(() => { if (duel !== d) return; (r === 'win' || r === 'forfait' ? A.win : A.fail)(); dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : r === 'lose' ? 'Défaite' : 'Égalité', `Toi ${fmt(mine)} · ${d.oppName} ${fmt(theirs)}`); }, 500);
 }
+export const isNew = () => !sv.tut; // personne n'a encore fini (ou passé) la partie guidée
 export const ghostOn = () => !!sv.ghost;
 export const setGhost = (v) => { sv.ghost = !!v; save(); };
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }
@@ -845,7 +864,7 @@ export function open(fresh) { // fresh : on va lancer autre chose qu'une partie 
   else newRun();
   last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
-function close() { if (duel) duelClose(); save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
+function close() { if (duel) duelClose(); H.back(); save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
   Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -857,6 +876,7 @@ export function init(opts) {
   const click = (el, f) => $(el).addEventListener('click', () => { A.ui(); H.vib(9); f(); });
   document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.addEventListener('click', () => { if (G && G.rep) { rpSpeed(+b.dataset.s); A.select(); } }));
   click('#mn-rpp', () => { const R = G && G.rep; if (!R) return; if (R.done) { const run = R.run; openReplay(run); } else { R.speed = R.speed ? 0 : +(document.querySelector('#mn-rp [data-s].on') || { dataset: { s: 2 } }).dataset.s; $('#mn-rpp').textContent = R.speed ? '❚❚' : '▶'; } });
+  $('#mn-tut').addEventListener('click', (e) => { if (e.target.id === 'mn-tutx') tutEnd(false); });
   click('#dl-new', () => { if ($('#mn-m-duel').dataset.s === 'end') { duelClose(); close(); openDuel(); } else duelHost(); });
   click('#dl-join', () => duelJoin($('#dl-in').value));
   click('#dl-x', () => { $('#mn-m-duel').classList.remove('on'); if (isOpen && G && G.duel) close(); else duelClose(); });
