@@ -25,6 +25,9 @@ alter table public.players add column if not exists seen_at timestamptz;
 alter table public.players add column if not exists no_duel boolean not null default false;
 -- niveau affiché sur le profil (déclaré par l'appareil, borné de 1 à 999)
 alter table public.players add column if not exists level integer not null default 1;
+-- administration : un seul compte (le tien) reçoit is_admin, à la main : update players set is_admin = true where lower(name) = 'zeyn';
+alter table public.players add column if not exists is_admin boolean not null default false;
+alter table public.players add column if not exists banned boolean not null default false;
 -- reprise de compte après un changement de domaine : ouverte à la main, par pseudo, pour une durée limitée (voir claim_player)
 alter table public.players add column if not exists claim_until timestamptz;
 create unique index if not exists players_name_key on public.players (lower(name));
@@ -70,6 +73,7 @@ declare v_id uuid; v_drops integer; v_last timestamptz; v_best integer; v_rank b
 begin
   select id into v_id from players where secret_hash = critical_hash(p_secret);
   if v_id is null then raise exception 'unknown_player'; end if;
+  if exists (select 1 from players where id = v_id and banned) then raise exception 'banned'; end if;
   if p_board <> 'all' and p_board !~ '^day:\d{4}-\d{2}-\d{2}$' then raise exception 'invalid_board'; end if;
   -- univers du jour : seulement pour aujourd'hui (un jour de marge pour les fuseaux horaires)
   if p_board <> 'all' and abs(substr(p_board, 5)::date - (now() at time zone 'utc')::date) > 1 then raise exception 'invalid_day'; end if;
@@ -114,6 +118,16 @@ create index if not exists challenge_log_from on public.challenge_log (from_id, 
 alter table public.likes enable row level security; alter table public.challenges enable row level security; alter table public.challenge_log enable row level security;
 revoke all on public.likes, public.challenges, public.challenge_log from anon, authenticated;
 
+create table if not exists public.gifts (
+  id bigserial primary key, to_id uuid not null references public.players (id) on delete cascade,
+  eclats integer not null default 0, xp integer not null default 0, note text not null default '', at timestamptz not null default now(), claimed boolean not null default false
+);
+create index if not exists gifts_to on public.gifts (to_id) where not claimed;
+create table if not exists public.announcements (id bigserial primary key, text text not null, until timestamptz not null, at timestamptz not null default now());
+alter table public.gifts enable row level security; alter table public.announcements enable row level security;
+revoke all on public.gifts, public.announcements from anon, authenticated;
+revoke all on sequence public.gifts_id_seq, public.announcements_id_seq from anon, authenticated;
+
 -- Lire une page du classement (50 lignes par défaut, 100 au plus). badge = premier astre de la vitrine du joueur.
 drop function if exists public.leaderboard(text, integer, integer); -- le type de retour a changé (colonne badge)
 create or replace function public.leaderboard(p_board text, p_offset integer default 0, p_limit integer default 50)
@@ -121,7 +135,7 @@ returns table (rank bigint, name text, score integer, sector integer, tier integ
 language sql stable security definer set search_path = public as $$
   select r.rank, r.name, r.score, r.sector, r.tier, r.badge, r.online from (
     select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier, p.featured[1] as badge, coalesce(p.seen_at > now() - interval '100 seconds', false) as online
-    from scores s join players p on p.id = s.player_id where s.board = p_board
+    from scores s join players p on p.id = s.player_id where s.board = p_board and not p.banned
   ) r order by r.rank offset greatest(p_offset, 0) limit least(greatest(p_limit, 1), 100)
 $$;
 
@@ -167,7 +181,7 @@ language sql stable security definer set search_path = public as $$
     'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'),
     'likes', (select count(*) from likes l where l.to_id = p.id),
     'liked', exists (select 1 from likes l join players me on me.id = l.from_id where l.to_id = p.id and me.secret_hash = critical_hash(p_secret)),
-    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level)
+    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level, 'admin', p.is_admin)
   from players p left join scores s on s.player_id = p.id and s.board = 'all'
   where lower(p.name) = lower(btrim(p_name))
 $$;
@@ -185,14 +199,14 @@ create or replace function public.rival(p_score integer) returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object('name', p.name, 'score', s.score, 'rank', (select count(*) + 1 from scores o where o.board = 'all' and o.score > s.score))
   from scores s join players p on p.id = s.player_id
-  where s.board = 'all' and s.score > greatest(coalesce(p_score, 0), 0) and s.log is not null
+  where s.board = 'all' and not p.banned and s.score > greatest(coalesce(p_score, 0), 0) and s.log is not null
   order by s.score asc, s.updated_at asc limit 1
 $$;
 
 -- Dernières parties réelles du classement mondial (fil d'activité).
 create or replace function public.activity() returns table (name text, score integer, sector integer, tier integer, at timestamptz)
 language sql stable security definer set search_path = public as $$
-  select p.name, s.score, s.sector, s.tier, s.updated_at from scores s join players p on p.id = s.player_id where s.board = 'all' order by s.updated_at desc limit 6
+  select p.name, s.score, s.sector, s.tier, s.updated_at from scores s join players p on p.id = s.player_id where s.board = 'all' and not p.banned order by s.updated_at desc limit 6
 $$;
 
 -- Part réelle des joueurs classés ayant déjà atteint un trou noir (10), un quasar (11), une galaxie (12).
@@ -221,14 +235,16 @@ end $$;
 -- « Je suis là » (toutes les ~30 s tant que l'appli est ouverte) : renvoie l'invitation de duel éventuelle (valable 2 minutes).
 create or replace function public.pulse(p_secret text) returns json
 language plpgsql security definer set search_path = public as $$
-declare v_id uuid; v_out json;
+declare v_id uuid; v_out json; v_admin boolean; v_gift json; v_msg json;
 begin
-  update players set seen_at = now() where secret_hash = critical_hash(p_secret) returning id into v_id;
+  update players set seen_at = now() where secret_hash = critical_hash(p_secret) returning id, is_admin into v_id, v_admin;
   if v_id is null then return null; end if;
   delete from challenges where at < now() - interval '2 minutes';
   select json_build_object('from', pf.name, 'code', c.code, 'age', extract(epoch from now() - c.at)) into v_out
     from challenges c join players pf on pf.id = c.from_id where c.to_id = v_id;
-  return json_build_object('duel', v_out);
+  select json_build_object('id', g.id, 'eclats', g.eclats, 'xp', g.xp, 'note', g.note) into v_gift from gifts g where g.to_id = v_id and not g.claimed order by g.id limit 1;
+  select json_build_object('id', a.id, 'text', a.text) into v_msg from announcements a where a.until > now() order by a.id desc limit 1;
+  return json_build_object('duel', v_out, 'admin', v_admin, 'gift', v_gift, 'msg', v_msg);
 end $$;
 
 -- Liker / ne plus liker le profil d'un joueur (pas soi-même ; 30 changements par heure au plus).
@@ -305,5 +321,81 @@ language sql security definer set search_path = public as $$
   update players set no_duel = coalesce(p_value, false) where secret_hash = critical_hash(p_secret)
 $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text) to anon, authenticated;
+
+-- ===== Administration : toutes ces fonctions exigent un compte is_admin (vérifié ici, jamais côté appareil) =====
+create or replace function public.admin_id(p_secret text) returns uuid
+language plpgsql stable security definer set search_path = public as $$
+declare v uuid; begin
+  select id into v from players where secret_hash = critical_hash(p_secret) and is_admin;
+  if v is null then raise exception 'forbidden'; end if; return v;
+end $$;
+revoke all on function public.admin_id(text) from public, anon, authenticated;
+
+create or replace function public.admin_players(p_secret text, p_query text default '', p_limit integer default 30)
+returns table (name text, level integer, score integer, online boolean, banned boolean, since timestamptz, playtime integer, likes bigint, admin boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform admin_id(p_secret);
+  return query select p.name, p.level, (select max(s.score) from scores s where s.player_id = p.id and s.board = 'all'), coalesce(p.seen_at > now() - interval '100 seconds', false),
+    p.banned, p.created_at, p.playtime, (select count(*) from likes l where l.to_id = p.id), p.is_admin
+    from players p where p.name ilike '%' || replace(replace(btrim(coalesce(p_query, '')), '%', ''), '_', '') || '%'
+    order by p.seen_at desc nulls last, p.created_at desc limit least(greatest(coalesce(p_limit, 30), 1), 60);
+end $$;
+
+create or replace function public.admin_gift(p_secret text, p_name text, p_eclats integer, p_xp integer, p_note text default '') returns json
+language plpgsql security definer set search_path = public as $$
+declare v uuid;
+begin
+  perform admin_id(p_secret); select id into v from players where lower(name) = lower(btrim(p_name)); if v is null then raise exception 'not_found'; end if;
+  if coalesce(p_eclats, 0) not between 0 and 1000000 or coalesce(p_xp, 0) not between 0 and 1000000 then raise exception 'invalid_amount'; end if;
+  insert into gifts (to_id, eclats, xp, note) values (v, coalesce(p_eclats, 0), coalesce(p_xp, 0), left(regexp_replace(coalesce(p_note, ''), '[[:cntrl:]<>]', '', 'g'), 80));
+  return json_build_object('ok', true);
+end $$;
+
+create or replace function public.admin_ban(p_secret text, p_name text, p_value boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); update players set banned = coalesce(p_value, true) where lower(name) = lower(btrim(p_name)) and not is_admin; end $$;
+
+create or replace function public.admin_rename(p_secret text, p_name text, p_new text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_new text := btrim(p_new);
+begin
+  perform admin_id(p_secret); if v_new is null or v_new !~ '^[[:alnum:] ._-]{3,16}$' then raise exception 'invalid_name'; end if;
+  begin update players set name = v_new where lower(name) = lower(btrim(p_name)); exception when unique_violation then raise exception 'name_taken'; end;
+  return json_build_object('name', v_new);
+end $$;
+
+create or replace function public.admin_reset_scores(p_secret text, p_name text) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); delete from scores where player_id = (select id from players where lower(name) = lower(btrim(p_name))); end $$;
+
+create or replace function public.admin_delete(p_secret text, p_name text) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); delete from players where lower(name) = lower(btrim(p_name)) and not is_admin; end $$;
+
+create or replace function public.admin_open_claim(p_secret text, p_name text, p_minutes integer default 30) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); update players set claim_until = now() + make_interval(mins => least(greatest(coalesce(p_minutes, 30), 1), 240)) where lower(name) = lower(btrim(p_name)) and not is_admin; end $$;
+
+create or replace function public.admin_announce(p_secret text, p_text text, p_minutes integer default 30) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_t text := left(btrim(regexp_replace(coalesce(p_text, ''), '[[:cntrl:]<>]', '', 'g')), 200);
+begin perform admin_id(p_secret); if length(v_t) < 1 then raise exception 'invalid_text'; end if;
+  insert into announcements (text, until) values (v_t, now() + make_interval(mins => least(greatest(coalesce(p_minutes, 30), 1), 1440))); end $$;
+
+create or replace function public.admin_announce_clear(p_secret text) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); delete from announcements; end $$;
+
+-- Le joueur récupère un cadeau reçu : une seule fois, uniquement le sien.
+create or replace function public.claim_gift(p_secret text, p_id bigint) returns json
+language plpgsql security definer set search_path = public as $$
+declare g gifts;
+begin
+  update gifts set claimed = true where id = p_id and not claimed and to_id = (select id from players where secret_hash = critical_hash(p_secret)) returning * into g;
+  if g.id is null then raise exception 'none'; end if;
+  return json_build_object('eclats', g.eclats, 'xp', g.xp, 'note', g.note);
+end $$;
+
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint) to anon, authenticated;

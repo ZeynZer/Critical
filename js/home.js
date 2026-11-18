@@ -2,6 +2,7 @@
 // Non destructif : il réorganise les boutons EXISTANTS (mêmes identifiants, mêmes actions) et ajoute des décors.
 // Il doit être lancé après CH.init() et ED.init() (qui ajoutent leurs boutons au menu).
 const $ = (s, r = document) => r.querySelector(s);
+const qa = (s, r = document) => [...r.querySelectorAll(s)];
 const make = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
 const ico = (p) => `<svg class="hm-ic" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 const ICONS = {
@@ -15,6 +16,7 @@ const ICONS = {
   rank: '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4"/>',
   more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
   fuse: '<circle cx="9" cy="12" r="5.2"/><circle cx="15" cy="12" r="5.2"/>',
+  goal: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
   hole: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="9.5" ry="3.6" transform="rotate(-18 12 12)"/>',
   duel: '<path d="M5 19L16 8M13 5h6v6M19 19L8 8M11 5H5v6"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
@@ -113,7 +115,8 @@ const CSS = `
 .hm-lv{position:absolute;right:70px;top:calc(env(safe-area-inset-top,0px) + 12px);width:46px;height:46px;border-radius:23px;padding:0;display:grid;place-items:center;z-index:2;font:900 14px var(--disp);color:#fff}
 .hm-lvr{position:absolute;inset:4px;border-radius:50%;background:conic-gradient(var(--c,#4df3ff) calc(var(--p,0) * 1%),rgba(255,255,255,.16) 0);-webkit-mask:radial-gradient(circle,transparent 57%,#000 60%);mask:radial-gradient(circle,transparent 57%,#000 60%)}.hm-lv b{position:relative}
 .hm-lvb{width:100%;height:10px;border-radius:5px;background:rgba(255,255,255,.14);overflow:hidden}.hm-lvb i{display:block;height:100%;border-radius:5px}.hm-lvn{font-size:13px!important;line-height:1.45;color:rgba(255,255,255,.7)!important;text-align:left}
-.hm-tab span{font-size:10px!important}
+.hm-tab span{font-size:10px!important}.hm-tab.dot::after{content:'';position:absolute;top:9px;right:calc(50% - 22px);width:9px;height:9px;border-radius:50%;background:#5dffc0;box-shadow:0 0 9px #5dffc0}
+.arming button{pointer-events:none!important;opacity:.4!important;filter:saturate(.4)}
 @media (prefers-reduced-motion:reduce){.hm-core-btn .hm-t,.hm-bh,.hm-gem{animation:none!important}}
 `;
 
@@ -238,7 +241,7 @@ export function init(o = {}) {
   if (opts.forge) fg = opts.forge(pg[2]);
   const place = (p, id, icon, d) => { const b = $(id); if (b) { row(b, icon); b.style.setProperty('--e', d); p.append(b); } };
   place(pg[0], '#b-rank', ICONS.rank, '.15s'); place(pg[0], '#b-duel', ICONS.duel, '.22s'); place(pg[0], '#b-profile', ICONS.user, '.29s');
-  place(pg[3], '#b-codex', ICONS.coll, '.15s'); place(pg[3], '#b-themes', ICONS.theme, '.22s'); place(pg[3], '#b-sandbox', ICONS.casc, '.29s');
+  place(pg[3], '#b-codex', ICONS.coll, '.15s'); place(pg[3], '#b-themes', ICONS.theme, '.22s'); place(pg[3], '#b-goals', ICONS.goal, '.29s'); place(pg[3], '#b-sandbox', ICONS.casc, '.36s');
 
   // page centrale : le trou noir EST le bouton Jouer
   const logo = $('.logo', wrap); if (logo) { logo.textContent = 'CRITICAL'; logo.classList.add('hm-in'); }
@@ -283,7 +286,8 @@ function levelModal() {
   const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Éclats. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
   m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
 }
-export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null } = {}) {
+export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null, goals = null } = {}) {
+  if (goals) { const s = $('#b-goals small'); if (s) s.textContent = goals.claimable ? `${goals.claimable} à valider` : `${goals.claimed} sur ${goals.total} validés`; const t = qa('.hm-tab').pop(); if (t) t.classList.toggle('dot', goals.claimable > 0); }
   if (fg) fg.refresh();
   const lv = $('.hm-lv'); if (lv && level) { lv.style.setProperty('--p', Math.round(level.pct * 100)); lv.style.setProperty('--c', `rgb(${level.col.join(',')})`); $('b', lv).textContent = level.level; }
   const sub = (id, t) => { const e = $(id + ' small'); if (e && t) e.textContent = t; };

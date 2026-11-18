@@ -16,7 +16,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', back: () => {}, challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
+const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', goal: () => {}, back: () => {}, challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -81,7 +81,7 @@ function onEvents() {
       shake = Math.max(shake, 1.5 + e.tier * 0.9); if (e.tier >= 6) { hitstop = 0.05; flash = 0.14; flashC = col; }
       A.setMood(Math.min(1, G.maxTier / F.MAX_TIER * 0.8 + G.depth * 0.04));
       if (e.tier === F.HOLE && !G.holeSeen) { G.holeSeen = true; slow = 1.1; ring(x, y, W * 0.7, r, 0.9, col, 5); ring(x, y, W * 0.45, r, 0.7, [255, 255, 255], 3); A.rumble(); }
-      if (!G.nop) addXp(Math.ceil((e.tier + 1) / 2));
+      if (!G.nop) { addXp(Math.ceil((e.tier + 1) / 2)); H.goal('merge', { tier: e.tier, chain: e.chain }); }
       if (G.nop) { /* rien ne se débloque ici */ }
       else if (!sv.cx[e.tier]) { sv.cx[e.tier] = 1; save(); addXp(20); if (e.tier >= 4) G.bonus += 10; if (e.tier >= 3 && !reveal) { say(BODIES[e.tier][0].toUpperCase(), 'NOUVEL ASTRE · CODEX', col); A.star(2); } }
       else if (e.chain >= 2) say('×' + Math.min(8, e.chain), e.chain >= 3 ? 'CHAÎNE' : '', e.chain >= 5 ? AM : [255, 255, 255]);
@@ -96,7 +96,7 @@ function onEvents() {
       texA = texB; texB = makeTex(e.depth); warp = 1; shake = 6; callout = null;
       warpMsg = ['SECTEUR ' + (e.depth + 1), (G.mod.n || sectorName(e.depth)).toUpperCase() + ' · +' + fmt(e.pts), e.depth];
       A.chestRise(0.75); H.vib(20);
-      H.track('depth', e.depth + 1, true);
+      H.track('depth', e.depth + 1, true); if (!G.nop) H.goal('sector', { n: e.depth + 1 });
     } else if (e.t === 'nova') {
       // Big Bang : ralenti, la lumière est aspirée, silence… puis l'explosion
       slow = 1.5; for (let k = 0; k < 3; k++) ring(x, y, W * (0.9 - k * 0.2), 4, 0.6, [[190, 110, 255], MG, [255, 255, 255]][k], 4);
@@ -107,9 +107,10 @@ function onEvents() {
         for (let k = 0; k < 5; k++) ring(x, y, 6, W * (0.4 + k * 0.3), 0.6 + k * 0.16, [CY, MG, AM, [255, 255, 255], [190, 110, 255]][k], 11 - k * 2);
         burst(x, y, 110, [255, 240, 220], B.u * 22, 1.3, 4); say('BIG BANG', '+' + fmt(pts), [255, 255, 255]);
         A.win(); A.rumble(); H.vib([40, 30, 40, 30, 80]); }, 650);
-      if (!G.nop) H.track('nova', 1);
+      if (!G.nop) { H.track('nova', 1); H.goal('nova'); }
     } else if (e.t === 'pulse') { const mag = e.v ? [90, 255, 200] : [170, 212, 255]; ring(x, y, e.r * B.u, e.r * B.u * (e.reach || 2.7), 0.45, mag, e.v ? 7 : 4); if (e.v) ring(x, y, e.r * B.u, e.r * B.u * e.reach * 0.7, 0.35, [255, 255, 255], 3); A.ping(); }
     else if (e.t === 'swallow') { // le petit astre est aspiré : un filet de lumière file vers l'absorbeur
+      if (!G.nop) H.goal('swallow');
       const hx = sx(e.hx), hy = sy(e.hy), col = e.by === F.MAX_TIER ? RCOL[Math.min(5, e.bv)] : e.by === 11 ? AM : e.by === 7 ? [100, 170, 255] : [190, 110, 255];
       for (let k = 0; k < 9 && parts.length < 260; k++) { const f = 0.5 + k / 9; parts.push({ x, y, vx: (hx - x) * 3.4 * f + (Math.random() - 0.5) * 30, vy: (hy - y) * 3.4 * f + (Math.random() - 0.5) * 30, l: 0, m: 0.3 + Math.random() * 0.15, cs: `rgb(${col[0] | 0},${col[1] | 0},${col[2] | 0})`, sz: 2.4 }); }
       ring(hx, hy, B.u * 2.4, B.u * 0.5, 0.4, col, 3); A.gulp();
@@ -117,7 +118,7 @@ function onEvents() {
     else if (e.t === 'rare') { // variante rare ou galaxie : grande révélation la 1re fois seulement, ensuite un simple éclat
       const r = rarOf(e.tier, e.v, e.p), key = e.tier + ':' + e.v;
       if (G.nop) continue;
-      sv.inv[key] = (sv.inv[key] | 0) + 1; save(); // un exemplaire de plus pour la fusion de collection
+      sv.inv[key] = (sv.inv[key] | 0) + 1; save(); H.goal('rare', { tier: e.tier, v: e.v }); // un exemplaire de plus pour la fusion de collection
       if (sv.cx[key]) { say(nameOf(e.tier, e.v).toUpperCase(), e.v === 1 || e.tier === F.MAX_TIER ? 'RARE · ×3 POINTS' : 'VARIANTE DE STYLE', RCOL[r]); ring(x, y, B.u * 3, B.u * 0.6, 0.55, RCOL[r], 3); burst(x, y, 14, RCOL[r], B.u * 6, 0.7, 2.4); A.rare(Math.min(r, 1)); H.vib(18); }
       else {
         sv.cx[key] = 1; save(); G.bonus += 15 + r * 15; addXp(40);
@@ -602,7 +603,7 @@ const pt = (e) => ({ x: e.clientX, y: e.clientY }); // le canvas couvre tout l'�
 const inZone = (p) => p.x > B.x - 18 && p.x < B.x + B.w + 18 && p.y > B.y - 60 && p.y < B.y + B.h + 20; // la cuve, avec une petite marge
 function onDown(e) { // appuie dans la cuve (même pendant qu'un astre tombe), glisse, relâche ; sortir de la cuve annule
   if (!G || G.over || G.rep) return; if (reveal) { if (reveal.l > 1.6) { reveal.l = reveal.d; slow = 0; } return; } const p = pt(e);
-  if (!G.sandbox && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (!(G.duel && duel.phase !== 'play') && F.swapHold(G)) { A.select(); H.vib(8); if (G.duel) dsendDrop(); } return; }
+  if (!G.sandbox && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (!(G.duel && duel.phase !== 'play') && F.swapHold(G)) { A.select(); H.vib(8); if (!G.nop) H.goal('hold'); if (G.duel) dsendDrop(); } return; }
   if (!inZone(p)) return;
   aiming = true; aimT = (p.x - B.x) / B.u; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
 }
@@ -703,18 +704,23 @@ const colIdx = () => Math.min(LV_COL.length - 1, Math.floor((levelOf(sv.xp).leve
 const lvCol = () => LV_COL[colIdx()];
 function lvStyle() { return colIdx(); }
 export const levelInfo = () => { const L = levelOf(sv.xp); return { ...L, pct: L.cur / L.need, col: LV_COL[colIdx()], next: colIdx() < LV_COL.length - 1 ? (colIdx() + 1) * 5 + 1 : 0 }; };
-function addXp(n) { // aucune expérience dans le bac à sable, les rediffusions ni les duels
-  if (!(n > 0) || (G && G.nop)) return; const before = levelOf(sv.xp).level; sv.xp += Math.round(n); if (G) G.xpGain = (G.xpGain || 0) + Math.round(n);
+function addXp(n, force) { // aucune expérience dans le bac à sable, les rediffusions ni les duels (sauf récompense de défi : force)
+  if (!(n > 0) || (G && G.nop && !force)) return; const before = levelOf(sv.xp).level; sv.xp += Math.round(n); if (G) G.xpGain = (G.xpGain || 0) + Math.round(n);
   const now = levelOf(sv.xp).level; for (let l = before + 1; l <= now; l++) { grant(100 + 50 * l, 'Niveau ' + l); if (isOpen && G && !ended) { say('NIVEAU ' + l, '+' + fmt(100 + 50 * l) + ' ÉCLATS', LV_COL[colIdx()]); A.win(); H.vib([20, 40, 20]); } }
-  save(); H.refresh();
+  save(); H.refresh(); H.goal('xp');
 }
+export const giveXp = (n) => addXp(n, true);
+export const adminLocal = { // outils de l'administrateur, sur cet appareil seulement
+  eclats: (n) => grant(n, 'Admin'), xp: (n) => addXp(n || 1000, true),
+  unlock: () => { for (const e of entries()) if (e.tier >= 0) { sv.cx[e.key] = 1; if (e.v >= 1 && e.v < 9 && e.tier < F.MAX_TIER) sv.inv[e.key] = Math.max(sv.inv[e.key] | 0, 10); } save(); H.refresh(); },
+};
 const FORGE_COPIES = (t) => (t <= 5 ? 6 : t <= 8 ? 4 : 3); // exemplaires de variantes d'un rang à réunir pour fabriquer son prismatique
 const copiesOf = (t) => Object.keys(VAR[t]).map(Number).filter((v) => v < 9).reduce((a, v) => a + (sv.inv[t + ':' + v] | 0), 0);
 export const forgeInfo = () => Object.keys(VAR).map((t) => ({ tier: +t, name: BODIES[t][0], key: t + ':9', copies: copiesOf(t), need: FORGE_COPIES(+t), own: !!sv.inv[t + ':9'], equipped: sv.skin[t] === 9 }));
 export function forge(t) { // consomme d'abord les variantes les plus courantes, jamais le prismatique ; renvoie la clé obtenue
   const i = forgeInfo().find((f) => f.tier === +t); if (!i || i.own || i.copies < i.need) return null;
   let need = i.need; for (const v of Object.keys(VAR[t]).map(Number).filter((v) => v < 9).sort((a, b) => b - a)) { const k = t + ':' + v, n = Math.min(need, sv.inv[k] | 0); sv.inv[k] = (sv.inv[k] | 0) - n; need -= n; }
-  sv.inv[t + ':9'] = 1; sv.cx[t + ':9'] = 1; sv.skin[t] = 9; sprites.clear(); addXp(60); save(); H.refresh(); return t + ':9';
+  sv.inv[t + ':9'] = 1; sv.cx[t + ':9'] = 1; sv.skin[t] = 9; sprites.clear(); addXp(60, true); save(); H.refresh(); H.goal('forge'); return t + ':9';
 }
 export function equip(t, on) { if (on) sv.skin[t] = 9; else delete sv.skin[t]; sprites.clear(); save(); }
 export const dust = () => sv.dust;
@@ -789,7 +795,7 @@ function endRun() {
   rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
-  H.track('score', G.score, true); H.track('runs', 1);
+  H.track('score', G.score, true); H.track('runs', 1); H.goal('run', { score: G.score, sector: G.depth + 1, over: G.over, drops: G.drops, chain: G.maxChain, tier: G.maxTier });
   const gain = Math.min(800, Math.round(G.depth * 50 + G.score / 200)) + G.bonus * 10, lv0 = levelOf(sv.xp).level; addXp(Math.min(300, Math.round(G.depth * 25 + G.score / 400))); // proportionnel au jeu réel : rien à gagner à saborder une partie
   if (G.over) A.fail();
   const rvTxt = rvDone ? `Tu as dépassé ${rv.name} !` : rv ? `À ${fmt(rv.score - G.score)} points de ${rv.name}.` : '';
@@ -811,7 +817,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   if (won) { sv.daily = { day: G.day, done: true, best: sv.daily.day === G.day ? Math.max(sv.daily.best, left) : left }; save(); A.win(); } else A.fail();
   rankLine(null); if (won) H.submit({ daily: G.day, score: Math.round(left * 100), sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n });
   setTimeout(() => {
-    if (first) { grant(1500, 'Défi du jour'); addXp(100); H.track('daily', 1); }
+    if (first) { grant(1500, 'Défi du jour'); addXp(100); H.track('daily', 1); H.goal('daily'); }
     $('#mn-xp').innerHTML = '';
     $('#mn-ot').textContent = won ? 'Défi réussi !' : 'Défi manqué'; $('#mn-share').hidden = !won; $('#mn-again').textContent = won ? 'Rejouer le défi' : 'Réessayer';
     $('#mn-os').textContent = won ? `Il te restait ${left.toLocaleString('fr-FR')} s. ${first ? '' : 'Récompense déjà reçue aujourd\'hui.'}` : c[3] + '.';
@@ -823,7 +829,7 @@ function newRun(seed, keep, opt) {
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
-    if (tok !== runTok || !r || G.chal || tut >= 0) return; rv = r;
+    if (tok !== runTok || !r || !r.name || G.chal || tut >= 0) return; rv = r;
     if (sv.ghost) H.runOf(r.name).then((run) => { if (tok === runTok && run && Array.isArray(run.log)) gh = { G: F.newGame(run.seed), log: run.log, steps: run.steps || 0, i: 0, done: false, name: r.name }; }).catch(() => {});
   }).catch(() => {});
 }
@@ -910,6 +916,7 @@ function duelFinish() {
 function duelCheck() { const d = duel; if (d && d.me != null && d.op.final != null && d.phase !== 'done') duelResult(d.me > d.op.final ? 'win' : d.me < d.op.final ? 'lose' : 'draw'); }
 function duelResult(r) {
   const d = duel; if (!d || d.phase === 'done') return; d.phase = 'done'; clearTimeout(d.wait); ended = true;
+  if (r === 'win' || r === 'forfait') H.goal('duelwin');
   const mine = d.me != null ? d.me : G.score, theirs = d.op.final != null ? d.op.final : d.op.G.score;
   setTimeout(() => { if (duel !== d) return; (r === 'win' || r === 'forfait' ? A.win : A.fail)(); dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : r === 'lose' ? 'Défaite' : 'Égalité', `Toi ${fmt(mine)} · ${d.oppName} ${fmt(theirs)}`); }, 500);
 }
