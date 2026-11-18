@@ -6,7 +6,7 @@ const KEY = 'critical.rank.v1', PAGE = 50;
 const $ = (s, r = document) => r.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); // les pseudos viennent d'autres joueurs
-const H = { level: () => 1, track: () => {}, invite: () => {}, joinDuel: () => {}, canNotify: () => false, toast: () => {}, vib: () => {}, today: () => '', astres: () => [], astreInfo: () => null, paint: () => {}, codexN: () => 0, tierName: () => '?', local: () => ({}) };
+const H = { receive: () => {}, level: () => 1, track: () => {}, invite: () => {}, joinDuel: () => {}, canNotify: () => false, toast: () => {}, vib: () => {}, today: () => '', astres: () => [], astreInfo: () => null, paint: () => {}, codexN: () => 0, tierName: () => '?', local: () => ({}) };
 const st = { secret: '', name: '', pending: [], prof: { featured: [], motto: '' }, dirty: false }; // pending : scores pas encore envoyés (pas de pseudo, ou hors connexion)
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
@@ -150,14 +150,17 @@ async function feed(t) { // faits réels uniquement : dernières parties classé
 export const rival = (score) => (ready() ? rpc('rival', { p_score: Math.round(score || 0) }) : Promise.resolve(null));
 export const runOf = (name) => rpc('get_run', { p_name: name });
 /* ---------- présence et invitations de duel ---------- */
-let pulseT = 0, lastInv = '', invT = 0;
+let pulseT = 0, lastInv = '', invT = 0, giftBusy = false;
+function showBanner(text, ann) { const b = $('#rk-inv'); b.dataset.m = ann ? 'ann' : ''; $('#inv-t').textContent = text; $('#inv-no').hidden = !!ann; $('#inv-ok').textContent = ann ? 'OK' : 'Accepter'; b.classList.add('on'); H.vib(12); if (ann) { clearTimeout(invT); invT = setTimeout(hideInv, 15000); } }
 const hideInv = () => { clearTimeout(invT); $('#rk-inv').classList.remove('on'); };
 async function pulse() { // « je suis là » toutes les 30 s ; renvoie une éventuelle invitation, montrée une seule fois et seulement hors partie
   if (!ready() || !st.name || document.hidden) return;
   if (st.lvSent !== H.level()) pushProfile(); // le niveau a changé : on le republie
   try {
-    const r = await rpc('pulse', { p_secret: secret() }), d = r && r.duel;
-    if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; $('#inv-t').textContent = `${d.from} te défie en duel 1v1`; $('#rk-inv').classList.add('on'); H.vib(12); invT = setTimeout(hideInv, 20000); }
+    const r = await rpc('pulse', { p_secret: secret() }), d = r && r.duel; st.admin = !!(r && r.admin);
+    if (r && r.gift && !giftBusy) { giftBusy = true; try { const g = await rpc('claim_gift', { p_secret: secret(), p_id: r.gift.id }); H.receive(g.eclats, g.xp, g.note); } catch (e) { /* déjà pris ou hors ligne */ } giftBusy = false; } // cadeau de l'administrateur : encaissé une seule fois, confirmé par le serveur
+    if (r && r.msg && r.msg.id !== st.msgSeen && H.canNotify()) { st.msgSeen = r.msg.id; save(); showBanner(r.msg.text, true); } // annonce : montrée une fois
+    if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; showBanner(`${d.from} te défie en duel 1v1`, false); invT = setTimeout(hideInv, 20000); }
   } catch (e) { /* hors connexion : on réessaiera */ }
 }
 function startPulse() {
@@ -165,10 +168,12 @@ function startPulse() {
   if (st.noDuel) rpc('set_no_duel', { p_secret: secret(), p_value: true }).catch(() => {}); pulse();
 }
 async function answer(ok) {
-  hideInv();
+  const ann = $('#rk-inv').dataset.m === 'ann'; hideInv(); if (ann) return;
   try { const r = await rpc('challenge_reply', { p_secret: secret(), p_accept: ok }); if (ok && r && r.code) H.joinDuel(r.code); }
   catch (e) { H.toast(ERR[e.message] || ERR.network); }
 }
+export const isAdmin = () => !!st.admin;
+export const admin = (fn, args = {}) => rpc(fn, { p_secret: secret(), ...args }).catch((e) => { throw new Error(ERR[e.message] || e.message); });
 export const noDuel = () => !!st.noDuel;
 export function setNoDuel(v) { st.noDuel = !!v; save(); if (st.name && ready()) rpc('set_no_duel', { p_secret: secret(), p_value: !!v }).catch(() => {}); }
 export async function challenge(name, code) { try { await rpc('challenge', { p_secret: secret(), p_name: name, p_code: code }); } catch (e) { throw new Error(ERR[e.message] || ERR.network); } }
