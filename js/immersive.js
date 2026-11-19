@@ -15,8 +15,8 @@ const soft = (x, px, py, r, col, a) => { const g = x.createRadialGradient(px, py
 const STYLE = `
 #im{position:fixed;inset:0;z-index:92;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,rgba(18,14,54,.96),rgba(2,2,10,.98));animation:im-in .45s ease;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 @keyframes im-in{from{opacity:0}}#im.out{opacity:0;transition:opacity .35s}
-#im .im-stage,.im-host .im-stage{perspective:1000px;perspective-origin:50% 45%}
-#im .im-card,.im-host .im-card{position:relative;overflow:hidden;border-radius:28px;transform-style:flat;will-change:transform;box-shadow:0 30px 80px rgba(0,0,0,.65),0 0 60px var(--g);background:#05060f}
+#im .im-stage,.im-host .im-stage{perspective:1000px;perspective-origin:50% 45%}#im .im-stage{position:relative}#im .im-stage::before,.im-host .im-stage::before{content:'';position:absolute;inset:-22%;background:radial-gradient(closest-side,var(--g),rgba(0,0,0,0));z-index:-1;pointer-events:none}
+#im .im-card,.im-host .im-card{position:relative;overflow:hidden;border-radius:28px;transform-style:flat;will-change:transform;background:#05060f;isolation:isolate;clip-path:inset(0 round 28px);-webkit-clip-path:inset(0 round 28px)}
 #im .im-card::after,.im-host .im-card::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 2px var(--b),inset 0 0 40px rgba(0,0,0,.55);pointer-events:none;z-index:30}
 #im .im-l,.im-host .im-l{position:absolute;left:50%;top:50%;will-change:transform;pointer-events:none}
 #im .im-l canvas,.im-host .im-l canvas{display:block}
@@ -39,7 +39,7 @@ export function show(o) {
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches), flat = !(window.CSS && window.CSS.supports && window.CSS.supports('transform', 'rotateX(1deg)')), lite = (navigator.hardwareConcurrency || 4) <= 2; // flat : pas de 3D (repli : parallaxe seule) ; lite : appareil modeste, moins de particules
   const D = Math.min(window.devicePixelRatio || 1, lite || flat ? 1 : 1.5);
   const cw = Math.round(Math.min(window.innerWidth * 0.86, 340, (o.hmax || window.innerHeight * 0.74) / 1.42)), ch = Math.round(cw * 1.42), A = cw * 0.05;
-  const root = o.host ? null : make('div', 'arming'), stage = make('div', 'im-stage'), card = make('div', 'im-card'); if (root) root.id = 'im'; card.style.width = cw + 'px'; card.style.height = ch + 'px'; card.style.setProperty('--g', rgba(col, 0.35)); card.style.setProperty('--b', rar >= 5 ? '#fff' : rgba(col, 1));
+  const root = o.host ? null : make('div', 'arming'), stage = make('div', 'im-stage'), card = make('div', 'im-card'); if (root) root.id = 'im'; card.style.width = cw + 'px'; card.style.height = ch + 'px'; card.style.setProperty('--g', rgba(col, 0.35)); stage.style.setProperty('--g', rgba(col, 0.35)); card.style.setProperty('--b', rar >= 5 ? '#fff' : rgba(col, 1));
   if (root) setTimeout(() => root.classList.remove('arming'), 700);
   const L = []; // { el, d : profondeur (-1 loin … +1 près), z : zoom, a : amplitude }
   const sy = -ch * 0.07; // le sujet est un peu au-dessus du centre : le texte occupe le bas de la carte
