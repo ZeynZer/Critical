@@ -57,7 +57,7 @@ let FN = 0, hud = null, hudKey = '', tut = -1;
 let duel = null; // duel 1v1 en cours (salon Realtime)
 let rv = null, rvDone = false, gh = null, runTok = 0; // rival (joueur juste au-dessus de mon record) et fantôme optionnel de sa partie
 let warp = 0, warpMsg = null, slow = 0, beatT = 0, tAcc = 0, ghosts = []; // tAcc : secondes de jeu pas encore enregistrées ; ghosts : astres aspirés par un Big Bang
-let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0;
+let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0, giftLock = 0, giftDur = 1, lastCur = null; // giftLock : un astre spécial (matière exotique, comète) vient de devenir l'astre en main ; on ignore les touches un instant pour ne pas le lâcher par réflexe
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
 
 const sx = (x) => B.x + x * B.u, sy = (y) => B.y + y * B.u;
@@ -474,6 +474,10 @@ function draw() {
       ctx.globalAlpha = 1;
     }
     ctx.globalAlpha = ready ? 1 : 0.6; drawItem(it, ax, ay + (ready ? Math.sin(T * 2.6) * 2 : 0), ready ? 1 : 0.9); ctx.globalAlpha = 1;
+    if (it.k === 'j' || it.k === 'b') { // astre spécial en main : halo + étiquette bien visibles ; la jauge se remplit pendant que les touches sont ignorées
+      const jc = it.k === 'j' ? [190, 130, 255] : [255, 150, 70], lk = clamp((giftLock - T) / giftDur, 0, 1), r0 = B.u * 1.55; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gg = ctx.createRadialGradient(ax, ay, r0 * 0.3, ax, ay, r0 * 2.1); gg.addColorStop(0, rgba(jc, 0.45 + 0.15 * Math.sin(T * 6))); gg.addColorStop(1, rgba(jc, 0)); ctx.fillStyle = gg; ctx.fillRect(ax - r0 * 2.1, ay - r0 * 2.1, r0 * 4.2, r0 * 4.2); ctx.restore();
+      ctx.lineWidth = 3; ctx.strokeStyle = rgba(jc, 0.9); ctx.beginPath(); ctx.arc(ax, ay, r0, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - lk)); ctx.stroke(); if (lk > 0) { ctx.globalAlpha = 0.5; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ax, ay, r0, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; }
+      txt(it.k === 'j' ? 'MATIÈRE EXOTIQUE' : 'COMÈTE', ax, ay - r0 - 14, 10, rgba(jc, 1), 'center', 'Orbitron', 800); txt(it.k === 'j' ? 'copie l\'astre qu\'elle touche' : 'explose au contact', ax, ay - r0 - 2, 9, 'rgba(255,255,255,.75)', 'center', 'system-ui', 600); }
   }
   // astres
   for (const b of G.bodies) {
@@ -576,6 +580,8 @@ function update(dt) {
     if (val >= c[1]) { G.won = true; endRun(); } else if (G.t >= c[2]) endRun();
   }
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
+  if (G.cur !== lastCur) { lastCur = G.cur; if (G.cur && (G.cur.k === 'j' || G.cur.k === 'b') && !G.rep && !G.nop && tut < 0) { giftDur = G.cur.k === 'j' ? 1.3 : 0.8; giftLock = T + giftDur; H.vib([10, 30, 10]); } }
+  if (want && T < giftLock) want = false; // touches de réflexe ignorées pendant le verrou
   if (want && G.cool <= 0 && !ended && !paused) { want = false; if (!(G.duel && duel.phase !== 'play') && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); if (G.duel) dsendDrop(); } } if (G.duel && duel.phase !== 'play') want = false; // un relâché pendant le temps de recharge est mémorisé
 }
 function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisie ; les lâchers tombent exactement au pas où ils ont eu lieu

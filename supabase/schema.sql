@@ -30,6 +30,10 @@ alter table public.players add column if not exists is_admin boolean not null de
 alter table public.players add column if not exists banned boolean not null default false;
 -- reprise de compte après un changement de domaine : ouverte à la main, par pseudo, pour une durée limitée (voir claim_player)
 alter table public.players add column if not exists claim_until timestamptz;
+-- personnalisation du profil : couleur (0-11), cadre (0-5), titre (clé d'une liste côté jeu)
+alter table public.players add column if not exists accent smallint not null default 0;
+alter table public.players add column if not exists frame smallint not null default 0;
+alter table public.players add column if not exists title text not null default '';
 create unique index if not exists players_name_key on public.players (lower(name));
 
 create table if not exists public.scores (
@@ -133,10 +137,10 @@ revoke all on sequence public.gifts_id_seq, public.announcements_id_seq from ano
 -- Lire une page du classement (50 lignes par défaut, 100 au plus). badge = premier astre de la vitrine du joueur.
 drop function if exists public.leaderboard(text, integer, integer); -- le type de retour a changé (colonne badge)
 create or replace function public.leaderboard(p_board text, p_offset integer default 0, p_limit integer default 50)
-returns table (rank bigint, name text, score integer, sector integer, tier integer, badge text, online boolean)
+returns table (rank bigint, name text, score integer, sector integer, tier integer, badge text, online boolean, level integer, accent smallint, frame smallint, title text)
 language sql stable security definer set search_path = public as $$
-  select r.rank, r.name, r.score, r.sector, r.tier, r.badge, r.online from (
-    select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier, p.featured[1] as badge, coalesce(p.seen_at > now() - interval '100 seconds', false) as online
+  select r.rank, r.name, r.score, r.sector, r.tier, r.badge, r.online, r.level, r.accent, r.frame, r.title from (
+    select row_number() over (order by s.score desc, s.updated_at asc) as rank, p.name, s.score, s.sector, s.tier, p.featured[1] as badge, coalesce(p.seen_at > now() - interval '100 seconds', false) as online, p.level, p.accent, p.frame, p.title
     from scores s join players p on p.id = s.player_id where s.board = p_board and not p.banned
   ) r order by r.rank offset greatest(p_offset, 0) limit least(greatest(p_limit, 1), 100)
 $$;
@@ -153,12 +157,13 @@ $$;
 
 -- Modifier son profil public : vitrine (0 à 3 astres distincts), devise (40 caractères au plus), nombre de découvertes.
 -- La vitrine est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu.
-drop function if exists public.set_profile(text, text[], text, integer); -- nouvelle signature : le niveau
-create or replace function public.set_profile(p_secret text, p_featured text[], p_motto text, p_codex integer, p_level integer default 1) returns json
+drop function if exists public.set_profile(text, text[], text, integer); -- anciennes signatures
+drop function if exists public.set_profile(text, text[], text, integer, integer);
+create or replace function public.set_profile(p_secret text, p_featured text[], p_motto text, p_codex integer, p_level integer default 1, p_accent integer default 0, p_frame integer default 0, p_title text default '') returns json
 language plpgsql security definer set search_path = public as $$
-declare v_id uuid; v_last timestamptz; v_motto text := btrim(coalesce(p_motto, '')); v_feat text[] := coalesce(p_featured, '{}');
+declare v_id uuid; v_last timestamptz; v_adm boolean; v_motto text := btrim(coalesce(p_motto, '')); v_feat text[] := coalesce(p_featured, '{}'); v_title text := btrim(coalesce(p_title, ''));
 begin
-  select id, profile_at into v_id, v_last from players where secret_hash = critical_hash(p_secret);
+  select id, profile_at, is_admin into v_id, v_last, v_adm from players where secret_hash = critical_hash(p_secret);
   if v_id is null then raise exception 'unknown_player'; end if;
   if v_last is not null and v_last > now() - interval '3 seconds' then raise exception 'too_fast'; end if;
   if coalesce(array_length(v_feat, 1), 0) > 3
@@ -167,7 +172,9 @@ begin
   then raise exception 'invalid_featured'; end if;
   if v_motto !~ '^[^[:cntrl:]<>]{0,40}$' then raise exception 'invalid_motto'; end if;
   if p_codex is null or p_codex < 0 or p_codex > 100 then raise exception 'invalid_codex'; end if;
-  update players set featured = v_feat, motto = v_motto, codex = p_codex, level = least(greatest(coalesce(p_level, 1), 1), 999), profile_at = now() where id = v_id;
+  if coalesce(p_accent, 0) not between 0 and 11 or coalesce(p_frame, 0) not between 0 and 5 then raise exception 'invalid_style'; end if;
+  if v_title !~ '^[a-z0-9_]{0,24}$' or (v_title = 'createur' and not v_adm) then raise exception 'invalid_title'; end if;
+  update players set featured = v_feat, motto = v_motto, codex = p_codex, level = least(greatest(coalesce(p_level, 1), 1), 999), accent = coalesce(p_accent, 0), frame = coalesce(p_frame, 0), title = v_title, profile_at = now() where id = v_id;
   return json_build_object('ok', true);
 end $$;
 
@@ -183,7 +190,7 @@ language sql stable security definer set search_path = public as $$
     'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'),
     'likes', (select count(*) from likes l where l.to_id = p.id),
     'liked', exists (select 1 from likes l join players me on me.id = l.from_id where l.to_id = p.id and me.secret_hash = critical_hash(p_secret)),
-    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level, 'admin', p.is_admin)
+    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level, 'admin', p.is_admin, 'accent', p.accent, 'frame', p.frame, 'title', p.title)
   from players p left join scores s on s.player_id = p.id and s.board = 'all'
   where lower(p.name) = lower(btrim(p_name))
 $$;
@@ -402,5 +409,148 @@ begin
   return json_build_object('eclats', g.eclats, 'xp', g.xp, 'note', g.note, 'pack', g.pack, 'packs', g.pack_n);
 end $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text, text, integer), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text, text, integer), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint) to anon, authenticated;
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer, integer, integer, text), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text, text, integer), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer, integer, integer, text), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text, text, integer), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint) to anon, authenticated;
+
+-- ============================== Communauté : idées, statistiques et outils d'administration ==============================
+create table if not exists public.ideas (
+  id bigserial primary key, player_id uuid not null references public.players (id) on delete cascade, body text not null,
+  status text not null default 'open', pinned boolean not null default false, created_at timestamptz not null default now()
+);
+create table if not exists public.idea_likes (
+  idea_id bigint not null references public.ideas (id) on delete cascade, player_id uuid not null references public.players (id) on delete cascade, at timestamptz not null default now(),
+  primary key (idea_id, player_id)
+);
+create index if not exists ideas_player on public.ideas (player_id, created_at);
+create index if not exists idea_likes_player on public.idea_likes (player_id, at);
+alter table public.ideas enable row level security; alter table public.idea_likes enable row level security;
+revoke all on public.ideas, public.idea_likes from anon, authenticated;
+revoke all on sequence public.ideas_id_seq from anon, authenticated;
+
+-- Proposer une idée (10 à 280 caractères, 3 par jour, pas de doublon). Elle part avec le « like » de son auteur.
+create or replace function public.idea_post(p_secret text, p_text text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_ban boolean; v_t text := btrim(regexp_replace(coalesce(p_text, ''), '[[:cntrl:]<>]', ' ', 'g')); v_new bigint;
+begin
+  select id, banned into v_id, v_ban from players where secret_hash = critical_hash(p_secret);
+  if v_id is null then raise exception 'unknown_player'; end if;
+  if v_ban then raise exception 'forbidden'; end if;
+  v_t := regexp_replace(v_t, ' {2,}', ' ', 'g');
+  if length(v_t) < 10 or length(v_t) > 280 then raise exception 'invalid_idea'; end if;
+  if (select count(*) from ideas where player_id = v_id and created_at > now() - interval '24 hours') >= 3 then raise exception 'too_many'; end if;
+  if exists (select 1 from ideas where lower(body) = lower(v_t)) then raise exception 'duplicate'; end if;
+  insert into ideas (player_id, body) values (v_id, v_t) returning id into v_new;
+  insert into idea_likes (idea_id, player_id) values (v_new, v_id);
+  return json_build_object('id', v_new);
+end $$;
+
+-- Liste des idées : 'top' (en cours de vote, les plus soutenues d'abord), 'new' (les plus récentes), 'done' (réalisées). Les idées refusées sont masquées (sauf pour l'administrateur, avec 'all').
+create or replace function public.idea_list(p_secret text, p_sort text default 'top', p_limit integer default 60)
+returns table (id bigint, body text, author text, mine boolean, likes bigint, liked boolean, status text, pinned boolean, at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+declare v_me uuid; v_adm boolean;
+begin
+  select p.id, p.is_admin into v_me, v_adm from players p where p.secret_hash = critical_hash(p_secret);
+  return query select i.id, i.body, p.name, i.player_id = v_me, (select count(*) from idea_likes l where l.idea_id = i.id),
+      exists (select 1 from idea_likes l where l.idea_id = i.id and l.player_id = v_me), i.status, i.pinned, i.created_at
+    from ideas i join players p on p.id = i.player_id
+    where case when p_sort = 'done' then i.status = 'done' when p_sort = 'all' and coalesce(v_adm, false) then true else i.status in ('open', 'planned', 'doing') end
+    order by case when p_sort = 'new' then 0 else i.pinned::int * -1 end,
+      case when p_sort = 'new' then 0 else (select count(*) from idea_likes l where l.idea_id = i.id) end desc, i.created_at desc
+    limit least(greatest(coalesce(p_limit, 60), 1), 100);
+end $$;
+
+-- Soutenir / retirer son soutien à une idée (pas la sienne ; 60 changements par heure au plus).
+create or replace function public.idea_like(p_secret text, p_id bigint) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid; v_owner uuid; v_on boolean;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret) and not banned;
+  if v_me is null then raise exception 'unknown_player'; end if;
+  select player_id into v_owner from ideas where id = p_id; if v_owner is null then raise exception 'not_found'; end if;
+  if v_owner = v_me then raise exception 'own_idea'; end if;
+  if (select count(*) from idea_likes where player_id = v_me and at > now() - interval '1 hour') >= 60 then raise exception 'too_fast'; end if;
+  if exists (select 1 from idea_likes where idea_id = p_id and player_id = v_me) then delete from idea_likes where idea_id = p_id and player_id = v_me; v_on := false;
+  else insert into idea_likes (idea_id, player_id) values (p_id, v_me); v_on := true; end if;
+  return json_build_object('liked', v_on, 'likes', (select count(*) from idea_likes where idea_id = p_id));
+end $$;
+
+-- Retirer sa propre idée (tant qu'elle n'est pas prise en charge).
+create or replace function public.idea_delete(p_secret text, p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from ideas where id = p_id and status = 'open' and player_id = (select id from players where secret_hash = critical_hash(p_secret));
+  if not found then raise exception 'not_found'; end if;
+end $$;
+
+create or replace function public.admin_idea_status(p_secret text, p_id bigint, p_status text, p_pin boolean default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform admin_id(p_secret); if p_status not in ('open', 'planned', 'doing', 'done', 'rejected') then raise exception 'invalid_status'; end if;
+  update ideas set status = p_status, pinned = coalesce(p_pin, pinned) where id = p_id; if not found then raise exception 'not_found'; end if;
+end $$;
+create or replace function public.admin_idea_delete(p_secret text, p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); delete from ideas where id = p_id; end $$;
+
+-- Tableau de bord : chiffres globaux.
+create or replace function public.admin_stats(p_secret text) returns json
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform admin_id(p_secret);
+  return json_build_object(
+    'players', (select count(*) from players), 'online', (select count(*) from players where seen_at > now() - interval '100 seconds'),
+    'active24', (select count(*) from players where seen_at > now() - interval '24 hours'), 'new7', (select count(*) from players where created_at > now() - interval '7 days'),
+    'banned', (select count(*) from players where banned), 'avg_level', (select coalesce(round(avg(level), 1), 0) from players),
+    'runs', (select count(*) from scores where board = 'all'), 'top', (select coalesce(max(score), 0) from scores where board = 'all'),
+    'hours', (select coalesce(round(sum(playtime) / 3600.0), 0) from players), 'likes', (select count(*) from likes),
+    'ideas', (select count(*) from ideas), 'ideas_open', (select count(*) from ideas where status in ('open', 'planned', 'doing')), 'idea_likes', (select count(*) from idea_likes),
+    'gifts_pending', (select count(*) from gifts where not claimed), 'duels', (select count(*) from challenge_log where at > now() - interval '24 hours'));
+end $$;
+
+-- Fiche complète d'un joueur.
+create or replace function public.admin_player(p_secret text, p_name text) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare p players;
+begin
+  perform admin_id(p_secret); select * into p from players where lower(name) = lower(btrim(p_name)); if p.id is null then raise exception 'not_found'; end if;
+  return json_build_object('name', p.name, 'level', p.level, 'codex', p.codex, 'motto', p.motto, 'title', p.title, 'accent', p.accent, 'frame', p.frame, 'featured', to_json(p.featured),
+    'since', p.created_at, 'seen', p.seen_at, 'playtime', p.playtime, 'banned', p.banned, 'admin', p.is_admin, 'online', coalesce(p.seen_at > now() - interval '100 seconds', false),
+    'best', (select max(s.score) from scores s where s.player_id = p.id and s.board = 'all'), 'tier', (select max(s.tier) from scores s where s.player_id = p.id),
+    'wins', (select count(*) from scores s where s.player_id = p.id and s.board like 'day:%'),
+    'rank', (select count(*) + 1 from scores o where o.board = 'all' and o.score > coalesce((select max(s.score) from scores s where s.player_id = p.id and s.board = 'all'), 0)),
+    'likes_in', (select count(*) from likes l where l.to_id = p.id), 'likes_out', (select count(*) from likes l where l.from_id = p.id),
+    'ideas', (select count(*) from ideas i where i.player_id = p.id), 'gifts', (select count(*) from gifts g where g.to_id = p.id), 'gifts_pending', (select count(*) from gifts g where g.to_id = p.id and not g.claimed));
+end $$;
+
+-- Modération d'un profil : efface devise, vitrine, titre et style.
+create or replace function public.admin_clear_profile(p_secret text, p_name text) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); update players set motto = '', featured = '{}', title = '', accent = 0, frame = 0 where lower(name) = lower(btrim(p_name)) and not is_admin; end $$;
+
+-- Cadeau pour tout le monde (ou seulement les joueurs en ligne) : un cadeau par joueur, encaissé à sa prochaine connexion.
+create or replace function public.admin_gift_all(p_secret text, p_eclats integer, p_xp integer, p_note text default '', p_pack text default null, p_pack_n integer default 0, p_online boolean default false) returns json
+language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  perform admin_id(p_secret);
+  if coalesce(p_eclats, 0) not between 0 and 100000 or coalesce(p_xp, 0) not between 0 and 100000 then raise exception 'invalid_amount'; end if;
+  if p_pack is not null and p_pack not in ('etoile', 'nebuleuse', 'galaxie') then raise exception 'invalid_pack'; end if;
+  if coalesce(p_pack_n, 0) not between 0 and 10 then raise exception 'invalid_amount'; end if;
+  if coalesce(p_eclats, 0) = 0 and coalesce(p_xp, 0) = 0 and (p_pack is null or coalesce(p_pack_n, 0) = 0) then raise exception 'invalid_amount'; end if;
+  insert into gifts (to_id, eclats, xp, note, pack, pack_n)
+    select id, coalesce(p_eclats, 0), coalesce(p_xp, 0), left(regexp_replace(coalesce(p_note, ''), '[[:cntrl:]<>]', '', 'g'), 80), p_pack, case when p_pack is null then 0 else coalesce(p_pack_n, 0) end
+    from players where not banned and (not coalesce(p_online, false) or seen_at > now() - interval '100 seconds');
+  get diagnostics n = row_count; return json_build_object('count', n);
+end $$;
+
+-- Annonces : liste (actives et récentes) et suppression d'une seule.
+create or replace function public.admin_announcements(p_secret text) returns table (id bigint, text text, until timestamptz, at timestamptz, active boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin perform admin_id(p_secret); return query select a.id, a.text, a.until, a.at, a.until > now() from announcements a order by a.id desc limit 20; end $$;
+create or replace function public.admin_announce_delete(p_secret text, p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); delete from announcements where id = p_id; end $$;
+
+revoke all on function public.idea_post(text, text), public.idea_list(text, text, integer), public.idea_like(text, bigint), public.idea_delete(text, bigint), public.admin_idea_status(text, bigint, text, boolean), public.admin_idea_delete(text, bigint), public.admin_stats(text), public.admin_player(text, text), public.admin_clear_profile(text, text), public.admin_gift_all(text, integer, integer, text, text, integer, boolean), public.admin_announcements(text), public.admin_announce_delete(text, bigint) from public, anon, authenticated;
+grant execute on function public.idea_post(text, text), public.idea_list(text, text, integer), public.idea_like(text, bigint), public.idea_delete(text, bigint), public.admin_idea_status(text, bigint, text, boolean), public.admin_idea_delete(text, bigint), public.admin_stats(text), public.admin_player(text, text), public.admin_clear_profile(text, text), public.admin_gift_all(text, integer, integer, text, text, integer, boolean), public.admin_announcements(text), public.admin_announce_delete(text, bigint) to anon, authenticated;
