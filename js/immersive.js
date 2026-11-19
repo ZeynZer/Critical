@@ -2,7 +2,7 @@
 // Technique : la carte (aplatie, découpée dans son cadre arrondi) bascule en perspective 3D, et ~10 plans qui la composent se décalent
 // chacun à leur vitesse (+ léger zoom différencié = la caméra avance dans l'illustration). Aucun WebGL : canvas 2D dessinés une fois,
 // un seul canvas animé (le corps de l'astre) et des transformations composées par le GPU.
-// show({ rig, name, rar, rname, sub, info, col }) ; rig = { size, halo, haloSpin, over, tier, color, frame(ctx, t) } (voir mine.js : astreRig)
+// show({ host? (mode intégré : la carte se pose dans ce conteneur ; aim() → [x,y] pilote la caméra ; wake() la réveille), rig, name, rar, rname, sub, info, col }) ; rig = { size, halo, haloSpin, over, tier, color, frame(ctx, t) } (voir mine.js : astreRig)
 const TAU = Math.PI * 2, clamp = (x, a = -1, b = 1) => Math.max(a, Math.min(b, x));
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const RC = [[150, 170, 215], [77, 243, 255], [190, 120, 255], [255, 205, 80], [255, 120, 90], [255, 255, 255]];
@@ -15,11 +15,11 @@ const soft = (x, px, py, r, col, a) => { const g = x.createRadialGradient(px, py
 const STYLE = `
 #im{position:fixed;inset:0;z-index:92;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,rgba(18,14,54,.96),rgba(2,2,10,.98));animation:im-in .45s ease;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 @keyframes im-in{from{opacity:0}}#im.out{opacity:0;transition:opacity .35s}
-#im .im-stage{perspective:1000px;perspective-origin:50% 45%}
-#im .im-card{position:relative;overflow:hidden;border-radius:28px;transform-style:flat;will-change:transform;box-shadow:0 30px 80px rgba(0,0,0,.65),0 0 60px var(--g);background:#05060f}
-#im .im-card::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 2px var(--b),inset 0 0 40px rgba(0,0,0,.55);pointer-events:none;z-index:30}
-#im .im-l{position:absolute;left:50%;top:50%;will-change:transform;pointer-events:none}
-#im .im-l canvas{display:block}
+#im .im-stage,.im-host .im-stage{perspective:1000px;perspective-origin:50% 45%}
+#im .im-card,.im-host .im-card{position:relative;overflow:hidden;border-radius:28px;transform-style:flat;will-change:transform;box-shadow:0 30px 80px rgba(0,0,0,.65),0 0 60px var(--g);background:#05060f}
+#im .im-card::after,.im-host .im-card::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 2px var(--b),inset 0 0 40px rgba(0,0,0,.55);pointer-events:none;z-index:30}
+#im .im-l,.im-host .im-l{position:absolute;left:50%;top:50%;will-change:transform;pointer-events:none}
+#im .im-l canvas,.im-host .im-l canvas{display:block}
 .im-spin{animation:im-sp var(--d,60s) linear infinite}@keyframes im-sp{to{transform:rotate(360deg)}}
 .im-pulse{animation:im-pu var(--d,6s) ease-in-out infinite}@keyframes im-pu{50%{transform:scale(1.07);opacity:.82}}
 .im-tw{animation:im-tw var(--d,4s) ease-in-out infinite alternate}@keyframes im-tw{from{opacity:.55}to{opacity:1}}
@@ -38,9 +38,9 @@ export function show(o) {
   const rig = o.rig, rar = Math.max(0, Math.min(5, o.rar | 0)), col = RC[rar], rc = rar >= 5 ? hsl(0, 1) : rgba(col, 1);
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches), flat = !(window.CSS && window.CSS.supports && window.CSS.supports('transform', 'rotateX(1deg)')), lite = (navigator.hardwareConcurrency || 4) <= 2; // flat : pas de 3D (repli : parallaxe seule) ; lite : appareil modeste, moins de particules
   const D = Math.min(window.devicePixelRatio || 1, lite || flat ? 1 : 1.5);
-  const cw = Math.round(Math.min(window.innerWidth * 0.86, 340, (window.innerHeight * 0.74) / 1.42)), ch = Math.round(cw * 1.42), A = cw * 0.05;
-  const root = make('div', 'arming'), stage = make('div', 'im-stage'), card = make('div', 'im-card'); root.id = 'im'; card.style.width = cw + 'px'; card.style.height = ch + 'px'; card.style.setProperty('--g', rgba(col, 0.35)); card.style.setProperty('--b', rar >= 5 ? '#fff' : rgba(col, 1));
-  setTimeout(() => root.classList.remove('arming'), 700);
+  const cw = Math.round(Math.min(window.innerWidth * 0.86, 340, (o.hmax || window.innerHeight * 0.74) / 1.42)), ch = Math.round(cw * 1.42), A = cw * 0.05;
+  const root = o.host ? null : make('div', 'arming'), stage = make('div', 'im-stage'), card = make('div', 'im-card'); if (root) root.id = 'im'; card.style.width = cw + 'px'; card.style.height = ch + 'px'; card.style.setProperty('--g', rgba(col, 0.35)); card.style.setProperty('--b', rar >= 5 ? '#fff' : rgba(col, 1));
+  if (root) setTimeout(() => root.classList.remove('arming'), 700);
   const L = []; // { el, d : profondeur (-1 loin … +1 près), z : zoom, a : amplitude }
   const sy = -ch * 0.07; // le sujet est un peu au-dessus du centre : le texte occupe le bas de la carte
   const layer = (el, d, o2 = {}) => { el.classList.add('im-l'); if (el.tagName === 'CANVAS') { el.style.marginLeft = -parseFloat(el.style.width) / 2 + 'px'; el.style.marginTop = -parseFloat(el.style.height) / 2 + 'px'; } if (o2.subj) el.style.marginTop = (parseFloat(el.style.marginTop) || 0) + sy + 'px'; L.push({ el, d, k: o2.k == null ? 1 : o2.k }); card.append(el); return el; };
@@ -79,16 +79,16 @@ export function show(o) {
   const foil = make('div', 'im-l'), glare = make('div', 'im-l'); foil.style.cssText = `width:${foilS}px;height:${foilS}px;margin:-${foilS / 2}px 0 0 -${foilS / 2}px;mix-blend-mode:color-dodge;opacity:${rar < 2 ? 0 : 0.1 + rar * 0.06};z-index:20`; foil.append(fc); fc.style.cssText = 'width:100%;height:100%;filter:saturate(1.2)';
   glare.style.cssText = `width:${cw * 1.6}px;height:${cw * 1.6}px;margin:-${cw * 0.8}px 0 0 -${cw * 0.8}px;background:radial-gradient(circle,rgba(255,255,255,.55),rgba(255,255,255,0) 55%);mix-blend-mode:overlay;z-index:21;opacity:.7`; card.append(foil, glare);
   const txt = make('div', 'im-txt', `<small>${(o.rname || '').toUpperCase()}</small><b>${o.name}</b><span>${[o.sub, o.info].filter(Boolean).join(' · ')}</span>`); card.append(txt);
-  const x = make('button', 'im-x', '✕'); x.setAttribute('aria-label', 'Fermer'); const hint = make('p', 'im-hint', reduce ? 'Glisse pour incliner la carte' : 'Incline ton appareil ou glisse pour explorer la scène');
-  stage.append(card); root.append(stage, x, hint); document.body.append(root);
+  const x = make('button', 'im-x', '✕'); x.setAttribute('aria-label', 'Fermer'); const hint = o.host ? null : make('p', 'im-hint', reduce ? 'Glisse pour incliner la carte' : 'Incline ton appareil ou glisse pour explorer la scène');
+  stage.append(card); if (root) { root.append(stage, x, hint); document.body.append(root); } else o.host.append(stage);
   // — caméra : cible d'inclinaison (souris / doigt / gyroscope), sinon mouvement automatique lent ; ressort pour la douceur
-  let tx = 0, ty = 0, cx2 = 0, cy2 = 0, active = 0, gyro = 0, g0 = null, t0 = performance.now() / 1000, raf = 0, frame = 0, closed = false, last = 0;
+  let tx = 0, ty = 0, cx2 = 0, cy2 = 0, active = 0, gyro = 0, g0 = null, t0 = performance.now() / 1000, raf = 0, frame = 0, closed = false, last = 0, awake = !o.host; // en mode hôte : la carte est préparée à l'avance, endormie, puis réveillée (wake) quand elle entre en scène
   const setPt = (e) => { const r = card.getBoundingClientRect(), px = (e.clientX - (r.left + r.width / 2)) / (r.width * 0.7), py = (e.clientY - (r.top + r.height / 2)) / (r.height * 0.7); tx = clamp(px); ty = clamp(py); active = performance.now(); };
-  root.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' || e.buttons) setPt(e); }); root.addEventListener('pointerdown', setPt);
+  if (root) { root.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' || e.buttons) setPt(e); }); root.addEventListener('pointerdown', setPt); }
   const onOri = (e) => { if (e.gamma == null) return; if (!g0) g0 = [e.gamma, e.beta]; gyro = performance.now(); if (performance.now() - active > 1500) { tx = clamp((e.gamma - g0[0]) / 22); ty = clamp((e.beta - g0[1]) / 22); } };
-  if (window.DeviceOrientationEvent) { try { if (typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') window.addEventListener('deviceorientation', onOri); }).catch(() => {}); else window.addEventListener('deviceorientation', onOri); } catch (e) { /* pas de gyroscope : mouvement automatique */ } }
+  if (root && window.DeviceOrientationEvent) { try { if (typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') window.addEventListener('deviceorientation', onOri); }).catch(() => {}); else window.addEventListener('deviceorientation', onOri); } catch (e) { /* pas de gyroscope : mouvement automatique */ } }
   function loop(now) {
-    raf = requestAnimationFrame(loop); if (document.hidden) return; const t = now / 1000 - t0, dt = Math.min(0.05, (now - last) / 1000 || 0.016); last = now; frame++;
+    raf = requestAnimationFrame(loop); if (document.hidden) return; if (!awake) { t0 = now / 1000; return; } const ext = o.aim && o.aim(); if (ext) { tx = ext[0]; ty = ext[1]; active = now; } const t = now / 1000 - t0, dt = Math.min(0.05, (now - last) / 1000 || 0.016); last = now; frame++;
     const enter = 1 - (1 - Math.min(1, t / 1.5)) ** 3, manual = now - active < 2200 || now - gyro < 600; // mouvement automatique quand personne ne touche
     const aimX = manual ? tx : reduce ? 0 : Math.sin(t * 0.33) * 0.55 + Math.sin(t * 0.13) * 0.2, aimY = manual ? ty : reduce ? 0 : Math.cos(t * 0.24 + 0.7) * 0.4;
     const k = 1 - Math.pow(0.001, dt); cx2 += (aimX - cx2) * Math.min(1, k * 1.2); cy2 += (aimY - cy2) * Math.min(1, k * 1.2);
@@ -105,8 +105,7 @@ export function show(o) {
     if (P.length && frame % 2 === 1) { px2.setTransform(D, 0, 0, D, 0, 0); px2.clearRect(0, 0, cw, ch); px2.globalCompositeOperation = 'lighter'; for (const p of P) { const sp = 6 + p.z * 22; p.y -= sp * dt * 2; p.x += Math.sin(t * 0.6 + p.h * 9) * 0.25; if (p.y < -12) { p.y = ch + 12; p.x = rnd(p.h * 99 + frame) * cw; } const r0 = 1.2 + p.z * p.z * 9, tw = 0.5 + 0.5 * Math.sin(t * 2 + p.h * 30); px2.globalAlpha = (0.25 + 0.55 * tw) * (p.z > 0.8 ? 0.32 : 1); soft(px2, p.x, p.y, r0 * 2.4, rar >= 5 ? RC[(p.h * 6) | 0] : p.s > 0.6 ? col : [255, 255, 255], 0.9); } px2.globalAlpha = 1; }
   }
   raf = requestAnimationFrame(loop);
-  const close = () => { if (closed) return; closed = true; cancelAnimationFrame(raf); window.removeEventListener('deviceorientation', onOri); root.classList.add('out'); setTimeout(() => root.remove(), 350); if (o.onClose) o.onClose(); };
-  x.addEventListener('click', close); root.addEventListener('dblclick', close);
-  setTimeout(() => { hint.style.opacity = 0; }, 5000);
-  return { close, get camera() { return [cx2, cy2]; }, setCamera(a, b) { tx = a; ty = b; active = performance.now() + 1e9; } };
+  const close = () => { if (closed) return; closed = true; cancelAnimationFrame(raf); window.removeEventListener('deviceorientation', onOri); if (root) { root.classList.add('out'); setTimeout(() => root.remove(), 350); } else stage.remove(); if (o.onClose) o.onClose(); };
+  if (root) { x.addEventListener('click', close); root.addEventListener('dblclick', close); setTimeout(() => { hint.style.opacity = 0; }, 5000); }
+  return { close, el: stage, wake() { awake = true; }, get camera() { return [cx2, cy2]; }, setCamera(a, b) { tx = a; ty = b; active = performance.now() + 1e9; } };
 }

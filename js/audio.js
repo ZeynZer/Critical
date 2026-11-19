@@ -210,6 +210,8 @@ export function chestReveal(r = 0) {
 // Ouverture de pack : montée qui s'accélère, notes de liaison (plus aiguës et plus riches pour une bonne rareté), avalement, impact
 export function packRise(d) { chestRise(d); const n = Math.max(3, Math.round(d * 4)); for (let i = 0; i < n; i++) tone(70 + i * 22, 'sine', 0.16, 0.22, { at: ((i / n) ** 1.6) * d }); }
 export function packLink(i, r) { const f = mtof(72 + [0, 2, 4, 7, 9][i % 5] + (r >= 3 ? 12 : 0)); tone(f, 'sine', 0.55, 0.18); tone(f * 2, 'triangle', 0.3, 0.07, { at: 0.02 }); if (r >= 3) [0, 4, 7, 12].forEach((s, k) => tone(mtof(84 + s + i), 'sine', 0.9, 0.07, { at: k * 0.05 })); }
+export function packCharge(p) { tone(mtof(48 + p * 24), 'sine', 0.22, 0.12 + p * 0.1); if (p > 0.7) noise(0.12, 0.05 + p * 0.06, 4000 + p * 4000, 800); }
+export function packPlace(r) { noise(0.16, 0.12, 5000, 700); tone(mtof(60 + r * 2), 'triangle', 0.18, 0.1); }
 export function packSwallow() { noise(1.3, 0.28, 900, 50); tone(220, 'sawtooth', 1.3, 0.14, { to: 28, atk: 0.4 }); }
 export function packBoom(r) { noise(1.1, 0.4, 9000, 90); tone(48, 'sine', 1.2, 0.6, { to: 26 }); if (r >= 4) rare(r); }
 export function packHit(r) { if (r >= 3) rare(r); else if (r >= 1) { tone(mtof(72 + r * 3), 'sine', 0.6, 0.2); tone(mtof(84 + r * 3), 'triangle', 0.35, 0.08); } else tone(mtof(66), 'sine', 0.25, 0.12); }

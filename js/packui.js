@@ -29,7 +29,7 @@ export function mount(page, api) {
   const list = make('div', 'pk-list'); page.append(list); let sig = '';
   const lowFx = (navigator.hardwareConcurrency || 4) <= 4;
   const run = (res, id, preview) => FX.play({
-    result: res, names: { pack: PACKS[id].n, rar: RAR }, paintCard: api.paintCard, onView: api.view, sfx: api.sfx, vib: api.vib, quick: api.quick && api.quick(), lowFx,
+    result: res, names: { pack: PACKS[id].n, rar: RAR }, paintCard: api.paintCard, onView: api.view, buildCard: api.buildCard, sfx: api.sfx, vib: api.vib, quick: api.quick && api.quick(), lowFx,
     canAgain: () => { if (preview) return { ok: false, label: 'Aperçu administrateur' }; const i = api.info(), n = i.stock[id]; return n > 0 ? { ok: true, label: `Ouvrir un autre (${n})` } : i.dust >= PACKS[id].cost ? { ok: true, label: `Ouvrir un autre · ${fmt(PACKS[id].cost)}` } : { ok: false, label: 'Plus assez d\'Éclats' }; },
     onDone: (act) => { sig = ''; api.refresh(); if (act === 'again') start(id); },
   });
