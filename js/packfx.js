@@ -46,7 +46,7 @@ export function play(o) {
   for (let i = 0; i < N; i++) links.push(L0 + (i + 1) * seg); // instant où la caméra frôle l'astre i
   const bh = scene === 'legend' ? tE : 0, cvg = scene === 'cosmic' ? tE : 0, tBoom = tE + { calm: 0.3, rare: 0.4, epic: 1.35, legend: 3.0, cosmic: 2.8 }[scene] * q, D0 = tE + TE + 0.5, tSum = D0 + 0.7;
   const sil = [], mini = [];
-  cards.forEach((c, i) => { const m = document.createElement('canvas'); o.paintCard(m, c.key, 96); mini.push(m); const s = document.createElement('canvas'); s.width = m.width; s.height = m.height; const x = s.getContext('2d'); x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(28,32,70,.95)'; x.fillRect(0, 0, s.width, s.height); sil.push(s); });
+  cards.forEach((c, i) => { const b = document.createElement('canvas'); o.paintCard(b, c.key, 170); sil.push(b); }); // les vrais astres (l'aura de rareté reste l'indice)
   const stars = Array.from({ length: low ? 70 : 130 }, (_, i) => ({ x: (rnd(i * 3.7) - 0.5) * 2.4, y: (rnd(i * 5.9) - 0.5) * 2.4, z: rnd(i * 9.1), h: rnd(i * 2.2) }));
   // — caméra : inclinaison visée (gyroscope / souris / glissé), sinon dérive lente ; ressort pour la douceur
   let ax = 0, ay = 0, camX = 0, camY = 0, tick = 0, ptr = null, gyro = 0, g0 = null, drag = null;
@@ -134,6 +134,7 @@ export function play(o) {
     ctx.globalAlpha = 1; if (x < -0.3) return; eventFx(t, x, al);
   }
   // — l'événement rare, au centre de l'écran (la caméra s'est arrêtée devant le dernier astre) : ce qui se passe dépend de la meilleure rareté du tirage
+  const wave = (x0, y0, t0, dur, r1, t) => { const u = (t - t0) / dur; if (u < 0 || u > 1) return; const r = eo(u) * r1, a = (1 - u) ** 1.6, g = ctx.createConicGradient ? ctx.createConicGradient(t * 0.6, x0, y0) : null; if (g) for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, hsl(i * 60, 1, 68)); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = g || hsl(t * 100, 1, 68); for (let k = 3; k >= 1; k--) { ctx.lineWidth = (10 + r * 0.16) * k / 1.6; ctx.globalAlpha = a * 0.11 * (4 - k); ctx.beginPath(); ctx.arc(x0, y0, r, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; };
   function eventFx(t, x, al) {
     const E = pj(W3(P[N - 1])) || [cx, cy, 1, 1], [ex, ey] = E, w = Math.min(1.15 * Rw * E[2], Math.min(W, H) * 0.6), rb = best >= 5 ? (k) => hsl(k * 40 + t * 90, 1, 70) : null, col = COL[best], cc = best >= 5 ? hsl(t * 200, 1, 72) : rgba(col, 1), mx = Math.max(W, H);
     ctx.globalCompositeOperation = 'lighter';
@@ -147,10 +148,14 @@ export function play(o) {
         ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(ex, ey, rr, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,215,150,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(ex, ey, rr * 1.06, 0, TAU); ctx.stroke(); } // anneau de lentille
       ctx.globalCompositeOperation = 'source-over'; if (x > 3.0 * q) { flash = Math.max(flash, 1 - clamp((x - 3.0 * q) / (0.45 * q))); ring(ex, ey, tE + 3.0 * q, 1.2, mx * 0.8, rgba(COL[4], 1), 12, t); ring(ex, ey, tE + 3.0 * q + 0.15, 1.2, mx * 0.6, '#fff', 6, t); sparks(ex, ey, tE + 3.0 * q, 90, (k) => hsl(20 + k * 5, 1, 68), 360, 1.5, t, 3); } }
     else { // cosmique : tous les astres convergent, un cœur de lumière monte, puis explosion arc-en-ciel
-      const cv = clamp(x / (2.0 * q)), core = eio(clamp((x - 1.0 * q) / (1.6 * q))), tb = 2.8 * q; ctx.globalCompositeOperation = 'source-over'; if (x < tb) { ctx.fillStyle = `rgba(0,0,8,${0.55 * Math.min(1, x / 0.5)})`; ctx.fillRect(0, 0, W, H);
+      const cv = clamp(x / (2.0 * q)), core = eio(clamp((x - 1.0 * q) / (1.6 * q))), tb = 2.8 * q, hue = t * 60, b = x > tb ? eo((x - tb) / 1.0) : 0; ctx.globalCompositeOperation = 'source-over';
+      if (x < tb) { ctx.fillStyle = `rgba(0,0,8,${0.55 * Math.min(1, x / 0.5)})`; ctx.fillRect(0, 0, W, H);
         for (let i = 0; i < N; i++) { const a = -Math.PI / 2 + (i / N) * TAU + ei(cv) * TAU * 1.6, rr = Math.min(W, H) * 0.34 * (1 - ei(cv)), sc = 1 - 0.8 * ei(cv), ww = Math.min(W, H) * 0.3 * sc; ctx.globalAlpha = 1 - ei(clamp((x - 1.7 * q) / (0.4 * q))); ctx.drawImage(sil[i], ex + Math.cos(a) * rr - ww / 2, ey + Math.sin(a) * rr - ww / 2, ww, ww); } ctx.globalAlpha = 1; }
-      ctx.globalCompositeOperation = 'lighter'; glow(ex, ey, mx * (0.15 + 0.7 * core + (x > tb ? 0.7 * eo((x - tb) / 0.8) : 0)), hsl(t * 240, 1, 72), (0.85 * (1 - (x > tb ? 0.5 * eo((x - tb) / 1) : 0))).toFixed(2)); for (let a = 0; a < 14; a++) { ctx.save(); ctx.translate(ex, ey); ctx.rotate(t * 1.3 + a * TAU / 14); ctx.fillStyle = hsl(a * 26 + t * 120, 1, 70, (0.3 * core).toFixed(2)); ctx.fillRect(w * 0.1, -2, mx * (0.2 + 0.4 * core), 4); ctx.restore(); }
-      ctx.globalCompositeOperation = 'source-over'; if (x > tb) { flash = Math.max(flash, x < tb + 0.5 ? eo((x - tb) / 0.3) : 1 - eo((x - tb - 0.5) / 0.8)); for (let k = 0; k < 3; k++) ring(ex, ey, tE + tb + 0.35 + k * 0.2, 1.3, mx * 0.8, hsl(t * 200 + k * 100, 1, 72), 10 - k * 2, t); sparks(ex, ey, tE + tb + 0.3, 110, (k) => hsl(k * 33 + t * 80, 1, 70), 380, 1.6, t, 3); } }
+      ctx.globalCompositeOperation = 'lighter'; // un cœur de lumière doux, deux halos de teintes décalées (aucun trait)
+      glow(ex, ey, mx * (0.14 + 0.5 * core + 0.8 * b), hsl(hue, 1, 70), (0.6 * (1 - 0.45 * b)).toFixed(2)); glow(ex, ey, mx * (0.1 + 0.34 * core + 0.55 * b), hsl(hue + 130, 1, 72), (0.5 * (1 - 0.45 * b)).toFixed(2)); glow(ex, ey, mx * (0.05 + 0.12 * core), 'rgba(255,255,255,1)', (0.9 * core).toFixed(2));
+      if (x > tb) { flash = Math.max(flash, x < tb + 0.4 ? eo((x - tb) / 0.25) : 1 - eo((x - tb - 0.4) / 1.0)); const age = x - tb;
+        for (let k = 0; k < 3; k++) wave(ex, ey, tE + tb + 0.1 + k * 0.28, 2.0, mx * 0.95, t); // ondes de choc : anneaux larges et diffus, dégradé arc-en-ciel
+        const n = low ? 28 : 56; for (let i = 0; i < n; i++) { const a = rnd(i * 3.3) * TAU, d = eo(age / 2.2) * mx * (0.12 + 0.5 * rnd(i * 5.7)), al = (1 - clamp(age / 2.6)) * clamp(age / 0.2); if (al > 0.01) glow(ex + Math.cos(a) * d, ey + Math.sin(a) * d - age * 8, 4 + rnd(i * 9.1) * 9, hsl(i * 17 + hue, 1, 74), al.toFixed(2)); } } }
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; banner(t);
   }
   function banner(t) { // la rareté, en grand, dès que l'événement éclate
