@@ -970,10 +970,12 @@ export function astreRig(key) {
     },
   };
 }
-export function viewCard(key) { // carte immersive d'un astre (Codex, packs)
-  const rig = astreRig(key); if (!rig) return; const info = astreInfo(key), k = parseKey(key), e = entries().find((x) => x.key === key);
-  IM.show({ rig, name: info.name, rar: Math.max(0, info.rar), rname: k.tier === F.MAX_TIER ? 'Galaxie · ' + RAR[Math.max(0, info.rar)] : RAR[Math.max(0, info.rar)], sub: info.sub, info: e && e.info ? e.info : '' });
+export function cardSpec(key) { // données d'une carte immersive (Codex, packs)
+  const rig = astreRig(key); if (!rig) return null; const info = astreInfo(key), k = parseKey(key), e = entries().find((x) => x.key === key);
+  return { rig, name: info.name, rar: Math.max(0, info.rar), rname: k.tier === F.MAX_TIER ? 'Galaxie · ' + RAR[Math.max(0, info.rar)] : RAR[Math.max(0, info.rar)], sub: info.sub, info: e && e.info ? e.info : '' };
 }
+export function viewCard(key) { const sp = cardSpec(key); if (sp) IM.show(sp); }
+export const buildCard = (key, host, aim, hmax) => { const sp = cardSpec(key); return sp && IM.show({ ...sp, host, aim, hmax }); }; // carte intégrée (ouverture de pack)
 export function paintCard(c, key, px) { // astre net à grande taille (cartes de pack) : on agrandit l'échelle de dessin le temps de la vignette
   const keep = B.u; B.u = 56; try { paintAstre(c, key, px, false); } finally { B.u = keep; }
 }
