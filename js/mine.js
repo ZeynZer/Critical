@@ -663,7 +663,7 @@ const HTML = `
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Pause</h2><p class="sub" id="mn-ht">Deux astres identiques qui se touchent fusionnent.</p><div id="mn-lad"></div><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
 const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-new">Créer un salon</button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
-<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxv" hidden>Voir en immersif</button><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
+<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
   ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '', info: powerText(i, 0) })),
@@ -701,11 +701,11 @@ function showCodex() {
     d.insertAdjacentHTML('beforeend', `<b>${e.ok ? e.name : '???'}</b>` + (e.sub ? `<small>${e.sub}</small>` : '')); g.append(d);
     d.addEventListener('click', () => {
       $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.';
-      const v = $('#mn-cxv'); v.hidden = !(e.ok && e.tier >= 0); v.onclick = () => viewCard(e.key);
+      if (e.ok && e.tier >= 0) viewCard(e.key); // un clic = la carte immersive (le pouvoir et l'équipement restent sous la grille)
       const b = $('#mn-cxe'); b.hidden = !(e.ok && e.tier >= 0 && equipable(e.tier, e.v)); if (!b.hidden) { const on = sv.skin[e.tier] === e.v; b.textContent = on ? 'Retirer cette apparence' : 'Équiper cette apparence'; b.onclick = () => { equip(e.tier, on ? 0 : e.v); showCodex(); $('#mn-cxd').textContent = on ? 'Apparence d\'origine rétablie.' : `${e.name} équipé : tous les astres de ce rang l'afficheront.`; }; }
     });
   }
-  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.'; $('#mn-cxe').hidden = true; $('#mn-cxv').hidden = true;
+  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.'; $('#mn-cxe').hidden = true;
   $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent des Éclats.`;
   $('#mn-m-codex').classList.add('on');
 }

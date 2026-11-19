@@ -8,8 +8,8 @@ const CSS = `#pk{position:fixed;inset:0;z-index:88;background:#02020a;touch-acti
 .pk-c{position:absolute;left:50%;top:50%;transform-origin:50% 50%;touch-action:none;pointer-events:auto;will-change:transform;cursor:grab}.pk-c .im-stage{position:absolute;left:0;top:0}
 .pk-back{position:absolute;inset:0;border-radius:28px;background:radial-gradient(circle at 50% 46%,rgba(var(--c),.55),rgba(var(--c),0) 58%),linear-gradient(160deg,#101246,#07081f);border:3px solid rgb(var(--c));box-shadow:0 0 50px rgba(var(--c),.55),inset 0 0 40px rgba(0,0,0,.6);overflow:hidden}
 .pk-back i{position:absolute;left:50%;top:46%;border:2px solid rgba(255,255,255,.35);border-radius:50%;transform:translate(-50%,-50%) rotate(var(--a)) scaleY(.36);width:var(--w);height:var(--w)}.pk-back.pr{animation:pk-hue 2.4s linear infinite}@keyframes pk-hue{to{filter:hue-rotate(360deg)}}
-#pk-slots{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;justify-content:center;gap:6px;padding:0 10px;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
-#pk-slots.sum{transform:translateY(calc(-50vh + 60px))}#pk.sum #pk-hint{bottom:calc(env(safe-area-inset-bottom,0px) + 160px)}#pk-slots.sum.fix{pointer-events:auto}
+#pk-slots{opacity:0;position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;justify-content:center;gap:6px;padding:0 10px;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+#pk.cards #pk-slots{opacity:1}#pk-slots.sum{transform:translateY(calc(-50vh + 60px))}#pk.sum #pk-hint{bottom:calc(env(safe-area-inset-bottom,0px) + 160px)}#pk-slots.sum.fix{pointer-events:auto}
 .pk-sl{flex:0 0 auto;width:var(--sw);height:calc(var(--sw)*1.4);border-radius:12px;border:2px dashed rgba(255,255,255,.2);display:grid;place-items:center;overflow:hidden;background:rgba(255,255,255,.03);padding:0;color:#fff}
 .pk-sl.on{border:2px solid var(--b);background:rgba(14,16,44,.92);box-shadow:0 0 14px var(--g);animation:pk-pop .5s cubic-bezier(.2,1.6,.4,1)}.pk-sl canvas{width:92%;height:auto;display:block}@keyframes pk-pop{from{transform:scale(.3);opacity:0}}
 #pk-fl{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
@@ -41,15 +41,10 @@ export function play(o) {
   const $ = (s) => root.querySelector(s), cv = $('canvas'), ctx = cv.getContext('2d'), deck = $('#pk-deck'), slots = $('#pk-slots'), fl = $('#pk-fl'), hint = $('#pk-hint'), ui = $('#pk-ui'), skip = $('#pk-skip');
   $('#pk-title').textContent = o.names.pack;
   let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, Rw = 0, S = 0, F = 1, gal = null, cw = 0, ch = 0;
-  // — calendrier de l'intro (secondes après l'allumage), construit une fois
-  const tA = TA[scene] * q, tB = 0.7 * q, L0 = tA + tB, ld = 0.55 * q, links = []; let tc = L0, bh = 0, cvg = 0;
-  for (let i = 0; i < N; i++) {
-    if (i === N - 1 && scene === 'epic') tc += 0.7 * q; // tension avant le dernier astre
-    if (i === N - 1 && scene === 'legend') { bh = tc; tc += 3.3 * q; } // le trou noir avale l'astre le plus rare puis le recrache
-    links.push(tc); tc += ld;
-  }
-  if (scene === 'cosmic') { cvg = tc; tc += 3.3 * q; } // convergence de tous les astres
-  const D0 = tc + 0.45, tSum = D0 + 0.7; // D0 : les astres se condensent en paquet de cartes
+  // — calendrier (secondes après l'allumage) : allumage → vol de caméra à travers le monde (un passage par astre) → événement rare → paquet de cartes
+  const tA = TA[scene] * q, tB = 0.7 * q, L0 = tA + tB, seg = 0.95 * q, TE = { calm: 1.8, rare: 2.2, epic: 3.0, legend: 4.6, cosmic: 4.6 }[scene] * q, tE = L0 + N * seg, links = [];
+  for (let i = 0; i < N; i++) links.push(L0 + (i + 1) * seg); // instant où la caméra frôle l'astre i
+  const bh = scene === 'legend' ? tE : 0, cvg = scene === 'cosmic' ? tE : 0, tBoom = tE + { calm: 0.3, rare: 0.4, epic: 1.35, legend: 3.0, cosmic: 2.8 }[scene] * q, D0 = tE + TE + 0.5, tSum = D0 + 0.7;
   const sil = [], mini = [];
   cards.forEach((c, i) => { const m = document.createElement('canvas'); o.paintCard(m, c.key, 96); mini.push(m); const s = document.createElement('canvas'); s.width = m.width; s.height = m.height; const x = s.getContext('2d'); x.drawImage(m, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(28,32,70,.95)'; x.fillRect(0, 0, s.width, s.height); sil.push(s); });
   const stars = Array.from({ length: low ? 70 : 130 }, (_, i) => ({ x: (rnd(i * 3.7) - 0.5) * 2.4, y: (rnd(i * 5.9) - 0.5) * 2.4, z: rnd(i * 9.1), h: rnd(i * 2.2) }));
@@ -82,12 +77,6 @@ export function play(o) {
   const sparks = (x, y, t0, n, col, sp, life, t, size = 2.2) => { const age = t - t0; if (age < 0 || age > life) return; const k = low ? Math.ceil(n / 2) : n; for (let i = 0; i < k; i++) { const a = rnd(i * 3.3 + t0 * 7) * TAU, v = sp * (0.35 + rnd(i * 5.7 + t0) * 0.65), al = 1 - age / life; ctx.fillStyle = typeof col === 'function' ? col(i) : col; ctx.globalAlpha = al; ctx.fillRect(x + Math.cos(a) * v * age - size / 2, y + Math.sin(a) * v * age + 90 * age * age - size / 2, size, size); } ctx.globalAlpha = 1; };
   const ring = (x, y, t0, dur, r1, col, w, t) => { const u = (t - t0) / dur; if (u < 0 || u > 1) return; ctx.strokeStyle = col; ctx.globalAlpha = (1 - u) * 0.9; ctx.lineWidth = w * (1 - u) + 0.5; ctx.beginPath(); ctx.arc(x, y, eo(u) * r1, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; };
   const glow = (x, y, r, col, a) => { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col.replace(/[\d.]+\)$/, a + ')')); g.addColorStop(1, col.replace(/[\d.]+\)$/, '0)')); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); };
-  function astre(i, p, sc, t, lit, hideAura) { // silhouette sombre + aura de la rareté (pas l'astre : il se dévoile sur la carte)
-    const m = sil[i], w = (m.width / DPR) * sc * p[2], [x, y] = p;
-    if (lit > 0 && !hideAura) { ctx.globalCompositeOperation = 'lighter'; glow(x, y, w * 1.25, pcol(i, t), (0.45 * lit).toFixed(2)); ctx.globalCompositeOperation = 'source-over'; }
-    ctx.drawImage(m, x - w / 2, y - w / 2, w, w);
-    if (lit > 0 && !hideAura) { ctx.strokeStyle = pr(i) ? hsl(t * 140 + i * 70, 1, 70) : rgba(COL[cards[i].r], 1); ctx.globalAlpha = lit; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(x, y, w * 0.4, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; }
-  }
   function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
   let flash = 0, tw = 0; // flash : fondu blanc de la frame (max des événements) ; tw : temps de la scène (dérive des étoiles)
   // — étoiles en profondeur : défilent lentement ; à l'allumage elles filent vers la caméra (traînées), de plus en plus vite
@@ -107,11 +96,74 @@ export function play(o) {
     if (p > 0.01) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(o0[0], o0[1], S * 0.19, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke(); } // jauge de maintien
     ctx.restore(); if (p > 0.9) { ctx.fillStyle = `rgba(255,255,255,${(p - 0.9) * 4})`; ctx.fillRect(0, 0, W, H); }
   }
+  // — monde du vol (unités de Rw) : astres le long d'un couloir sinueux, caméra qui les frôle (spline), cible qui regarde un peu devant
+  const v3 = { sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], norm: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; } };
+  const cr = (arr, u) => { const n = arr.length, i = Math.min(n - 2, Math.max(0, Math.floor(u))), f = u - i, p0 = arr[Math.max(0, i - 1)], p1 = arr[i], p2 = arr[i + 1], p3 = arr[Math.min(n - 1, i + 2)]; return p1.map((_, d) => 0.5 * (2 * p1[d] + (-p0[d] + p2[d]) * f + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * f * f + (-p0[d] + 3 * p1[d] - 3 * p2[d] + p3[d]) * f ** 3)); };
+  const PZ = 2.3, P = Array.from({ length: N }, (_, i) => [Math.sin(i * 1.9 + 0.4) * 1.1, Math.cos(i * 2.4) * 0.55, i * PZ]), K = [[P[0][0] - 1.2, P[0][1] + 0.5, P[0][2] - PZ * 1.1]];
+  for (let i = 0; i < N - 1; i++) { const sd = i % 2 ? 1 : -1; K.push([P[i][0] + sd * 0.7, P[i][1] - sd * 0.15, P[i][2] + 0.5]); } K.push([P[N - 1][0] + 0.45, P[N - 1][1] + 0.15, P[N - 1][2] - 2.3]);
+  const ST = Array.from({ length: low ? 110 : 210 }, (_, i) => { const a = rnd(i * 4.1) * TAU, rr = 0.9 + rnd(i * 7.3) ** 1.5 * 4.5; return { p: [Math.cos(a) * rr, Math.sin(a) * rr * 0.8, -2.5 + rnd(i * 2.9) * (N * PZ + 5)], s: 0.6 + rnd(i * 5.1) * 1.4, h: rnd(i * 1.7) }; });
+  const NEB = Array.from({ length: low ? 4 : 6 }, (_, i) => ({ p: [Math.cos(i * 2.1) * 3.2, Math.sin(i * 1.3) * 2.2, i * (N * PZ / 5) - 1], s: 3.5 + rnd(i * 3.3) * 2, c: i % 3 === 0 ? bucketCol : i % 3 === 1 ? [90, 70, 200] : [60, 120, 230] }));
+  let C = null; // caméra de l'image courante
+  const pj = (p, ps = C.pos) => { const d = v3.sub(p, ps), zc = v3.dot(d, C.f); if (zc < 0.2 * Rw) return null; const k = C.F / zc * 1; return [cx + v3.dot(d, C.r) * k, cy - v3.dot(d, C.u) * k, k, zc]; }; // p en px monde
+  const W3 = (p) => [p[0] * Rw, p[1] * Rw, p[2] * Rw];
+  function world(t, al) {
+    const u = clamp((t - L0) / seg, 0, N), x = t - tE, Kp = (uu) => W3(cr(K, uu)), pos0 = Kp(u), pos2 = Kp(clamp((t - 0.05 - L0) / seg, 0, N)), tg = W3(cr(P, clamp(u * 0.85 + 0.35, 0, N - 1)));
+    let f = v3.norm(v3.sub(tg, pos0)); let pos = v3.add(pos0, v3.mul(f, Rw * 0.4 * eo(x / TE) * (x > 0 ? 1 : 0))); // poussée lente pendant l'événement
+    let r0 = v3.norm(v3.cross([0, 1, 0], f)), u0 = v3.cross(f, r0); const sx = camX * Rw * 0.3, sy = camY * Rw * 0.2; f = v3.norm(v3.sub(v3.add(v3.add(tg, v3.mul(r0, sx)), v3.mul(u0, sy)), pos));
+    r0 = v3.norm(v3.cross([0, 1, 0], f)); u0 = v3.cross(f, r0); const vx = v3.dot(v3.sub(pos0, pos2), r0) / 0.05, roll = reduce ? 0 : clamp(-vx / Rw * 0.1, -0.45, 0.45) + Math.sin(t * 0.7) * 0.03, cs = Math.cos(roll), sn = Math.sin(roll);
+    const zoom = 1 + (x > 0 ? 0.55 * eo(x / (TE * 0.6)) : 0) + (scene === 'legend' && x > 2.4 * q ? 0.25 * Math.sin(clamp((x - 2.4 * q) / (0.6 * q)) * Math.PI) : 0);
+    C = { pos, f, r: v3.add(v3.mul(r0, cs), v3.mul(u0, sn)), u: v3.add(v3.mul(u0, cs), v3.mul(r0, -sn)), F: F * zoom * (1 + punch * 0.5) }; ctx.globalAlpha = al;
+    // nébuleuses (grands halos qui défilent lentement = repère de profondeur)
+    ctx.globalCompositeOperation = 'lighter'; for (const n of NEB) { const q2 = pj(W3(n.p)); if (q2) glow(q2[0], q2[1], n.s * Rw * q2[2], rgba(n.c, 1), (0.16 * al).toFixed(2)); }
+    // étoiles : vraies positions 3D, traînée = projection avec la caméra de l'instant précédent (flou de mouvement réel)
+    ctx.lineCap = 'round'; const pp = pos2; for (const st of ST) { const w = W3(st.p), a = pj(w); if (!a || a[0] < -40 || a[0] > W + 40 || a[1] < -40 || a[1] > H + 40) continue; const b = pj(w, pp) || a, near = clamp(a[2] * Rw / 8, 0.15, 1); ctx.strokeStyle = best >= 5 ? hsl(st.h * 360 + t * 90, 0.8, 78) : `rgba(${200 + st.h * 55 | 0},${215 + st.h * 30 | 0},255,${(0.3 + 0.6 * near) * al})`; ctx.lineWidth = Math.min(3.2, st.s * (0.5 + a[2] * Rw / 16)); ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(a[0], a[1]); ctx.stroke(); }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = al;
+    // astres : silhouettes en perspective, aura de leur vraie rareté quand la caméra s'approche (prismatique dès l'épique)
+    const lit = (i) => t > links[i] - 0.4 * q ? 1 : clamp((3.4 * Rw - Math.hypot(...v3.sub(W3(P[i]), pos))) / (1.8 * Rw)), conv = scene === 'cosmic' && x > 0, hole = scene === 'legend' && x > 0, list = [];
+    for (let i = 0; i < N; i++) { if (conv || (scene === 'cosmic' && i === N - 1 && x > -0.2)) continue; let w3 = W3(P[i]), sc = 1; const last = i === N - 1;
+      if (last && hole) { const u2 = clamp((x - 0.8 * q) / (1.6 * q)); if (x > 0.8 * q) { const a = u2 * TAU * 2.4, rr = Rw * 0.9 * (1 - u2 ** 1.4); w3 = v3.add(w3, [Math.cos(a) * rr, Math.sin(a) * rr * 0.4, Math.sin(a) * rr * 0.4]); sc = 1 - 0.92 * u2; if (x > 2.4 * q) sc = 0; } }
+      if (last && scene === 'epic' && x > 0) sc = x > 1.35 * q ? 0 : 1 + 0.5 * eo(x / (1.35 * q)) + Math.sin(x * 40) * 0.02;
+      const a = pj(w3); if (a && sc > 0.01) list.push({ i, a, sc, lit: last && hole ? 0 : lit(i) }); }
+    for (let i = 1; i < N; i++) { const a = pj(W3(P[i - 1])), b = pj(W3(P[i])); if (!a || !b || scene === 'cosmic' && x > -0.2) continue; const l2 = Math.min(lit(i - 1), lit(i)); if (l2 <= 0 || (scene === 'legend' && i === N - 1)) continue; const pm = cards[i].r >= 3 || cards[i - 1].r >= 3 || best >= 5, g = ctx.createLinearGradient(a[0], a[1], b[0], b[1]); g.addColorStop(0, pm ? hsl(t * 160, 1, 70) : rgba(COL[cards[i - 1].r], 1)); g.addColorStop(1, pm ? hsl(t * 160 + 120, 1, 70) : rgba(COL[cards[i].r], 1)); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = g; ctx.globalAlpha = al * l2 * 0.5; ctx.lineWidth = Math.max(1, (pm ? 3.5 : 2) * Math.min(a[2], b[2]) * Rw / 10); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = al; }
+    list.sort((p1, p2) => p2.a[3] - p1.a[3]);
+    for (const e of list) { const i = e.i, w = 1.15 * Rw * e.a[2] * e.sc, [px, py] = e.a, fade = clamp((e.a[3] - 0.2 * Rw) / (0.5 * Rw)); if (w > W * 5) continue; ctx.globalAlpha = al * fade;
+      if (e.lit > 0) { ctx.globalCompositeOperation = 'lighter'; glow(px, py, w * 1.25, pcol(i, t), (0.5 * e.lit).toFixed(2)); ctx.globalCompositeOperation = 'source-over'; }
+      ctx.drawImage(sil[i], px - w / 2, py - w / 2, w, w);
+      if (e.lit > 0) { ctx.strokeStyle = pr(i) ? hsl(t * 140 + i * 70, 1, 70) : rgba(COL[cards[i].r], 1); ctx.globalAlpha = al * fade * e.lit; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(px, py, w * 0.4, 0, TAU); ctx.stroke(); }
+      ctx.globalAlpha = al; const lt = links[i]; if (i < N - 1) { sparks(px, py, lt - 0.4 * q, pr(i) ? 26 : 10, pr(i) ? (k) => hsl(k * 40 + t * 90, 1, 70) : rgba(COL[cards[i].r], 1), 90 + cards[i].r * 30, 0.7, t); if (t > lt - 0.4 * q) ring(px, py, lt - 0.4 * q, 0.7, w * 0.9, pr(i) ? hsl(t * 200, 1, 72) : rgba(COL[cards[i].r], 1), pr(i) ? 6 : 3, t); } }
+    ctx.globalAlpha = 1; if (x < -0.3) return; eventFx(t, x, al);
+  }
+  // — l'événement rare, au centre de l'écran (la caméra s'est arrêtée devant le dernier astre) : ce qui se passe dépend de la meilleure rareté du tirage
+  function eventFx(t, x, al) {
+    const E = pj(W3(P[N - 1])) || [cx, cy, 1, 1], [ex, ey] = E, w = Math.min(1.15 * Rw * E[2], Math.min(W, H) * 0.6), rb = best >= 5 ? (k) => hsl(k * 40 + t * 90, 1, 70) : null, col = COL[best], cc = best >= 5 ? hsl(t * 200, 1, 72) : rgba(col, 1), mx = Math.max(W, H);
+    ctx.globalCompositeOperation = 'lighter';
+    if (scene === 'calm' || scene === 'rare') { const k = clamp((x - 0.3 * q) / (0.8 * q)); glow(ex, ey, w * (0.9 + k), cc, (0.2 + 0.5 * k).toFixed(2)); if (scene === 'rare') { ctx.save(); ctx.translate(ex, ey); ctx.rotate(t * 0.7); for (let a = 0; a < 10; a++) { ctx.rotate(TAU / 10); ctx.fillStyle = rgba(col, 0.18 * k); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w * 2.2, -w * 0.05); ctx.lineTo(w * 2.2, w * 0.05); ctx.fill(); } ctx.restore(); } ctx.globalCompositeOperation = 'source-over'; ring(ex, ey, tE + 0.3 * q, 1, w * 2.2, cc, 6, t); sparks(ex, ey, tE + 0.3 * q, scene === 'rare' ? 50 : 24, rgba(col, 1), 150, 1.2, t, 2.6); }
+    else if (scene === 'epic') { // supernova : l'astre enfle, tremble, puis explose
+      const tb = 1.35 * q, k = clamp(x / tb); if (x < tb) { ctx.fillStyle = `rgba(0,0,10,${0.4 * k})`; ctx.globalCompositeOperation = 'source-over'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'lighter'; glow(ex, ey, w * (1 + 1.5 * k * k), cc, (0.3 + 0.5 * k).toFixed(2)); }
+      else { glow(ex, ey, w * 2.5 * (1 + 0.6 * eo((x - tb) / 1.2)), cc, (0.75 * (1 - 0.7 * eo((x - tb) / 1.6))).toFixed(2)); flash = Math.max(flash, 0.95 * (1 - clamp((x - tb) / 0.4))); ctx.globalCompositeOperation = 'source-over'; for (let k2 = 0; k2 < 3; k2++) ring(ex, ey, tE + tb + k2 * 0.18, 1.1, mx * 0.7, k2 ? hsl(t * 200 + k2 * 80, 1, 72) : '#fff', 9 - k2 * 2, t); sparks(ex, ey, tE + tb, 90, (k3) => hsl(260 + k3 * 5 + t * 60, 1, 70), 320, 1.4, t, 3); } }
+    else if (scene === 'legend') { // trou noir : se forme, avale l'astre rare en spirale, silence, puis explose en lumière
+      const g = x < 0.8 * q ? eo(x / (0.8 * q)) : x > 3.0 * q ? 1 - eo((x - 3.0 * q) / (0.45 * q)) : 1, rr = w * 0.5 * g; ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = `rgba(0,0,6,${0.8 * g * (x > 3.0 * q ? 1 - clamp((x - 3.0 * q) / 0.6) : 1)})`; ctx.fillRect(0, 0, W, H);
+      if (rr > 1) { ctx.globalCompositeOperation = 'lighter'; ctx.save(); ctx.translate(ex, ey); ctx.rotate(-0.25 + Math.sin(t * 0.8) * 0.06); ctx.scale(1, 0.34); ctx.rotate(t * 2.6); const ac = ctx.createRadialGradient(0, 0, rr * 0.8, 0, 0, rr * 2.8); ac.addColorStop(0, 'rgba(255,255,255,.95)'); ac.addColorStop(0.2, 'rgba(255,200,110,.9)'); ac.addColorStop(0.55, 'rgba(255,110,40,.45)'); ac.addColorStop(1, 'rgba(120,30,200,0)'); ctx.fillStyle = ac; ctx.beginPath(); ctx.arc(0, 0, rr * 2.8, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(255,230,170,.7)'; ctx.lineWidth = 3; for (let a = 0; a < 5; a++) { ctx.beginPath(); ctx.arc(0, 0, rr * (1.2 + a * 0.25), a, a + 1.4); ctx.stroke(); } ctx.restore();
+        ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(ex, ey, rr, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,215,150,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(ex, ey, rr * 1.06, 0, TAU); ctx.stroke(); } // anneau de lentille
+      ctx.globalCompositeOperation = 'source-over'; if (x > 3.0 * q) { flash = Math.max(flash, 1 - clamp((x - 3.0 * q) / (0.45 * q))); ring(ex, ey, tE + 3.0 * q, 1.2, mx * 0.8, rgba(COL[4], 1), 12, t); ring(ex, ey, tE + 3.0 * q + 0.15, 1.2, mx * 0.6, '#fff', 6, t); sparks(ex, ey, tE + 3.0 * q, 90, (k) => hsl(20 + k * 5, 1, 68), 360, 1.5, t, 3); } }
+    else { // cosmique : tous les astres convergent, un cœur de lumière monte, puis explosion arc-en-ciel
+      const cv = clamp(x / (2.0 * q)), core = eio(clamp((x - 1.0 * q) / (1.6 * q))), tb = 2.8 * q; ctx.globalCompositeOperation = 'source-over'; if (x < tb) { ctx.fillStyle = `rgba(0,0,8,${0.55 * Math.min(1, x / 0.5)})`; ctx.fillRect(0, 0, W, H);
+        for (let i = 0; i < N; i++) { const a = -Math.PI / 2 + (i / N) * TAU + ei(cv) * TAU * 1.6, rr = Math.min(W, H) * 0.34 * (1 - ei(cv)), sc = 1 - 0.8 * ei(cv), ww = Math.min(W, H) * 0.3 * sc; ctx.globalAlpha = 1 - ei(clamp((x - 1.7 * q) / (0.4 * q))); ctx.drawImage(sil[i], ex + Math.cos(a) * rr - ww / 2, ey + Math.sin(a) * rr - ww / 2, ww, ww); } ctx.globalAlpha = 1; }
+      ctx.globalCompositeOperation = 'lighter'; glow(ex, ey, mx * (0.15 + 0.7 * core + (x > tb ? 0.7 * eo((x - tb) / 0.8) : 0)), hsl(t * 240, 1, 72), (0.85 * (1 - (x > tb ? 0.5 * eo((x - tb) / 1) : 0))).toFixed(2)); for (let a = 0; a < 14; a++) { ctx.save(); ctx.translate(ex, ey); ctx.rotate(t * 1.3 + a * TAU / 14); ctx.fillStyle = hsl(a * 26 + t * 120, 1, 70, (0.3 * core).toFixed(2)); ctx.fillRect(w * 0.1, -2, mx * (0.2 + 0.4 * core), 4); ctx.restore(); }
+      ctx.globalCompositeOperation = 'source-over'; if (x > tb) { flash = Math.max(flash, x < tb + 0.5 ? eo((x - tb) / 0.3) : 1 - eo((x - tb - 0.5) / 0.8)); for (let k = 0; k < 3; k++) ring(ex, ey, tE + tb + 0.35 + k * 0.2, 1.3, mx * 0.8, hsl(t * 200 + k * 100, 1, 72), 10 - k * 2, t); sparks(ex, ey, tE + tb + 0.3, 110, (k) => hsl(k * 33 + t * 80, 1, 70), 380, 1.6, t, 3); } }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; banner(t);
+  }
+  function banner(t) { // la rareté, en grand, dès que l'événement éclate
+    const a = eo((t - tBoom - 0.15) / 0.5) * (t > D0 ? 1 - eo((t - D0) / 0.5) : 1); if (a <= 0.01) return; const nm = o.names.rar[best].toUpperCase(), fs = Math.min(W * 0.115, 46) * (0.85 + 0.15 * ob((t - tBoom - 0.15) / 0.6)), y = H * 0.2, col = COL[best];
+    ctx.save(); ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${fs}px Orbitron,system-ui,sans-serif`; ctx.shadowColor = best >= 5 ? '#fff' : rgba(col, 1); ctx.shadowBlur = 28;
+    if (best >= 5) { let xx = cx - ctx.measureText(nm).width / 2; for (const ch2 of nm) { const wd = ctx.measureText(ch2).width; ctx.fillStyle = hsl((xx / W) * 400 + t * 200, 1, 68); ctx.textAlign = 'left'; ctx.fillText(ch2, xx, y); xx += wd; } ctx.textAlign = 'center'; } else { ctx.fillStyle = rgba(col, 1); ctx.fillText(nm, cx, y); }
+    ctx.shadowBlur = 0; for (let d = 0; d < 6; d++) { ctx.fillStyle = d <= best ? (best >= 5 ? hsl(d * 60 + t * 200, 1, 70) : rgba(col, 1)) : 'rgba(255,255,255,.2)'; ctx.beginPath(); const px = cx + (d - 2.5) * 24, py = y + fs * 0.85; ctx.moveTo(px, py - 8); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 8); ctx.lineTo(px - 6, py); ctx.fill(); } ctx.restore();
+  }
   function draw(t) {
     flash = 0; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, W, H);
     punch = t > tA && t < tA + 1.2 ? 0.16 * (1 - eo((t - tA) / 1.2)) * Math.min(1, (t - tA) / 0.12) : t < tA ? 0.06 + 0.1 * (t / tA) ** 2 : 0; // la caméra « encaisse » l'allumage
-    let sh = reduce ? 0 : t < tA ? (t / tA) ** 3 * 5 : 0; if (!reduce) for (const l of links) if (t > l && t < l + 0.25) sh = Math.max(sh, 3 * (best >= 3 ? 1.6 : 1)); ctx.save(); ctx.translate(Math.sin(t * 61) * sh, Math.cos(t * 53) * sh);
-    const u0 = clamp(t / tA); starfield(t, t < tA ? 0.5 + 6 * u0 ** 2 : Math.max(0.5, 6 * (1 - eo((t - tA) / 1.5))), t * 28 + 6 * tA * u0 ** 3 * 28 / 3 + (t > tA ? 6 * (t - tA) * 28 * 0.4 : 0));
+    let sh = reduce ? 0 : t < tA ? (t / tA) ** 3 * 5 : 0; if (!reduce) for (const l of links) if (t > l && t < l + 0.25) sh = Math.max(sh, 3 * (best >= 3 ? 1.6 : 1)); if (!reduce && t > tBoom && t < tBoom + 0.5) sh = Math.max(sh, 9 * (1 - (t - tBoom) / 0.5)); ctx.save(); ctx.translate(Math.sin(t * 61) * sh, Math.cos(t * 53) * sh);
+    const u0 = clamp(t / tA); if (t < L0) starfield(t, t < tA ? 0.5 + 6 * u0 ** 2 : Math.max(0.5, 6 * (1 - eo((t - tA) / 1.5))), t * 28 + 6 * tA * u0 ** 3 * 28 / 3 + (t > tA ? 6 * (t - tA) * 28 * 0.4 : 0));
     // — A · allumage : la galaxie (dans la perspective) tourne de plus en plus vite
     if (t < tA + tB) {
       const u = u0, spin = 0.35 * t + 13 * tA * (u ** 3.2) / 3.2, sc = (0.55 + 0.45 * eo(u)) * (t > tA ? 1 + 1.5 * eo((t - tA) / tB) : 1), fade = t > tA ? 1 - eo((t - tA) / (tB * 0.9)) : 1, w = S * sc, o0 = proj(0, 0, 0);
@@ -120,46 +172,9 @@ export function play(o) {
       ctx.globalAlpha = 1; glow(o0[0], o0[1], S * 0.11 * (1 + u), best >= 5 ? hsl(t * 200, 1, 80) : 'rgba(255,255,255,1)', (0.5 + 0.5 * u).toFixed(2)); ctx.globalCompositeOperation = 'source-over';
       if (t > tA) { ring(o0[0], o0[1], tA, tB * 1.4, Math.max(W, H) * 0.7, 'rgba(255,255,255,1)', 6, t); flash = Math.max(flash, 0.5 * (1 - clamp((t - tA) / 0.25))); }
     }
-    // — B/C : les astres jaillissent sur une orbite 3D, puis les liens de lumière les allument un à un
-    if (t >= tA && t < D0 + 0.6) {
-      const dissolve = t > D0 ? 1 - eo((t - D0) / 0.5) : 1; ctx.globalAlpha = dissolve; const hole = scene === 'legend' ? t - bh : -1, conv = scene === 'cosmic' ? t - cvg : -1, pos = [];
-      const at = (i, rr, a2, bob) => proj(Math.cos(a2) * rr, bob, Math.sin(a2) * rr);
-      for (let i = 0; i < N; i++) {
-        const born = clamp((t - tA - i * 0.06) / (tB * 0.8)), a0 = -Math.PI / 2 + (i / N) * TAU + (t - tA) * 0.32, bob = Math.sin(t * 1.6 + i) * 5; let rr = Rw * ob(born), a2 = a0, sc = 0.2 + 0.8 * eo(born), sw = false;
-        if (scene === 'legend' && i === N - 1 && hole >= 0) { const s0 = 0.7 * q, s1 = 2.1 * q, u2 = clamp((hole - s0) / (s1 - s0)); if (hole >= s0 && hole < 2.6 * q) { rr = Rw * (1 - u2 ** 1.4); a2 = a0 + u2 * TAU * 2.4; sc *= 1 - 0.92 * u2; sw = hole > s1; if (sw) sc = 0; } else if (hole >= 2.6 * q) { const u3 = clamp((hole - 2.6 * q) / (0.7 * q)); rr = Rw * eo(u3); sc = 0.1 + 0.9 * ob(u3); } }
-        if (scene === 'cosmic' && conv >= 0) { const u = clamp(conv / (1.5 * q)); a2 = a0 + ei(u) * TAU * 1.6; rr = Rw * (1 - ei(u)); sc *= 1 - 0.85 * ei(u); if (conv > 2.2 * q) { const u3 = clamp((conv - 2.2 * q) / (0.8 * q)); rr = Rw * eo(u3); a2 = a0; sc = 0.1 + 0.9 * ob(u3); } }
-        pos.push({ p: at(i, rr, a2, bob), sc, i });
-      }
-      const holeNow = scene === 'legend' && hole >= 0 && hole < 3.3 * q;
-      if (holeNow) { const k = hole / (3.3 * q); ctx.globalAlpha = dissolve * Math.min(0.78, eio(Math.min(k * 4, 1)) * 0.78) * (k > 0.8 ? 1 - (k - 0.8) / 0.2 : 1); ctx.fillStyle = '#000006'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = dissolve; }
-      for (const e of pos.slice().sort((a, b) => b.p[3] - a.p[3])) { // du plus loin au plus proche
-        const i = e.i, lt = i === 0 ? links[0] : links[i - 1], lit = clamp((t - lt) / 0.4), hole2 = scene === 'legend' && i === N - 1 && hole >= 0 && hole < 2.6 * q;
-        if (e.sc > 0.01) astre(i, e.p, e.sc, t, lit, hole2); sparks(e.p[0], e.p[1], lt, pr(i) ? 26 : 10, pr(i) ? (k) => hsl(k * 40 + t * 90, 1, 70) : rgba(COL[cards[i].r], 1), 70 + cards[i].r * 25, 0.7, t);
-      }
-      for (let i = 0; i < N; i++) { // un faisceau de i-1 vers i (le premier referme le polygone), pulsation de la meilleure des deux couleurs
-        const ls = links[i], u = clamp((t - ls) / ld), a = i === 0 ? N - 1 : i - 1, b2 = i === 0 ? 0 : i; if (t < ls) continue;
-        const [x0, y0] = pos[a].p, [x1, y1] = pos[b2].p, r2 = Math.max(cards[a].r, cards[b2].r), pm = r2 >= 3 || best >= 5, e = eo(u);
-        if (holeNow && (a === N - 1 || b2 === N - 1)) continue; // pendant l'avalement, les liens de l'astre rare disparaissent
-        const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, pm ? hsl(t * 160, 1, 70) : rgba(COL[cards[a].r], 1)); g.addColorStop(1, pm ? hsl(t * 160 + 120, 1, 70) : rgba(COL[cards[b2].r], 1));
-        ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.strokeStyle = g; ctx.globalAlpha = dissolve * (0.35 + 0.65 * (1 - clamp((t - ls - ld) / 2)) ** 0.5); ctx.lineWidth = pm ? 6 : 3.5; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + (x1 - x0) * e, y0 + (y1 - y0) * e); ctx.stroke(); ctx.lineWidth = pm ? 2 : 1.2; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.globalAlpha = dissolve;
-        const tr = ls + ld; ring(x1, y1, tr, 0.7, Rw * (pm ? 0.9 : 0.55), pm ? hsl(t * 200, 1, 72) : rgba(COL[r2], 1), pm ? 7 : 3.5, t);
-        if (pm && t > tr && t < tr + 0.25) flash = Math.max(flash, scene === 'epic' && i === N - 1 ? 0.8 : 0.16 * (1 - (t - tr) / 0.25));
-        ctx.globalCompositeOperation = 'source-over';
-      }
-      if (holeNow) { // trou noir : disque d'accrétion horizontal en perspective + anneau de lentille vertical, au centre
-        const h = hole, k = h / (3.3 * q), gr = k < 0.2 ? eo(k / 0.2) : k > 0.8 ? 1 - eo((k - 0.8) / 0.2) : 1, rr = Rw * 0.55 * gr, o0 = proj(0, 0, 0);
-        ctx.globalCompositeOperation = 'lighter'; ctx.save(); plane(t * 2.6); const ac = ctx.createRadialGradient(0, 0, rr * 0.8, 0, 0, rr * 2.4); ac.addColorStop(0, 'rgba(255,255,255,.95)'); ac.addColorStop(0.2, 'rgba(255,200,110,.9)'); ac.addColorStop(0.55, 'rgba(255,110,40,.45)'); ac.addColorStop(1, 'rgba(120,30,200,0)'); ctx.fillStyle = ac; ctx.beginPath(); ctx.arc(0, 0, rr * 2.4, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(255,230,170,.7)'; ctx.lineWidth = 2; for (let a = 0; a < 5; a++) { ctx.beginPath(); ctx.arc(0, 0, rr * (1.15 + a * 0.22), a, a + 1.4); ctx.stroke(); } ctx.restore();
-        ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(o0[0], o0[1], rr, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,215,150,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(o0[0], o0[1], rr * 1.08, 0, TAU); ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
-        const out = 2.6 * q; if (h > out && h < out + 0.7 * q) { flash = Math.max(flash, 0.95 * (1 - (h - out) / (0.35 * q))); ring(o0[0], o0[1], bh + out, 0.9, Math.max(W, H) * 0.8, rgba(COL[4], 1), 10, t); }
-        sparks(o0[0], o0[1], bh + out, 60, (kk) => hsl(30 + kk * 6, 1, 70), 260, 1.1, t, 3);
-      }
-      if (scene === 'cosmic' && conv >= 0 && conv < 3.3 * q) { // convergence : tous les astres fusionnent en une lumière unique
-        const core = eio(clamp((conv - 1 * q) / (1.4 * q))), out = conv > 2.3 * q ? eo((conv - 2.3 * q) / (0.5 * q)) : 0, o0 = proj(0, 0, 0);
-        ctx.globalCompositeOperation = 'lighter'; glow(o0[0], o0[1], S * (0.2 + 0.9 * core + 0.6 * out), hsl(t * 240, 1, 72), (0.85 * (1 - out * 0.4)).toFixed(2)); for (let a = 0; a < 12; a++) { ctx.save(); ctx.translate(o0[0], o0[1]); ctx.rotate(t * 1.3 + a * TAU / 12); ctx.fillStyle = hsl(a * 30 + t * 120, 1, 70, (0.3 * core).toFixed(2)); ctx.fillRect(S * 0.04, -1.5, S * (0.14 + 0.26 * core), 3); ctx.restore(); } ctx.globalCompositeOperation = 'source-over';
-        flash = Math.max(flash, conv > 2.2 * q ? (conv < 2.7 * q ? eo((conv - 2.2 * q) / (0.5 * q)) : 1 - eo((conv - 2.7 * q) / (0.6 * q))) : 0);
-      }
-      ctx.globalAlpha = 1;
-    }
+    // — B/C/E · vol de caméra dans un monde en profondeur : on frôle les astres un à un, on les esquive, puis zoom sur l'événement rare du tirage
+    if (t >= tA && t < D0 + 0.6) world(t, eo((t - tA - 0.25 * q) / (0.5 * q)) * (t > D0 ? 1 - eo((t - D0) / 0.5) : 1));
+    ctx.globalAlpha = 1;
     // — D · les astres se condensent en paquet de cartes (le dos de chacune est liséré de sa vraie rareté)
     if (t >= D0 - 0.1) { const u = eo((t - D0 + 0.1) / 0.7); stack(0, u, t); }
     ctx.restore();
@@ -187,7 +202,7 @@ export function play(o) {
   }
   function fling(dir, from) { if (!cur || cur.out) return; cur.out = dir; cur.outT = 0; cur.from = from; if (sfx.place) sfx.place(cards[cur.k].r); vib(8); }
   function place(k) {
-    const c = cards[k], s = slotEl[k], m = document.createElement('canvas'); o.paintCard(m, c.key, 96); m.style.width = '92%'; s.append(m); const col = COL[c.r]; s.style.setProperty('--b', pr(k) ? '#ff9af0' : rgba(col, 1)); s.style.setProperty('--g', rgba(col, 0.5)); s.classList.add('on'); s.setAttribute('aria-label', c.n); s.addEventListener('click', () => { if (o.onView && ph === 'sum') o.onView(c.key); });
+    const c = cards[k], s = slotEl[k], m = document.createElement('canvas'); o.paintCard(m, c.key, 96); m.style.width = '92%'; m.style.height = 'auto'; s.append(m); const col = COL[c.r]; s.style.setProperty('--b', pr(k) ? '#ff9af0' : rgba(col, 1)); s.style.setProperty('--g', rgba(col, 0.5)); s.classList.add('on'); s.setAttribute('aria-label', c.n); s.addEventListener('click', () => { if (o.onView && ph === 'sum') o.onView(c.key); });
     const ct2 = pend[k]; if (ct2) ct2.close(); if (cur && cur.w) cur.w.remove(); cur = null; placed++;
     if (placed >= N) summary(); else showCard(placed);
   }
@@ -219,10 +234,9 @@ export function play(o) {
   }
   // — pilotage : maintien pour charger, intro (fonction de t), cartes
   const events = []; // sons et vibrations déclenchés une fois quand t franchit leur instant
-  events.push([0, () => sfx.rise && sfx.rise(tA)]); for (let i = 0; i < links.length; i++) events.push([links[i] + ld, () => { const a = i === 0 ? N - 1 : i - 1, b2 = i === 0 ? 0 : i; sfx.link && sfx.link(i, Math.max(cards[a].r, cards[b2].r)); vib(cards[i].r >= 3 ? [12, 25, 12] : 8); }]);
-  if (scene === 'legend') { events.push([bh + 0.7 * q, () => sfx.swallow && sfx.swallow()], [bh + 2.6 * q, () => { sfx.boom && sfx.boom(4); vib([40, 40, 80]); }]); }
-  if (scene === 'cosmic') { events.push([cvg + 0.4, () => sfx.swallow && sfx.swallow()], [cvg + 2.3 * q, () => { sfx.boom && sfx.boom(5); vib([40, 30, 40, 30, 120]); }]); }
-  if (scene === 'epic') events.push([links[N - 1], () => sfx.boom && sfx.boom(3)]);
+  events.push([0, () => sfx.rise && sfx.rise(tA)]); for (let i = 0; i < links.length; i++) events.push([links[i] - 0.1, () => { sfx.link && sfx.link(i, cards[i].r); vib(cards[i].r >= 3 ? [12, 25, 12] : 8); }]);
+  if (scene === 'legend') events.push([tE + 0.8 * q, () => sfx.swallow && sfx.swallow()]); if (scene === 'cosmic') events.push([tE + 0.3 * q, () => sfx.swallow && sfx.swallow()]);
+  events.push([tBoom, () => { sfx.boom && sfx.boom(Math.max(2, best)); vib(best >= 4 ? [40, 30, 40, 30, 120] : best >= 3 ? [30, 40, 60] : 14); }]);
   const fired = new Set();
   function advance(nt) { for (let i = 0; i < events.length; i++) if (!fired.has(i) && nt >= events[i][0]) { fired.add(i); if (!o.manual) events[i][1](); } t = nt; }
   function startCards() { if (ph === 'cards' || ph === 'sum') return; ph = 'cards'; tw = 0; root.classList.add('cards'); DPR = 1; /* décor plus léger pendant les cartes */ cv.width = Math.ceil(W); cv.height = Math.ceil(H); $('#pk-title').style.opacity = 0.5; showCard(0); }
