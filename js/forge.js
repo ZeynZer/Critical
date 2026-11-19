@@ -49,7 +49,8 @@ export function mount(page, api) {
     for (let i = 0; i < f.need; i++) { const c = document.createElement('canvas'); api.paint(c, String(f.tier), 56); const a = (i / f.need) * Math.PI * 2; c.className = 'fg-in'; c.style.setProperty('--x', Math.cos(a) * 130 + 'px'); c.style.setProperty('--y', Math.sin(a) * 130 + 'px'); c.style.animationDelay = i * 0.06 + 's'; stage.append(c); }
     const big = document.createElement('canvas'); api.paint(big, key, 170, true); big.className = 'fg-out'; stage.append(big);
     const tm = setInterval(() => api.paint(big, key, 170, true), 70), ok = make('button', '', 'Super');
-    ov.append(stage, make('h3', '', 'Astre prismatique'), make('p', '', `${f.name} prismatique : unique, déjà équipé. Retrouve-le dans l'onglet Fusion.`), ok); document.body.append(ov);
+    const see = make('button', '', 'Admirer en immersif'); see.style.cssText = 'opacity:0;animation:fgt .6s 3.1s forwards;background:rgba(255,255,255,.08);margin-top:0'; see.addEventListener('click', () => api.view && api.view(key));
+    ov.append(stage, make('h3', '', 'Astre prismatique'), make('p', '', `${f.name} prismatique : unique, déjà équipé. Retrouve-le dans l'onglet Fusion.`), ok, see); document.body.append(ov);
     ok.addEventListener('click', () => { clearInterval(tm); ov.remove(); refresh(); });
   }
   refresh(); return { refresh() { refresh(); if (packs) packs.refresh(); }, packs };
