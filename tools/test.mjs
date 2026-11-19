@@ -144,3 +144,16 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   for (const tier of [7, 9, 10, 11]) assert.deepEqual(F.absorbOf({ k: 'c', tier, v: 2 }), F.absorbOf({ k: 'c', tier, v: 0 }), 'un style ne donne aucun pouvoir (rang ' + tier + ')');
   console.log('variantes de style OK', JSON.stringify(cnt));
 }
+
+{ // packs : probabilités réelles = probabilités affichées, garanties, indices honnêtes, déterminisme
+  const { PACKS, rollCards, draw, mulberry, SCENES } = await import('../js/packs.js'); const { POOL, CAT } = await import('../js/catalog.js');
+  for (const [id, pk] of Object.entries(PACKS)) assert.ok(Math.abs(pk.odds.reduce((a, b) => a + b, 0) - 100) < 1e-9, 'les probabilités de ' + id + ' font 100 %');
+  assert.ok([0, 1, 2, 3, 4, 5].every((r) => POOL.some((c) => c.r === r)), 'chaque rareté a des cartes'); assert.equal(new Set(POOL.map((c) => c.key)).size, POOL.length, 'cartes uniques');
+  for (const [t, vs] of Object.entries(CAT)) for (const [v, e] of Object.entries(vs)) { assert.ok(e.n && e.c.length === 3 && e.r >= 0 && e.r <= 5, `fiche ${t}:${v}`); if (+v >= 4) assert.equal(e.src, 'pack'); }
+  const rng = mulberry(123), N = 400000, cnt = [0, 0, 0, 0, 0, 0]; for (let i = 0; i < N / 5; i++) for (const c of rollCards(PACKS.etoile, rng)) cnt[c.r]++;
+  PACKS.etoile.odds.forEach((p, r) => { const exp = (N * p) / 100, tol = Math.max(5 * Math.sqrt(exp), exp * 0.04); assert.ok(Math.abs(cnt[r] - exp) < tol, `rareté ${r} : ${cnt[r]} tirés pour ${exp.toFixed(0)} attendus`); });
+  for (const [id, pk] of Object.entries(PACKS)) { let py = {}, gap = 0, maxGap = 0; for (let i = 0; i < 4000; i++) { const d = draw(id, py, 1000 + i); py = d.pity; assert.ok(d.tell.best >= pk.min, `${id} : au moins la rareté garantie`); assert.equal(d.tell.scene, SCENES[Math.max(...d.cards.map((c) => c.r))], 'l\'indice annonce la vraie meilleure rareté'); assert.ok(d.cards.every((c, k) => !k || d.cards[k - 1].r <= c.r), 'ordre de révélation croissant'); gap = d.tell.best >= 3 ? 0 : gap + 1; maxGap = Math.max(maxGap, gap); } assert.ok(maxGap < pk.pity[0], `${id} : un épique au plus tous les ${pk.pity[0]} packs (série max ${maxGap})`); }
+  assert.deepEqual(draw('etoile', {}, 77).cards, draw('etoile', {}, 77).cards, 'même graine, même tirage');
+  for (let r = 0; r <= 5; r++) { const d = draw('galaxie', {}, 9 + r, r); assert.equal(d.tell.best, r, 'rareté forcée ' + r); }
+  console.log('packs OK');
+}

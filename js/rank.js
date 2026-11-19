@@ -158,7 +158,7 @@ async function pulse() { // « je suis là » toutes les 30 s ; renvoie une éve
   if (st.lvSent !== H.level()) pushProfile(); // le niveau a changé : on le republie
   try {
     const r = await rpc('pulse', { p_secret: secret() }), d = r && r.duel; st.admin = !!(r && r.admin);
-    if (r && r.gift && !giftBusy) { giftBusy = true; try { const g = await rpc('claim_gift', { p_secret: secret(), p_id: r.gift.id }); H.receive(g.eclats, g.xp, g.note); } catch (e) { /* déjà pris ou hors ligne */ } giftBusy = false; } // cadeau de l'administrateur : encaissé une seule fois, confirmé par le serveur
+    if (r && r.gift && !giftBusy) { giftBusy = true; try { const g = await rpc('claim_gift', { p_secret: secret(), p_id: r.gift.id }); H.receive(g.eclats, g.xp, g.note, g.pack, g.packs); } catch (e) { /* déjà pris ou hors ligne */ } giftBusy = false; } // cadeau de l'administrateur : encaissé une seule fois, confirmé par le serveur
     if (r && r.msg && r.msg.id !== st.msgSeen && H.canNotify()) { st.msgSeen = r.msg.id; save(); showBanner(r.msg.text, true); } // annonce : montrée une fois
     if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; showBanner(`${d.from} te défie en duel 1v1`, false); invT = setTimeout(hideInv, 20000); }
   } catch (e) { /* hors connexion : on réessaiera */ }

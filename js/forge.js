@@ -2,6 +2,7 @@
 // api : { info(), paint(canvas, clé, px, live), forge(rang), equip(rang, on), toast(txt), sfx(), vib(n) }
 const make = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
 const CSS = `
+.fg-seg{display:flex;gap:6px;padding:4px;border-radius:22px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);width:100%}.fg-seg button{flex:1;height:38px;border-radius:18px;border:0;background:none;color:rgba(255,255,255,.65);font:800 12px var(--disp);letter-spacing:.06em;text-transform:uppercase;transition:background .25s,color .25s}.fg-seg button.on{background:linear-gradient(135deg,rgba(77,243,255,.35),rgba(255,79,216,.3));color:#fff}.fg-box{width:100%;display:flex;flex-direction:column;gap:12px}.fg-box[hidden]{display:none}
 .fg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
 .fg-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px 9px;border-radius:22px;background:radial-gradient(120% 80% at 50% 0,rgba(255,255,255,.16),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.16);color:#fff;text-align:center;transition:transform .4s cubic-bezier(.2,1.6,.4,1)}
 .fg-card:active{transform:scale(.94)}.fg-card canvas{display:block;transition:filter .3s,opacity .3s}.fg-card:not(.own) canvas{filter:grayscale(1) brightness(.8);opacity:.45}
@@ -22,8 +23,11 @@ const CSS = `
 `;
 export function mount(page, api) {
   const st = make('style'); st.textContent = CSS; document.head.appendChild(st);
+  const fbox = make('div', 'fg-box'), pbox = make('div', 'fg-box'), seg = make('div', 'fg-seg', '<button data-v="p">Packs</button><button data-v="f">Fusion</button>');
   const grid = make('div', 'fg-grid'), note = make('p', 'fg-note', 'Chaque variante obtenue en partie compte pour un exemplaire. Réunis-en assez pour un même rang et fabrique son <b>astre prismatique</b> : unique, il s\'équipe à la place de l\'apparence de ce rang.');
-  page.append(grid, note); let sig = '';
+  fbox.append(grid, note); page.append(seg, pbox, fbox); let sig = '', packs = api.mountPacks ? api.mountPacks(pbox) : null, view = 'p'; try { view = localStorage.getItem('critical.fview') || 'p'; } catch (e) { /* ignore */ }
+  const show = (v) => { view = v; try { localStorage.setItem('critical.fview', v); } catch (e) { /* ignore */ } fbox.hidden = v !== 'f'; pbox.hidden = v !== 'p'; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === v)); };
+  seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { api.sfx(); show(b.dataset.v); } }); show(view);
   const refresh = () => {
     const list = api.info(), s = JSON.stringify(list.map((f) => [f.copies, f.own, f.equipped])); if (s === sig) return; sig = s; grid.textContent = '';
     for (const f of list) {
@@ -32,7 +36,7 @@ export function mount(page, api) {
       if (!f.own) c.append(make('div', 'fg-bar', `<i style="width:${Math.min(100, (f.copies / f.need) * 100)}%"></i>`));
       c.addEventListener('click', () => {
         api.sfx();
-        if (f.own) { api.equip(f.tier, !f.equipped); api.vib(8); sig = ''; refresh(); }
+        if (f.own) { api.equip(f.tier, f.equipped ? 0 : 9); api.vib(8); sig = ''; refresh(); }
         else if (f.copies >= f.need) celebrate(f);
         else api.toast(`Il te faut ${f.need} variantes de ${f.name} (${f.copies} pour l'instant)`);
       });
@@ -48,5 +52,5 @@ export function mount(page, api) {
     ov.append(stage, make('h3', '', 'Astre prismatique'), make('p', '', `${f.name} prismatique : unique, déjà équipé. Retrouve-le dans l'onglet Fusion.`), ok); document.body.append(ov);
     ok.addEventListener('click', () => { clearInterval(tm); ov.remove(); refresh(); });
   }
-  refresh(); return { refresh };
+  refresh(); return { refresh() { refresh(); if (packs) packs.refresh(); }, packs };
 }
