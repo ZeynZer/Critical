@@ -224,8 +224,9 @@ function renderProfile(p, me, offline) {
     const info = H.astreInfo(key), d = document.createElement('div'), c = document.createElement('canvas');
     d.className = 'pf-cell'; d.style.setProperty('--c', `rgb(${info.col.join(',')})`); c.dataset.key = key; H.paint(c, key, 84, true); d.append(c);
     d.insertAdjacentHTML('beforeend', (info.rar >= 3 ? `<em>${['', '', '', 'ÉPIQUE', 'LÉGENDAIRE', 'CRITIQUE'][info.rar]}</em>` : '') + `<b>${esc(info.name)}</b>` + (info.sub ? `<small>${esc(info.sub)}</small>` : ''));
-    show.append(d);
+    d.style.cursor = 'pointer'; d.addEventListener('click', () => H.view && H.view(key)); show.append(d);
   }
+  $('#pf-av').onclick = () => keys[0] && H.view && H.view(keys[0]);
   $('#pf-lab').hidden = !show.children.length;
   clearInterval(pfTimer); if (keys.length) pfTimer = setInterval(() => document.querySelectorAll('#rk-prof canvas[data-key]').forEach((c) => H.paint(c, c.dataset.key, c.closest('#pf-av') ? 96 : 84, true)), 100); // astres animés
   $('#pf-rank').textContent = p.rank ? 'n° ' + fmt(p.rank) : '–'; $('#pf-score').textContent = p.score ? fmt(p.score) : '–';
