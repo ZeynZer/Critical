@@ -3,10 +3,12 @@
 // Habillage : le verre liquide du reste du jeu, sur fond d'espace profond.
 import * as A from './audio.js';
 import * as F from './fusion.js';
+import { CAT, RAR, equipable } from './catalog.js';
+import { PACKS, draw as drawPack } from './packs.js';
 import { channel } from './realtime.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
-const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
+const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, pk: { etoile: 0, nebuleuse: 0, galaxie: 0 }, pity: {}, pkDay: '', pkN: 0, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 if (!Object.keys(sv.inv).length) for (const k of Object.keys(sv.cx)) if (/^\d+:[1-8]$/.test(k) && !k.startsWith('12:')) sv.inv[k] = 1; // les variantes déjà découvertes comptent pour un exemplaire chacune
 if (!sv.eco) { sv.eco = 1; sv.dust = Math.round((sv.dust || 0) * 10); } // l'économie est passée à l'échelle ×10 (Éclats) : on convertit l'ancien solde une seule fois
@@ -116,7 +118,7 @@ function onEvents() {
       ring(hx, hy, B.u * 2.4, B.u * 0.5, 0.4, col, 3); A.gulp();
     }
     else if (e.t === 'rare') { // variante rare ou galaxie : grande révélation la 1re fois seulement, ensuite un simple éclat
-      const r = rarOf(e.tier, e.v, e.p), key = e.tier + ':' + e.v;
+      const r = Math.max(0, catR(e.tier, e.v)), key = e.tier + ':' + e.v;
       if (G.nop) continue;
       sv.inv[key] = (sv.inv[key] | 0) + 1; save(); H.goal('rare', { tier: e.tier, v: e.v }); // un exemplaire de plus pour la fusion de collection
       if (sv.cx[key]) { say(nameOf(e.tier, e.v).toUpperCase(), e.v === 1 || e.tier === F.MAX_TIER ? 'RARE · ×3 POINTS' : 'VARIANTE DE STYLE', RCOL[r]); ring(x, y, B.u * 3, B.u * 0.6, 0.55, RCOL[r], 3); burst(x, y, 14, RCOL[r], B.u * 6, 0.7, 2.4); A.rare(Math.min(r, 1)); H.vib(18); }
@@ -213,24 +215,31 @@ function galaxy(r, v) {
   return { back: halo(r, P.rainbow ? [255, 255, 255] : P.a, 0.35 + v * 0.09), spinB: -0.1 - v * 0.03, pulse: 0.03 + v * 0.012, disc: layer(v * 9 + 1, 4.6, 1), spinD: 0.22 + v * 0.05, disc2: P.two ? layer(v * 9 + 5, -3.4, 0.7) : null, over: o };
 }
 const KIND = ['dust', 'orb', 'rock', 'moon', 'planet', 'gas', 'dwarf', 'sun', 'giant', 'neutron', 'hole', 'quasar', 'galaxy'];
-// Variantes : VAR[rang][v] = [nom, teinte]. v = 1 : variante rare à pouvoir ; v = 2… : styles fréquents (visuels) ; v = 9 : prismatique (fusion).
-const VAR = {
-  3: { 1: ['Lune de glace', [130, 220, 255]], 2: ['Lune d\'ambre', [255, 190, 90]] },
-  4: { 1: ['Monde de lave', [255, 84, 36]], 2: ['Monde de jade', [70, 230, 150]], 3: ['Monde de cristal', [190, 240, 255]] },
-  5: { 1: ['Géante de saphir', [64, 120, 255]], 2: ['Géante d\'émeraude', [60, 220, 140]], 3: ['Géante pourpre', [190, 90, 255]] },
-  6: { 2: ['Naine violette', [170, 100, 255]] },
-  7: { 1: ['Étoile bleue', [100, 170, 255]], 2: ['Soleil rose', [255, 110, 190]] },
-  8: { 1: ['Supergéante', [255, 190, 70]], 2: ['Géante d\'azur', [90, 200, 255]] },
-  9: { 1: ['Magnétar', [90, 255, 200]], 2: ['Pulsar rose', [255, 120, 220]] },
-  10: { 1: ['Trou blanc', [190, 255, 255]], 2: ['Trou noir écarlate', [255, 80, 80]] },
-  11: { 1: ['Blazar', [110, 255, 190]], 2: ['Quasar azur', [80, 170, 255]] },
-};
-for (const t of Object.keys(VAR)) VAR[t][9] = [BODIES[t][0] + ' prismatique', [255, 255, 255]];
-const vOdds = (t, v) => (v === 1 ? F.RARE[t] : v === 9 ? 0 : (F.STYLES[t] || [])[v - 2] || 0);
+// Variantes : VAR[rang][v] = [nom, teinte, effet] dérivé du catalogue (js/catalog.js). v = 9 : prismatique (fusion).
+const VAR = {};
+for (const t of Object.keys(CAT)) { VAR[t] = {}; for (const v of Object.keys(CAT[t])) VAR[t][v] = [CAT[t][v].n, CAT[t][v].c, CAT[t][v].fx]; VAR[t][9] = [BODIES[t][0] + ' prismatique', [255, 255, 255]]; }
+const catR = (t, v) => (t === F.MAX_TIER ? v : v === 9 ? 5 : CAT[t] && CAT[t][v] ? CAT[t][v].r : -1); // rareté d'une carte
+const vOdds = (t, v) => (v === 1 ? F.RARE[t] : v === 9 || v < 1 ? 0 : (F.STYLES[t] || [])[v - 2] || 0); // 0 : skin de pack (pas tiré en partie)
 const nameOf = (tier, v) => (tier === F.MAX_TIER ? GAL[v | 0].n : v && VAR[tier] && VAR[tier][v] ? VAR[tier][v][0] : BODIES[tier][0]);
 const RCOL = [[160, 185, 225], [77, 243, 255], [255, 79, 216], [255, 194, 71], [255, 120, 90], [255, 255, 255]];
 const rarOf = (tier, v, p) => (tier === F.MAX_TIER ? v : v === 9 ? 5 : p > 0.05 ? 1 : p > 0.03 ? 2 : p > 0.02 ? 3 : 4); // niveau de mise en scène 0..5
 
+// Effets des skins : décorations posées sur le calque de lumière fixe (over), découpées dans le disque (et hors du cœur noir des trous noirs / quasars)
+function skinFx(A, tier, r, col, fx) {
+  const x = A.over.getContext('2d'), s = r * 1.3, core = tier === 10 ? 0.62 : tier === 11 ? 0.32 : 0, L = rgba(col, 1), lite = [Math.min(255, col[0] + 90), Math.min(255, col[1] + 90), Math.min(255, col[2] + 90)];
+  const disc = () => { x.beginPath(); x.arc(s, s, r, 0, TAU); if (core) { x.arc(s, s, r * core, 0, TAU, true); } };
+  const clip = () => { x.save(); disc(); x.clip(core ? 'evenodd' : 'nonzero'); };
+  if (fx === 'frost') { clip(); soft(x, s - r * 0.3, s - r * 0.3, r * 0.9, [255, 255, 255], 0.35); for (let i = 0; i < 46; i++) { const a = rnd(i * 2.1) * TAU, d = Math.sqrt(rnd(i * 3.7)) * r; x.fillStyle = `rgba(235,250,255,${0.25 + rnd(i * 5.3) * 0.6})`; x.save(); x.translate(s + Math.cos(a) * d, s + Math.sin(a) * d); x.rotate(rnd(i) * 3); x.fillRect(-r * 0.015, -r * 0.07, r * 0.03, r * 0.14); x.restore(); } x.restore(); x.strokeStyle = 'rgba(220,245,255,.85)'; x.lineWidth = Math.max(1.5, r * 0.05); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
+  else if (fx === 'neon') { clip(); x.fillStyle = 'rgba(0,0,20,.32)'; x.fill(); x.restore(); x.save(); x.shadowColor = L; x.shadowBlur = r * 0.35; x.strokeStyle = rgba(lite, 1); x.lineWidth = Math.max(1.5, r * 0.07); x.beginPath(); x.arc(s, s, r * 0.96, 0, TAU); x.stroke(); x.lineWidth = Math.max(1, r * 0.035); x.globalAlpha = 0.6; x.beginPath(); x.arc(s, s, r * 0.78, 0, TAU); x.stroke(); x.restore(); }
+  else if (fx === 'rings') { x.save(); x.translate(s, s); x.rotate(-0.38); for (const [k, w, al] of [[1.26, 0.07, 0.9], [1.14, 0.04, 0.55]]) { x.strokeStyle = rgba(lite, al); x.lineWidth = r * w; x.beginPath(); x.ellipse(0, 0, r * k, r * k * 0.28, 0, 0, TAU); x.stroke(); } x.restore(); }
+  else if (fx === 'lava') { clip(); const P = [[-0.7, -0.5], [-0.3, -0.15], [0.05, -0.3], [0.35, 0.1], [0.7, 0.3]].map(([px, py], i) => [s + px * r + (rnd(i * 3.1) - 0.5) * r * 0.2, s + py * r + (rnd(i * 5.9) - 0.5) * r * 0.2]); const path = (ox = 0) => { x.beginPath(); P.forEach((p, i) => (i ? x.lineTo(p[0] + ox, p[1] + ox * 1.5) : x.moveTo(p[0] + ox, p[1] + ox * 1.5))); }; x.lineJoin = x.lineCap = 'round'; x.globalCompositeOperation = 'lighter'; for (const ox of [0, r * 0.35]) { path(ox); x.strokeStyle = rgba(col, 0.5); x.lineWidth = r * 0.16; x.stroke(); path(ox); x.strokeStyle = rgba(lite, 0.95); x.lineWidth = r * 0.06; x.stroke(); } soft(x, s, s, r, col, 0.25); x.restore(); }
+  else if (fx === 'crystal') { clip(); const N = 9, ctr = [s - r * 0.1, s - r * 0.12], P = []; for (let i = 0; i < N; i++) { const a = (i / N) * TAU + 0.2; P.push([s + Math.cos(a) * r * 1.05, s + Math.sin(a) * r * 1.05]); } for (let i = 0; i < N; i++) { const a = P[i], b = P[(i + 1) % N], l = Math.cos((i / N) * TAU + 2.2); x.fillStyle = l > 0 ? `rgba(255,255,255,${l * 0.3})` : `rgba(0,0,30,${-l * 0.28})`; x.beginPath(); x.moveTo(ctr[0], ctr[1]); x.lineTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.closePath(); x.fill(); x.strokeStyle = 'rgba(255,255,255,.4)'; x.lineWidth = Math.max(1, r * 0.02); x.beginPath(); x.moveTo(ctr[0], ctr[1]); x.lineTo(a[0], a[1]); x.stroke(); } x.restore(); x.strokeStyle = rgba(lite, 0.9); x.lineWidth = Math.max(1.5, r * 0.05); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
+  else if (fx === 'const') { clip(); const P = Array.from({ length: 9 }, (_, i) => [s + (rnd(i * 4.3 + 1) - 0.5) * r * 1.7, s + (rnd(i * 6.1 + 2) - 0.5) * r * 1.7]); x.fillStyle = 'rgba(0,0,25,.3)'; x.fillRect(0, 0, s * 2, s * 2); x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = Math.max(1, r * 0.025); x.beginPath(); P.forEach((p, i) => (i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]))); x.stroke(); for (const p of P) { soft(x, p[0], p[1], r * 0.16, lite, 0.8); x.fillStyle = '#fff'; x.beginPath(); x.arc(p[0], p[1], Math.max(1, r * 0.04), 0, TAU); x.fill(); } x.restore(); }
+  else if (fx === 'holo') { clip(); const g = x.createConicGradient ? x.createConicGradient(0.7, s, s) : null; if (g) { for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsl(${(i * 60) % 360},100%,65%)`); x.globalCompositeOperation = 'color'; x.globalAlpha = 0.5; x.fillStyle = g; x.fillRect(0, 0, s * 2, s * 2); x.globalAlpha = 1; x.globalCompositeOperation = 'lighter'; } const sh = x.createLinearGradient(s - r, s - r, s + r, s + r); sh.addColorStop(0.3, 'rgba(255,255,255,0)'); sh.addColorStop(0.5, 'rgba(255,255,255,.45)'); sh.addColorStop(0.7, 'rgba(255,255,255,0)'); x.fillStyle = sh; x.fillRect(0, 0, s * 2, s * 2); x.restore(); x.strokeStyle = 'rgba(255,255,255,.7)'; x.lineWidth = Math.max(1, r * 0.04); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
+  else if (fx === 'inner') { clip(); x.fillStyle = 'rgba(0,0,22,.55)'; x.fillRect(0, 0, s * 2, s * 2); x.globalCompositeOperation = 'lighter'; for (let i = 0; i < 160; i++) { const t = rnd(i * 1.3) ** 0.8, a = (i % 3) * 2.094 + t * 4.4 + (rnd(i * 7.7) - 0.5) * 0.5, d = r * (0.08 + t * 0.9); soft(x, s + Math.cos(a) * d, s + Math.sin(a) * d * 0.94, r * (0.03 + rnd(i * 3.1) * 0.06), i % 4 ? lite : [255, 255, 255], 0.35 + rnd(i) * 0.5); } soft(x, s, s, r * 0.4, [255, 255, 255], 0.9); x.restore(); x.strokeStyle = rgba(lite, 0.85); x.lineWidth = Math.max(1.5, r * 0.05); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
+  else if (fx === 'aurora') { clip(); x.globalCompositeOperation = 'lighter'; for (let k = 0; k < 3; k++) { x.beginPath(); for (let i = 0; i <= 20; i++) { const t = i / 20, px = s - r + t * r * 2, py = s + (k - 1) * r * 0.42 + Math.sin(t * 7 + k * 2) * r * 0.16; i ? x.lineTo(px, py) : x.moveTo(px, py); } x.strokeStyle = rgba(k === 1 ? lite : col, 0.45); x.lineWidth = r * 0.3; x.lineCap = 'round'; x.stroke(); } x.restore(); x.strokeStyle = rgba(lite, 0.7); x.lineWidth = Math.max(1, r * 0.04); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
+  else if (fx === 'flame') { x.save(); x.globalCompositeOperation = 'lighter'; for (let i = 0; i < 18; i++) { const a = (i / 18) * TAU + rnd(i) * 0.3, l = r * (1.1 + rnd(i * 2.9) * 0.2), g = x.createRadialGradient(s, s, r * 0.9, s, s, l); g.addColorStop(0, rgba(lite, 0.85)); g.addColorStop(1, rgba(col, 0)); x.fillStyle = g; x.beginPath(); x.moveTo(s + Math.cos(a - 0.14) * r * 0.95, s + Math.sin(a - 0.14) * r * 0.95); x.lineTo(s + Math.cos(a) * l, s + Math.sin(a) * l); x.lineTo(s + Math.cos(a + 0.14) * r * 0.95, s + Math.sin(a + 0.14) * r * 0.95); x.closePath(); x.fill(); } x.restore(); }
+}
 function build(tier, r, v) {
   const kind = KIND[tier], s = r * 1.3;
   if (kind === 'galaxy') return galaxy(r, v);
@@ -306,7 +315,7 @@ function build(tier, r, v) {
     A = { over: o, back: b, still: true, spinB: 0.25, disc: accretion(r, 0.3, true), spinD: 1.7 };
   }
   const V = v && VAR[tier] && VAR[tier][v];
-  if (V && v !== 9) for (const k of ['strip', 'strip2', 'back', 'disc']) A[k] = tint(A[k], V[1]);
+  if (V && v !== 9) { for (const k of ['strip', 'strip2', 'back', 'disc']) A[k] = tint(A[k], V[1]); if (V[2] && A.over) skinFx(A, tier, r, V[1], V[2]); }
   if (v === 9) A.prism = true; // prismatique : un arc-en-ciel tourne sur l'astre (voir compose)
   return A;
 }
@@ -653,12 +662,12 @@ const HTML = `
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Pause</h2><p class="sub" id="mn-ht">Deux astres identiques qui se touchent fusionnent.</p><div id="mn-lad"></div><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
 const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-new">Créer un salon</button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
-<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
+<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
   ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '', info: powerText(i, 0) })),
   ...GAL.map((g, v) => ({ key: F.MAX_TIER + ':' + v, name: g.n, tier: F.MAX_TIER, v, p: F.GALAXY[v], ok: !!sv.cx[F.MAX_TIER + ':' + v], sub: odds(F.GALAXY[v]), info: powerText(F.MAX_TIER, v) })),
-  ...Object.keys(VAR).flatMap((t) => Object.keys(VAR[t]).map(Number).sort().map((v) => ({ key: t + ':' + v, name: VAR[t][v][0], tier: +t, v, p: vOdds(+t, v) || undefined, ok: !!sv.cx[t + ':' + v], sub: v === 9 ? 'Fusion' : odds(vOdds(+t, v)), info: powerText(+t, v) }))),
+  ...Object.keys(VAR).flatMap((t) => Object.keys(VAR[t]).map(Number).sort().map((v) => ({ key: t + ':' + v, name: VAR[t][v][0], tier: +t, v, p: vOdds(+t, v) || undefined, ok: !!sv.cx[t + ':' + v], sub: v === 9 ? 'Fusion' : vOdds(+t, v) ? odds(vOdds(+t, v)) : 'Pack · ' + RAR[CAT[t][v].r], r: catR(+t, v), info: powerText(+t, v) }))),
   ...Object.keys(SECRETS).map((id) => ({ key: id, name: SECRETS[id][0], tier: -1, v: 0, ok: !!sv.cx[id], sub: SECRETS[id][1], info: '' })),
 ];
 const parseKey = (k) => { const m = /^(\d{1,2})(?::(\d))?$/.exec(String(k)); return m && +m[1] <= F.MAX_TIER ? { tier: +m[1], v: +(m[2] || 0) } : null; };
@@ -671,8 +680,8 @@ export const tierName = (t) => (t === F.MAX_TIER ? 'Galaxie' : (BODIES[t] || ['?
 export const astres = () => entries().filter((e) => e.ok && e.tier >= 0).map((e) => ({ ...e, r: e.p ? -Math.log(e.p) : e.tier / 20 })).sort((a, b) => b.r - a.r);
 export function astreInfo(key) { // nom, rareté (-1 = courant) et couleur d'un astre, pour l'affichage d'un profil
   const k = parseKey(key); if (!k) return null;
-  const p = k.tier === F.MAX_TIER ? F.GALAXY[k.v] : k.v ? vOdds(k.tier, k.v) : 0, rar = k.tier === F.MAX_TIER ? k.v : k.v === 9 ? 5 : k.v && p ? rarOf(k.tier, k.v, p) : -1;
-  return { name: k.tier === F.MAX_TIER ? GAL[k.v].n : nameOf(k.tier, k.v), rar, col: rar >= 0 ? RCOL[rar] : [160, 185, 225], sub: p ? odds(p) : k.v === 9 ? 'Fusion' : '' };
+  const p = k.tier === F.MAX_TIER ? F.GALAXY[k.v] : k.v ? vOdds(k.tier, k.v) : 0, rar = k.v || k.tier === F.MAX_TIER ? catR(k.tier, k.v) : -1;
+  return { name: k.tier === F.MAX_TIER ? GAL[k.v].n : nameOf(k.tier, k.v), rar, col: rar >= 0 ? RCOL[rar] : [160, 185, 225], sub: p ? odds(p) : k.v === 9 ? 'Fusion' : k.v ? 'Pack · ' + RAR[Math.max(0, rar)] : '' };
 }
 // Dessine un astre dans une vignette carrée de px pixels (profil, classement). live : astre animé, à repeindre régulièrement.
 export function paintAstre(c, key, px, live) {
@@ -689,9 +698,12 @@ function showCodex() {
     if (e.ok && e.tier >= 0) { const c = document.createElement('canvas'); paintAstre(c, e.key, 64); d.append(c); }
     else d.insertAdjacentHTML('beforeend', `<i>${e.ok ? '★' : '?'}</i>`);
     d.insertAdjacentHTML('beforeend', `<b>${e.ok ? e.name : '???'}</b>` + (e.sub ? `<small>${e.sub}</small>` : '')); g.append(d);
-    d.addEventListener('click', () => { $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.'; });
+    d.addEventListener('click', () => {
+      $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.';
+      const b = $('#mn-cxe'); b.hidden = !(e.ok && e.tier >= 0 && equipable(e.tier, e.v)); if (!b.hidden) { const on = sv.skin[e.tier] === e.v; b.textContent = on ? 'Retirer cette apparence' : 'Équiper cette apparence'; b.onclick = () => { equip(e.tier, on ? 0 : e.v); showCodex(); $('#mn-cxd').textContent = on ? 'Apparence d\'origine rétablie.' : `${e.name} équipé : tous les astres de ce rang l'afficheront.`; }; }
+    });
   }
-  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.';
+  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.'; $('#mn-cxe').hidden = true;
   $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent des Éclats.`;
   $('#mn-m-codex').classList.add('on');
 }
@@ -706,12 +718,31 @@ function lvStyle() { return colIdx(); }
 export const levelInfo = () => { const L = levelOf(sv.xp); return { ...L, pct: L.cur / L.need, col: LV_COL[colIdx()], next: colIdx() < LV_COL.length - 1 ? (colIdx() + 1) * 5 + 1 : 0 }; };
 function addXp(n, force) { // aucune expérience dans le bac à sable, les rediffusions ni les duels (sauf récompense de défi : force)
   if (!(n > 0) || (G && G.nop && !force)) return; const before = levelOf(sv.xp).level; sv.xp += Math.round(n); if (G) G.xpGain = (G.xpGain || 0) + Math.round(n);
-  const now = levelOf(sv.xp).level; for (let l = before + 1; l <= now; l++) { grant(100 + 50 * l, 'Niveau ' + l); if (isOpen && G && !ended) { say('NIVEAU ' + l, '+' + fmt(100 + 50 * l) + ' ÉCLATS', LV_COL[colIdx()]); A.win(); H.vib([20, 40, 20]); } }
+  const now = levelOf(sv.xp).level; for (let l = before + 1; l <= now; l++) { grant(100 + 50 * l, 'Niveau ' + l); if (l % 5 === 0) { sv.pk.nebuleuse = (sv.pk.nebuleuse | 0) + 1; H.toast(`Niveau ${l} : un Pack Nébuleuse offert !`); } if (isOpen && G && !ended) { say('NIVEAU ' + l, '+' + fmt(100 + 50 * l) + ' ÉCLATS', LV_COL[colIdx()]); A.win(); H.vib([20, 40, 20]); } }
   save(); H.refresh(); H.goal('xp');
 }
 export const giveXp = (n) => addXp(n, true);
+/* ============================== packs d'astres ============================== */
+export const packInfo = () => ({ stock: { ...sv.pk }, pity: sv.pity, free: sv.pkDay !== H.today(), dust: sv.dust });
+export function packAdd(id, n = 1) { if (!PACKS[id] || !(n > 0)) return; sv.pk[id] = (sv.pk[id] | 0) + Math.round(n); save(); H.refresh(); }
+export function packFree() { if (sv.pkDay === H.today()) return false; sv.pkDay = H.today(); packAdd('etoile', 1); return true; }
+// Ouvre un pack : prend un exemplaire en stock, sinon paie en Éclats. Le tirage est appliqué tout de suite (rien ne se perd si on quitte en route).
+// preview : aperçu administrateur (rareté forcée), n'enregistre rien.
+export function packOpen(id, preview = false, force = null) {
+  const pk = PACKS[id]; if (!pk) return null;
+  if (!preview) { if ((sv.pk[id] | 0) > 0) sv.pk[id]--; else if (sv.dust >= pk.cost) sv.dust -= pk.cost; else return null; }
+  const res = drawPack(id, preview ? {} : sv.pity[id] || {}, undefined, force);
+  res.cards = res.cards.map((c) => ({ ...c, n: astreInfo(c.key).name, isNew: !sv.cx[c.key] }));
+  if (!preview) {
+    sv.pity[id] = res.pity; sv.pkN++;
+    for (const c of res.cards) { sv.inv[c.key] = (sv.inv[c.key] | 0) + 1; sv.cx[c.key] = 1; }
+    addXp(8 + 6 * res.cards.filter((c) => c.isNew).length, true); save(); H.refresh(); H.goal('pack', { best: res.tell.best });
+  }
+  return res;
+}
 export const adminLocal = { // outils de l'administrateur, sur cet appareil seulement
   eclats: (n) => grant(n, 'Admin'), xp: (n) => addXp(n || 1000, true),
+  packs: (n) => { for (const id of Object.keys(PACKS)) packAdd(id, n); },
   unlock: () => { for (const e of entries()) if (e.tier >= 0) { sv.cx[e.key] = 1; if (e.v >= 1 && e.v < 9 && e.tier < F.MAX_TIER) sv.inv[e.key] = Math.max(sv.inv[e.key] | 0, 10); } save(); H.refresh(); },
 };
 const FORGE_COPIES = (t) => (t <= 5 ? 6 : t <= 8 ? 4 : 3); // exemplaires de variantes d'un rang à réunir pour fabriquer son prismatique
@@ -719,10 +750,10 @@ const copiesOf = (t) => Object.keys(VAR[t]).map(Number).filter((v) => v < 9).red
 export const forgeInfo = () => Object.keys(VAR).map((t) => ({ tier: +t, name: BODIES[t][0], key: t + ':9', copies: copiesOf(t), need: FORGE_COPIES(+t), own: !!sv.inv[t + ':9'], equipped: sv.skin[t] === 9 }));
 export function forge(t) { // consomme d'abord les variantes les plus courantes, jamais le prismatique ; renvoie la clé obtenue
   const i = forgeInfo().find((f) => f.tier === +t); if (!i || i.own || i.copies < i.need) return null;
-  let need = i.need; for (const v of Object.keys(VAR[t]).map(Number).filter((v) => v < 9).sort((a, b) => b - a)) { const k = t + ':' + v, n = Math.min(need, sv.inv[k] | 0); sv.inv[k] = (sv.inv[k] | 0) - n; need -= n; }
+  let need = i.need; for (const v of Object.keys(VAR[t]).map(Number).filter((v) => v < 9).sort((a, b) => b - a)) { const k = t + ':' + v, n = Math.min(need, sv.inv[k] | 0); if (n) { sv.inv[k] -= n; need -= n; } }
   sv.inv[t + ':9'] = 1; sv.cx[t + ':9'] = 1; sv.skin[t] = 9; sprites.clear(); addXp(60, true); save(); H.refresh(); H.goal('forge'); return t + ':9';
 }
-export function equip(t, on) { if (on) sv.skin[t] = 9; else delete sv.skin[t]; sprites.clear(); save(); }
+export function equip(t, v) { if (v && sv.cx[t + ':' + v]) sv.skin[t] = v; else delete sv.skin[t]; sprites.clear(); save(); H.refresh(); } // v : 0 = apparence d'origine
 export const dust = () => sv.dust;
 export const themeStat = () => [Object.keys(sv.themes).length, THEMES.length];
 // Récompense de mission : un thème offert ; si on le possède déjà, la moitié de son prix en poussière d'étoile
@@ -921,6 +952,9 @@ function duelResult(r) {
   setTimeout(() => { if (duel !== d) return; (r === 'win' || r === 'forfait' ? A.win : A.fail)(); dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : r === 'lose' ? 'Défaite' : 'Égalité', `Toi ${fmt(mine)} · ${d.oppName} ${fmt(theirs)}`); }, 500);
 }
 export const isNew = () => !sv.tut; // personne n'a encore fini (ou passé) la partie guidée
+export function paintCard(c, key, px) { // astre net à grande taille (cartes de pack) : on agrandit l'échelle de dessin le temps de la vignette
+  const keep = B.u; B.u = 56; try { paintAstre(c, key, px, false); } finally { B.u = keep; }
+}
 export const ghostOn = () => !!sv.ghost;
 export const setGhost = (v) => { sv.ghost = !!v; save(); };
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }

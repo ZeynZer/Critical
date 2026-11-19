@@ -122,6 +122,8 @@ create table if not exists public.gifts (
   id bigserial primary key, to_id uuid not null references public.players (id) on delete cascade,
   eclats integer not null default 0, xp integer not null default 0, note text not null default '', at timestamptz not null default now(), claimed boolean not null default false
 );
+alter table public.gifts add column if not exists pack text;
+alter table public.gifts add column if not exists pack_n integer not null default 0;
 create index if not exists gifts_to on public.gifts (to_id) where not claimed;
 create table if not exists public.announcements (id bigserial primary key, text text not null, until timestamptz not null, at timestamptz not null default now());
 alter table public.gifts enable row level security; alter table public.announcements enable row level security;
@@ -242,7 +244,7 @@ begin
   delete from challenges where at < now() - interval '2 minutes';
   select json_build_object('from', pf.name, 'code', c.code, 'age', extract(epoch from now() - c.at)) into v_out
     from challenges c join players pf on pf.id = c.from_id where c.to_id = v_id;
-  select json_build_object('id', g.id, 'eclats', g.eclats, 'xp', g.xp, 'note', g.note) into v_gift from gifts g where g.to_id = v_id and not g.claimed order by g.id limit 1;
+  select json_build_object('id', g.id, 'eclats', g.eclats, 'xp', g.xp, 'note', g.note, 'pack', g.pack, 'packs', g.pack_n) into v_gift from gifts g where g.to_id = v_id and not g.claimed order by g.id limit 1;
   select json_build_object('id', a.id, 'text', a.text) into v_msg from announcements a where a.until > now() order by a.id desc limit 1;
   return json_build_object('duel', v_out, 'admin', v_admin, 'gift', v_gift, 'msg', v_msg);
 end $$;
@@ -342,13 +344,16 @@ begin
     order by p.seen_at desc nulls last, p.created_at desc limit least(greatest(coalesce(p_limit, 30), 1), 60);
 end $$;
 
-create or replace function public.admin_gift(p_secret text, p_name text, p_eclats integer, p_xp integer, p_note text default '') returns json
+drop function if exists public.admin_gift(text, text, integer, integer, text); -- nouvelle signature : packs
+create or replace function public.admin_gift(p_secret text, p_name text, p_eclats integer, p_xp integer, p_note text default '', p_pack text default null, p_pack_n integer default 0) returns json
 language plpgsql security definer set search_path = public as $$
 declare v uuid;
 begin
   perform admin_id(p_secret); select id into v from players where lower(name) = lower(btrim(p_name)); if v is null then raise exception 'not_found'; end if;
   if coalesce(p_eclats, 0) not between 0 and 1000000 or coalesce(p_xp, 0) not between 0 and 1000000 then raise exception 'invalid_amount'; end if;
-  insert into gifts (to_id, eclats, xp, note) values (v, coalesce(p_eclats, 0), coalesce(p_xp, 0), left(regexp_replace(coalesce(p_note, ''), '[[:cntrl:]<>]', '', 'g'), 80));
+  if p_pack is not null and p_pack not in ('etoile', 'nebuleuse', 'galaxie') then raise exception 'invalid_pack'; end if;
+  if coalesce(p_pack_n, 0) not between 0 and 100 then raise exception 'invalid_amount'; end if;
+  insert into gifts (to_id, eclats, xp, note, pack, pack_n) values (v, coalesce(p_eclats, 0), coalesce(p_xp, 0), left(regexp_replace(coalesce(p_note, ''), '[[:cntrl:]<>]', '', 'g'), 80), p_pack, case when p_pack is null then 0 else coalesce(p_pack_n, 0) end);
   return json_build_object('ok', true);
 end $$;
 
@@ -394,8 +399,8 @@ declare g gifts;
 begin
   update gifts set claimed = true where id = p_id and not claimed and to_id = (select id from players where secret_hash = critical_hash(p_secret)) returning * into g;
   if g.id is null then raise exception 'none'; end if;
-  return json_build_object('eclats', g.eclats, 'xp', g.xp, 'note', g.note);
+  return json_build_object('eclats', g.eclats, 'xp', g.xp, 'note', g.note, 'pack', g.pack, 'packs', g.pack_n);
 end $$;
 
-revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint), public.critical_hash(text) from public;
-grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint) to anon, authenticated;
+revoke all on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text, text, integer), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint), public.critical_hash(text) from public;
+grant execute on function public.register(text, text), public.submit_score(text, text, integer, integer, integer, bigint, jsonb, integer), public.leaderboard(text, integer, integer), public.my_rank(text, text), public.set_profile(text, text[], text, integer, integer), public.get_profile(text, text), public.report_playtime(text, integer), public.get_run(text), public.rival(integer), public.activity(), public.rarity(), public.pulse(text), public.like_player(text, text), public.challenge(text, text, text), public.challenge_reply(text, boolean), public.challenge_cancel(text), public.set_no_duel(text, boolean), public.claim_player(text, text), public.admin_players(text, text, integer), public.admin_gift(text, text, integer, integer, text, text, integer), public.admin_ban(text, text, boolean), public.admin_rename(text, text, text), public.admin_reset_scores(text, text), public.admin_delete(text, text), public.admin_open_claim(text, text, integer), public.admin_announce(text, text, integer), public.admin_announce_clear(text), public.claim_gift(text, bigint) to anon, authenticated;

@@ -7,7 +7,7 @@ const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
 const st = { done: {}, claimed: {}, ctr: {} };
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
-const api = { grant: () => {}, xp: () => {}, level: () => 1, toast: () => {}, vib: () => {}, sfx: () => {}, changed: () => {} };
+const api = { pack: () => {}, grant: () => {}, xp: () => {}, level: () => 1, toast: () => {}, vib: () => {}, sfx: () => {}, changed: () => {} };
 
 const LV = ['Facile', 'Moyen', 'Difficile', 'Légendaire'], COL = ['#5dffc0', '#4df3ff', '#ff4fd8', '#ffc247'], RW = [[150, 20], [400, 50], [1000, 120], [3000, 300]];
 // c : compteur cumulé · m : meilleur résultat · l : niveau du joueur · e : événement ponctuel (when(type, données))
@@ -61,8 +61,15 @@ const DEFS = [
   c('forge5', 3, 'Collectionneur prismatique', 'Fabrique 5 astres prismatiques.', 'forges', 5, [5000, 500]),
   c('duel10', 3, 'Champion', 'Gagne 10 duels.', 'duelwins', 10),
   lvl('lv40', 3, 'Niveau 40', 40, [6000, 600]),
+  // — Packs
+  c('pack1', 0, 'Premier pack', 'Ouvre un pack d\'astres.', 'packs', 1),
+  c('pack25', 1, 'Pluie d\'étoiles', 'Ouvre 25 packs.', 'packs', 25),
+  c('pack100', 2, 'Chasseur de raretés', 'Ouvre 100 packs.', 'packs', 100),
+  c('leg1', 2, 'Du lourd !', 'Obtiens un astre légendaire dans un pack.', 'legend', 1),
+  c('cosmic1', 3, 'Singularité', 'Obtiens un astre cosmique dans un pack.', 'cosmic', 1, [8000, 800]),
 ];
 const rw = (g) => g.r || RW[g.l];
+const PKR = [null, 'etoile', 'nebuleuse', 'galaxie'], PKN = { etoile: 'Pack Étoile', nebuleuse: 'Pack Nébuleuse', galaxie: 'Pack Galaxie' }; // Moyen et au-dessus : un pack en plus
 const prog = (g) => (g.k === 'l' ? Math.min(g.n, api.level()) : g.k === 'e' ? (st.done[g.id] ? 1 : 0) : Math.min(g.n, st.ctr[g.ctr] | 0));
 const isDone = (g) => !!st.done[g.id];
 const max = (k, v) => { st.ctr[k] = Math.max(st.ctr[k] | 0, v | 0); };
@@ -88,6 +95,7 @@ export function event(type, x = {}) {
   else if (type === 'duelwin') k.duelwins = (k.duelwins | 0) + 1;
   else if (type === 'forge') k.forges = (k.forges | 0) + 1;
   else if (type === 'like') k.likes = (k.likes | 0) + 1;
+  else if (type === 'pack') { k.packs = (k.packs | 0) + 1; if (x.best >= 4) k.legend = 1; if (x.best >= 5) k.cosmic = 1; }
   save(); check(type, x);
 }
 export const summary = () => ({ claimable: DEFS.filter((g) => isDone(g) && !st.claimed[g.id]).length, claimed: DEFS.filter((g) => st.claimed[g.id]).length, total: DEFS.length });
@@ -114,7 +122,7 @@ const render = () => {
   for (const g of rows) {
     const [d, x] = rw(g), p = prog(g), it = make('div', 'gl-it' + (isDone(g) && !st.claimed[g.id] ? ' ready' : '') + (st.claimed[g.id] ? ' claimed' : '')); it.style.setProperty('--c', COL[g.l]);
     it.append(make('div', 'gl-tx', `<b>${g.t}</b><small>${g.d}</small>` + (g.k !== 'e' && !isDone(g) ? `<div class="gl-bar"><i style="width:${(p / g.n) * 100}%"></i></div><em>${fmt(p)} / ${fmt(g.n)}</em>` : `<em style="color:${COL[g.l]}">${LV[g.l].toUpperCase()}</em>`)));
-    const r = make('div', 'gl-rw', `+${fmt(d)} Éclats<br>+${fmt(x)} XP`);
+    const r = make('div', 'gl-rw', `+${fmt(d)} Éclats<br>+${fmt(x)} XP` + (PKR[g.l] ? `<br>+1 ${PKN[PKR[g.l]]}` : ''));
     if (isDone(g) && !st.claimed[g.id]) { const b = make('button', 'gl-ok', 'Valider'); b.disabled = true; setTimeout(() => { b.disabled = false; }, 800); b.addEventListener('click', () => claim(g.id)); r.append(b); } // inerte un instant : pas d'appui involontaire
     else if (st.claimed[g.id]) r.append(make('span', '', '✓ validé'));
     it.append(r); list.append(it);
@@ -122,7 +130,7 @@ const render = () => {
 };
 function claim(id) {
   const g = DEFS.find((x) => x.id === id); if (!g || !isDone(g) || st.claimed[id]) return;
-  const [d, x] = rw(g); st.claimed[id] = Date.now(); save(); api.grant(d, g.t); api.xp(x); api.vib([12, 30, 12]); api.sfx(); api.changed(); render();
+  const [d, x] = rw(g); st.claimed[id] = Date.now(); save(); api.grant(d, g.t); api.xp(x); if (PKR[g.l]) api.pack(PKR[g.l], 1); api.vib([12, 30, 12]); api.sfx(); api.changed(); render();
 }
 export function open() { check('xp'); if (!summary().claimable && tab === 'ready') tab = 'todo'; mod.classList.add('on'); render(); }
 export function init(a) {

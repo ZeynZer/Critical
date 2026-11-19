@@ -237,7 +237,7 @@ export function init(o = {}) {
   pager = make('div', 'hm-pager'); const pg = PAGES.map(() => make('section', 'hm-pg')); pager.append(...pg);
   const head = (p, t, s) => p.append(make('div', 'hm-hd', `<h2>${t}</h2><p>${s}</p>`));
   head(pg[0], 'Social', 'Affronte les autres joueurs');
-  head(pg[2], 'Fusion', 'Crée des astres uniques'); head(pg[3], 'Collection', 'Tes astres, tes décors');
+  head(pg[2], 'Fusion', 'Packs d\'astres et astres uniques'); head(pg[3], 'Collection', 'Tes astres, tes décors');
   if (opts.forge) fg = opts.forge(pg[2]);
   const place = (p, id, icon, d) => { const b = $(id); if (b) { row(b, icon); b.style.setProperty('--e', d); p.append(b); } };
   place(pg[0], '#b-rank', ICONS.rank, '.15s'); place(pg[0], '#b-duel', ICONS.duel, '.22s'); place(pg[0], '#b-profile', ICONS.user, '.29s');

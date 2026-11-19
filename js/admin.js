@@ -5,6 +5,7 @@ const make = (tag, cls, html) => { const e = document.createElement(tag); if (cl
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const CSS = `
 #ad-m .card{max-width:440px;align-items:stretch;gap:10px}#ad-m h2{text-align:center;margin:0}#ad-m h3{margin:6px 0 0;font:700 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:#ffc247}
+#ad-m select{height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:#fff;padding:0 10px;font:600 14px var(--font);flex:1;min-width:0}
 #ad-m input{height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:#fff;padding:0 12px;font:600 14px var(--font);outline:none;user-select:text;-webkit-user-select:text;min-width:0}
 .ad-r{display:flex;gap:8px}.ad-r input{flex:1}.ad-b{height:40px;padding:0 14px;border-radius:14px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#fff;font:700 12px var(--font);flex:none}.ad-b.d{border-color:rgba(255,106,138,.6);color:#ff8aa0}.ad-b.go{background:rgba(93,255,192,.18);border-color:rgba(93,255,192,.5)}.ad-b:active{transform:scale(.95)}
 #ad-list{display:flex;flex-direction:column;gap:5px;max-height:26vh;overflow-y:auto;scrollbar-width:none;touch-action:pan-y}#ad-list::-webkit-scrollbar{display:none}
@@ -16,9 +17,10 @@ export function mount(api) {
   const m = make('div', 'modal', `<div class="card glass"><h2>Administration</h2>
 <div class="ad-r"><input id="ad-q" placeholder="Chercher un joueur" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="ad-b" id="ad-go">Chercher</button></div>
 <div id="ad-list"></div><p class="ad-sel" id="ad-sel"></p><div id="ad-act"></div>
-<h3>Cadeau pour le joueur choisi</h3><div class="ad-r"><input id="ad-e" inputmode="numeric" placeholder="Éclats"><input id="ad-x" inputmode="numeric" placeholder="XP"></div><div class="ad-r"><input id="ad-n" placeholder="Message (facultatif)" maxlength="80"><button class="ad-b go" id="ad-gift">Offrir</button></div>
+<h3>Cadeau pour le joueur choisi</h3><div class="ad-r"><input id="ad-e" inputmode="numeric" placeholder="Éclats"><input id="ad-x" inputmode="numeric" placeholder="XP"></div><div class="ad-r"><select id="ad-pk"><option value="">Aucun pack</option><option value="etoile">Pack Étoile</option><option value="nebuleuse">Pack Nébuleuse</option><option value="galaxie">Pack Galaxie</option></select><input id="ad-pn" inputmode="numeric" placeholder="Nombre" style="max-width:96px"></div><div class="ad-r"><input id="ad-n" placeholder="Message (facultatif)" maxlength="80"><button class="ad-b go" id="ad-gift">Offrir</button></div>
 <h3>Annonce pour tous</h3><div class="ad-r"><input id="ad-t" placeholder="Texte de l'annonce" maxlength="200"><button class="ad-b go" id="ad-ann">Envoyer</button></div><div class="ad-r"><button class="ad-b" id="ad-clr">Effacer les annonces</button></div>
-<h3>Sur cet appareil</h3><div id="ad-loc" class="ad-r" style="flex-wrap:wrap"><button class="ad-b" data-k="e">+10 000 Éclats</button><button class="ad-b" data-k="x">+1 000 XP</button><button class="ad-b" data-k="u">Tout débloquer</button></div>
+<h3>Sur cet appareil</h3><div id="ad-loc" class="ad-r" style="flex-wrap:wrap"><button class="ad-b" data-k="e">+10 000 Éclats</button><button class="ad-b" data-k="x">+1 000 XP</button><button class="ad-b" data-k="u">Tout débloquer</button><button class="ad-b" data-k="p">+3 packs de chaque</button></div>
+<h3>Tester l'ouverture de pack (aperçu gratuit)</h3><div id="ad-t2" class="ad-r" style="flex-wrap:wrap"><button class="ad-b" data-r="0">Commune</button><button class="ad-b" data-r="2">Rare</button><button class="ad-b" data-r="3">Épique</button><button class="ad-b" data-r="4">Légendaire</button><button class="ad-b" data-r="5">Cosmique</button></div>
 <div class="btns"><button class="big primary" id="ad-x2">Fermer</button></div></div>`); m.id = 'ad-m'; document.body.append(m);
   const $ = (s) => m.querySelector(s); let sel = null, armed = null;
   const run = async (fn, args, ok) => { try { const r = await api.call(fn, args); api.toast(ok || 'Fait'); return r || true; } catch (e) { api.toast('Refusé : ' + e.message); return null; } };
@@ -38,10 +40,11 @@ export function mount(api) {
     document.querySelectorAll('#ad-list .ad-p').forEach((b) => b.classList.toggle('on', b.textContent.startsWith(p.name)));
   }
   $('#ad-go').addEventListener('click', search); $('#ad-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
-  $('#ad-gift').addEventListener('click', () => { if (!sel) return api.toast('Choisis un joueur'); const d = parseInt($('#ad-e').value, 10) || 0, x = parseInt($('#ad-x').value, 10) || 0; if (!d && !x) return api.toast('Indique des Éclats ou de l\'XP'); run('admin_gift', { p_name: sel, p_eclats: d, p_xp: x, p_note: $('#ad-n').value }, `Cadeau envoyé à ${sel}`); });
+  $('#ad-gift').addEventListener('click', () => { if (!sel) return api.toast('Choisis un joueur'); const d = parseInt($('#ad-e').value, 10) || 0, x = parseInt($('#ad-x').value, 10) || 0, pk = $('#ad-pk').value || null, pn = parseInt($('#ad-pn').value, 10) || (pk ? 1 : 0); if (!d && !x && !pk) return api.toast('Indique des Éclats, de l\'XP ou un pack'); run('admin_gift', { p_name: sel, p_eclats: d, p_xp: x, p_note: $('#ad-n').value, p_pack: pk, p_pack_n: pn }, `Cadeau envoyé à ${sel}`); });
   $('#ad-ann').addEventListener('click', () => $('#ad-t').value.trim() && run('admin_announce', { p_text: $('#ad-t').value, p_minutes: 60 }, 'Annonce envoyée (1 h)'));
   $('#ad-clr').addEventListener('click', () => run('admin_announce_clear', {}, 'Annonces effacées'));
   $('#ad-loc').addEventListener('click', (e) => { const k = e.target.dataset.k; if (k) { api.local[k](); api.toast('Fait sur cet appareil'); } });
+  $('#ad-t2').addEventListener('click', (e) => { const r = e.target.dataset.r; if (r !== undefined) { m.classList.remove('on'); api.local.test(+r); } });
   $('#ad-x2').addEventListener('click', () => m.classList.remove('on'));
   return { open() { m.classList.add('on'); search(); } };
 }
