@@ -48,7 +48,7 @@ for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec 
 QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
 GOALS.init({ pack: MINE.packAdd, grant: MINE.grant, xp: MINE.giveXp, level: () => MINE.levelInfo().level, toast, vib, sfx: A.ui, changed: refresh });
 let packs = null;
-const adm = ADMIN.mount({ call: RANK.admin, toast, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
+const adm = ADMIN.mount({ call: RANK.admin, toast, vib, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
 tap('#o-admin', () => { $('#m-settings').classList.remove('on'); adm.open(); });
 HOME.init({ sfx: A.ui, levelInfo: MINE.levelInfo, forge: (el) => FORGE.mount(el, { view: MINE.viewCard, mountPacks: (box) => (packs = PACKUI.mount(box, { info: MINE.packInfo, open: (id) => MINE.packOpen(id), preview: (r, id) => MINE.packOpen(id, true, r), free: MINE.packFree, paintCard: MINE.paintCard, view: MINE.viewCard, buildCard: MINE.buildCard, sfx: { charge: A.packCharge, place: A.packPlace, rise: A.packRise, link: A.packLink, swallow: A.packSwallow, boom: A.packBoom, hit: A.packHit }, vib, toast, quick: () => S.quick, refresh })), info: MINE.forgeInfo, paint: MINE.paintAstre, forge: MINE.forge, equip: MINE.equip, toast, sfx: A.ui, vib }) });
 // l'icône du bouton Profil devient l'astre de profil choisi
