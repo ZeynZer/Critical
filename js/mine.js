@@ -5,6 +5,7 @@ import * as A from './audio.js';
 import * as F from './fusion.js';
 import { CAT, RAR, equipable } from './catalog.js';
 import { PACKS, draw as drawPack } from './packs.js';
+import * as IM from './immersive.js';
 import { channel } from './realtime.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
@@ -328,10 +329,10 @@ function sprite(tier, v) {
 }
 // Performance : les calques d'un astre animé (halo, surface découpée, lumière) sont assemblés UNE fois par rang toutes les 2 images
 // dans s.comp ; chaque astre de ce rang n'est plus qu'une copie d'image. Avant : découpe + 3 à 5 dessins par astre et par image.
-function compose(s, tier) {
+function compose(s, tier, body) { // body : seulement la surface (le halo et la lumière sont alors des calques à part)
   const h = s.h, x = s.cx, img = (c) => x.drawImage(c, -h, -h, h * 2, h * 2);
   x.setTransform(DPR, 0, 0, DPR, 0, 0); x.clearRect(0, 0, h * 2, h * 2); x.translate(h, h);
-  if (s.back) { const p = 1 + (s.pulse || 0) * Math.sin(T * 2.3 + tier); x.save(); if (s.spinB) x.rotate(T * s.spinB); if (!s.still) x.scale(p, p); img(s.back); x.restore(); }
+  if (s.back && !body) { const p = 1 + (s.pulse || 0) * Math.sin(T * 2.3 + tier); x.save(); if (s.spinB) x.rotate(T * s.spinB); if (!s.still) x.scale(p, p); img(s.back); x.restore(); }
   if (s.disc) { x.save(); x.rotate(T * s.spinD); img(s.disc); x.restore(); }
   if (s.disc2) { x.save(); x.rotate(-T * s.spinD * 0.7); img(s.disc2); x.restore(); }
   if (s.strip) {
@@ -343,7 +344,7 @@ function compose(s, tier) {
     x.restore();
   }
   if (s.prism && x.createConicGradient) { x.save(); x.beginPath(); x.arc(0, 0, h / 1.3, 0, TAU); x.clip(); const g = x.createConicGradient(T * 0.9, 0, 0); for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsl(${(i * 60) % 360},100%,62%)`); x.globalCompositeOperation = 'color'; x.globalAlpha = 0.72; x.fillStyle = g; x.fillRect(-h, -h, h * 2, h * 2); x.restore(); }
-  if (s.over) img(s.over);
+  if (s.over && !body) img(s.over);
 }
 function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
   if (it.k === 'c') {
@@ -662,7 +663,7 @@ const HTML = `
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Pause</h2><p class="sub" id="mn-ht">Deux astres identiques qui se touchent fusionnent.</p><div id="mn-lad"></div><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
 const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-new">Créer un salon</button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
-<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
+<div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxv" hidden>Voir en immersif</button><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
   ...BODIES.slice(0, F.MAX_TIER).map((b, i) => ({ key: String(i), name: b[0], tier: i, v: 0, ok: !!sv.cx[i], sub: '', info: powerText(i, 0) })),
@@ -700,10 +701,11 @@ function showCodex() {
     d.insertAdjacentHTML('beforeend', `<b>${e.ok ? e.name : '???'}</b>` + (e.sub ? `<small>${e.sub}</small>` : '')); g.append(d);
     d.addEventListener('click', () => {
       $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.';
+      const v = $('#mn-cxv'); v.hidden = !(e.ok && e.tier >= 0); v.onclick = () => viewCard(e.key);
       const b = $('#mn-cxe'); b.hidden = !(e.ok && e.tier >= 0 && equipable(e.tier, e.v)); if (!b.hidden) { const on = sv.skin[e.tier] === e.v; b.textContent = on ? 'Retirer cette apparence' : 'Équiper cette apparence'; b.onclick = () => { equip(e.tier, on ? 0 : e.v); showCodex(); $('#mn-cxd').textContent = on ? 'Apparence d\'origine rétablie.' : `${e.name} équipé : tous les astres de ce rang l'afficheront.`; }; }
     });
   }
-  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.'; $('#mn-cxe').hidden = true;
+  $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.'; $('#mn-cxe').hidden = true; $('#mn-cxv').hidden = true;
   $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent des Éclats.`;
   $('#mn-m-codex').classList.add('on');
 }
@@ -952,6 +954,26 @@ function duelResult(r) {
   setTimeout(() => { if (duel !== d) return; (r === 'win' || r === 'forfait' ? A.win : A.fail)(); dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : r === 'lose' ? 'Défaite' : 'Égalité', `Toi ${fmt(mine)} · ${d.oppName} ${fmt(theirs)}`); }, 500);
 }
 export const isNew = () => !sv.tut; // personne n'a encore fini (ou passé) la partie guidée
+// Calques d'un astre pour la carte immersive : halo, surface animée (frame), lumière fixe, chacun à sa propre profondeur
+export function astreRig(key) {
+  const k = parseKey(key); if (!k) return null;
+  const U = 64, r = F.TIERS[k.tier].r * U, s = build(k.tier, r, k.v); s.h = r * 1.3; // construit à grande échelle, hors du cache du jeu
+  const size = s.h * 2; let comp = null;
+  return {
+    size, tier: k.tier, v: k.v, color: BODIES[k.tier][1], halo: s.back || null, haloSpin: s.spinB || 0, over: s.over || null,
+    frame(x, tNow) { // dessine la surface (centre en 0,0, côté = size) à l'instant tNow, sans toucher à l'horloge du jeu
+      const keep = T; T = tNow;
+      try {
+        if (s.spr) { x.save(); x.rotate(tNow * (s.spin || 0)); x.drawImage(s.spr, -size / 2, -size / 2, size, size); x.restore(); }
+        else { if (!comp) { comp = document.createElement('canvas'); comp.width = comp.height = Math.ceil(size * DPR); s.comp = comp; s.cx = comp.getContext('2d'); } compose(s, k.tier, true); x.drawImage(comp, -size / 2, -size / 2, size, size); }
+      } finally { T = keep; }
+    },
+  };
+}
+export function viewCard(key) { // carte immersive d'un astre (Codex, packs)
+  const rig = astreRig(key); if (!rig) return; const info = astreInfo(key), k = parseKey(key), e = entries().find((x) => x.key === key);
+  IM.show({ rig, name: info.name, rar: Math.max(0, info.rar), rname: k.tier === F.MAX_TIER ? 'Galaxie · ' + RAR[Math.max(0, info.rar)] : RAR[Math.max(0, info.rar)], sub: info.sub, info: e && e.info ? e.info : '' });
+}
 export function paintCard(c, key, px) { // astre net à grande taille (cartes de pack) : on agrandit l'échelle de dessin le temps de la vignette
   const keep = B.u; B.u = 56; try { paintAstre(c, key, px, false); } finally { B.u = keep; }
 }
