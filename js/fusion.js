@@ -38,7 +38,7 @@ const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { inset: 0.4, n: 'Cuv
   { g: 0.7, n: 'Légèreté' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, inset: 0.4, n: 'Chaos originel' }];
 export const mod = (d) => ({ g: 1, inset: 0, n: '', ...MODS[d % MODS.length] });
 // Blitz : cuve resserrée en permanence, chrono qui ne tourne qu'une fois le 1er astre lâché, tempo (lâchers rapprochés) qui multiplie les points.
-export const BLITZ = { max: 10, inset: 1.7, ht: 8.6, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
+export const BLITZ = { max: 10, inset: 1.2, ht: 11, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
 const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; return m; };
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
