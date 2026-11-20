@@ -57,7 +57,7 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : HT, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : HT, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
   G.mod = modOf(G, 0); G.inset = G.mod.inset; G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
@@ -84,6 +84,11 @@ export function drop(G, x) {
   G.cool = COOLDOWN; G.swapped = false; G.drops++; G.log.push(G.n, Math.round(dx * 1000)); // journal (pas de calcul, position) : permet de rejouer la partie à l'identique
   return true;
 }
+// Pouvoirs équipés : une variante à pouvoir (v = 1) que le joueur a découverte peut être « équipée » ; elle est consignée en tête du journal (x <= -1e6 : masque de rangs)
+// pour que le serveur, les rediffusions et les fantômes rejouent la partie à l'identique.
+export const maskOf = (p) => Object.keys(p || {}).reduce((m, t) => (p[t] ? m | (1 << +t) : m), 0);
+export const powersOf = (m) => { const p = {}; for (let t = 0; t <= MAX_TIER; t++) if ((m >> t) & 1) p[t] = 1; return p; };
+export function act(G, x) { if (x <= -1e6) { G.powers = powersOf(-1e6 - x); return true; } return swapHold(G); } // entrée négative du journal : en-tête de pouvoirs, sinon échange de réserve
 export function swapHold(G) {
   if (G.over || G.swapped) return false;
   if (G.hold) { const h = G.hold; G.hold = G.cur; G.cur = h; } else { G.hold = G.cur; G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
@@ -129,9 +134,10 @@ function fuse(G, a, b) {
   else if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
   else {
     if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
+    else if (G.powers && G.powers[tier + 1] && RARE[tier + 1]) { n.v = 1; n.eq = true; } // pouvoir équipé : la variante à pouvoir à chaque fusion de ce rang, sans le bonus de points d'un tirage rare
     else if (STYLES[tier + 1]) { let u = roll2(G.seed | 0, G.fusions); STYLES[tier + 1].some((p, i) => { if (u < p) { n.v = 2 + i; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: n.v, p }); return true; } u -= p; return false; }); }
   }
-  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v === 1 || (n.v && tier + 1 === MAX_TIER) ? 3 : 1) * bm; G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
+  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * ((n.v === 1 && !n.eq) || (n.v && tier + 1 === MAX_TIER) ? 3 : 1) * bm; G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
   if (!G.sandbox && tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
@@ -296,7 +302,7 @@ export function replay(seed, log, end, opt) {
   const G = newGame(seed, opt);
   for (let i = 0; i < log.length && !G.over; i += 2) {
     while (G.n < log[i] && !G.over) sub(G);
-    if (log[i + 1] < 0) swapHold(G); else drop(G, log[i + 1] / 1000);
+    if (log[i + 1] < 0) act(G, log[i + 1]); else drop(G, log[i + 1] / 1000);
   }
   while (G.n < end && !G.over) sub(G);
   return G;
