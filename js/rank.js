@@ -35,7 +35,7 @@ async function flush() {
   if (!ready() || !st.name || !st.pending.length) return null;
   let out = null;
   for (const p of st.pending.slice()) {
-    try { const r = await rpc('submit_score', { p_secret: secret(), p_board: p.board, p_score: p.score, p_sector: p.sector, p_tier: p.tier, p_seed: p.seed, p_log: p.log, p_steps: p.steps }); if (p.board === 'all') out = r; }
+    try { const r = await rpc('submit_score', { p_secret: secret(), p_board: p.board, p_score: p.score, p_sector: p.sector, p_tier: p.tier, p_seed: p.seed, p_log: p.log, p_steps: p.steps }); if (p.board === 'all' || p.board === 'blitz') out = r; }
     catch (e) { if (e.message === 'network' || e.message === 'too_fast') continue; } // on réessaiera ; tout autre refus est définitif
     st.pending = st.pending.filter((q) => q !== p);
   }
@@ -49,7 +49,7 @@ export function reportTime(sec, force) { // temps de jeu cumulé, au plus une fo
 // Appelé en fin de partie. run = { score, sector, tier, seed, log, steps } ; avec daily = date, c'est un défi du jour (score = centièmes de seconde restants)
 export function submit(run) {
   if (!ready() || run.score <= 0) return Promise.resolve(null);
-  for (const board of [run.daily ? 'day:' + run.daily : 'all']) {
+  for (const board of [run.daily ? 'day:' + run.daily : run.blitz ? 'blitz' : 'all']) {
     const old = st.pending.find((p) => p.board === board);
     if (old && old.score >= run.score) continue;
     st.pending = st.pending.filter((p) => p.board !== board).concat({ board, score: run.score, sector: run.sector, tier: run.tier, seed: run.seed, log: run.log, steps: run.steps });
@@ -138,7 +138,7 @@ const CROWN = '<svg viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 1
 const HTML = INVHTML + `
 <div class="modal hub" id="rk"><div class="hub-in">
 <div class="hub-hd"><div class="hub-t"><h2>Communauté</h2><p id="hub-sub"></p></div><button class="hub-x" id="rk-close" aria-label="Fermer">✕</button></div>
-<div class="hub-tabs"><button data-b="all" class="on">Classement</button><button data-b="day">Défi du jour</button><button data-b="ideas">Idées</button></div>
+<div class="hub-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Défi du jour</button><button data-b="blitz">Blitz</button><button data-b="ideas">Idées</button></div>
 <div class="hub-body" id="rk-body"><div id="rk-feed"></div><div id="rk-pod"></div><div id="rk-list"></div><div id="rk-ideas" hidden></div></div>
 <div class="hub-dock"><div id="rk-me"></div><button id="rk-name"></button></div></div></div>
 <div class="modal" id="rk-prof"><div class="card glass"><div class="pf-ban" id="pf-ban"></div><div class="pf-in"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-title"></p><p id="pf-lvl"></p><p id="pf-motto"></p>
@@ -153,11 +153,11 @@ const HTML = INVHTML + `
 <h3>Devise</h3><input id="ed-motto" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Ta devise (facultatif)" enterkeyhint="done"><p id="ed-err"></p></div>
 <div class="ed-ft"><button id="ed-cancel">Annuler</button><button id="ed-name">Pseudo</button><button id="ed-ok">Enregistrer</button></div></div></div>
 ` + ASKHTML;
-const pts = (v) => (board === 'all' ? fmt(v) : (v / 100).toLocaleString('fr-FR') + ' s d\'avance'); // défi : temps restant
+const pts = (v) => (board === 'all' || board === 'blitz' ? fmt(v) : (v / 100).toLocaleString('fr-FR') + ' s d\'avance'); // défi : temps restant
 const fmtTime = (sec) => (sec < 60 ? '< 1 min' : sec < 3600 ? `${Math.floor(sec / 60)} min` : `${Math.floor(sec / 3600)} h ${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}`);
 const fmtMonth = (iso) => { try { return new Date(iso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); } catch (e) { return ''; } };
 let board = 'all', off = 0, done = false, busy = false, token = 0, ideasUi = null, inIdeas = false;
-const boardId = () => (board === 'all' ? 'all' : 'day:' + H.today());
+const boardId = () => (board === 'all' ? 'all' : board === 'blitz' ? 'blitz' : 'day:' + H.today());
 const avOf = (box, key, px, a, f, still) => avatar(box, { key, px, accent: a, frame: f, still, paint: H.paint });
 const rgbOf = (i) => accentRgb(i);
 function rowEl(r) {
@@ -190,11 +190,11 @@ async function show(b) {
   document.querySelectorAll('.hub-tabs button').forEach((x) => x.classList.toggle('on', x.dataset.b === b));
   $('#rk-list').textContent = ''; $('#rk-pod').textContent = ''; $('#rk-body').scrollTop = 0; $('#rk-me').innerHTML = ''; $('#rk-ideas').hidden = !tab; $('#rk-list').hidden = tab; $('#rk-pod').hidden = tab; $('#rk-feed').hidden = tab;
   $('#rk-name').textContent = st.name ? 'Mon profil' : 'Choisir un pseudo';
-  $('#hub-sub').textContent = tab ? 'Propose, soutiens, façonne le jeu' : b === 'day' ? 'Le défi du jour, tous contre la montre' : 'Les meilleurs univers du monde';
+  $('#hub-sub').textContent = tab ? 'Propose, soutiens, façonne le jeu' : b === 'day' ? 'Le défi du jour, tous contre la montre' : b === 'blitz' ? 'Cuve étroite, chrono, tempo : le plus rapide gagne' : 'Les meilleurs univers du monde';
   if (tab) { if (!ideasUi) ideasUi = mountIdeas($('#rk-ideas'), { call: (fn, args) => rpc(fn, { p_secret: secret(), ...args }).catch((e) => { throw new Error(ERR[e.message] || ERR.network); }), name: () => st.name, askName, isAdmin: () => !!st.admin, toast: (x) => H.toast(x), vib: (x) => H.vib(x) }); ideasUi.refresh(); $('#rk-me').innerHTML = st.name ? `Connecté : <b style="font-size:13px">${esc(st.name)}</b><em>Les idées les plus soutenues passent en premier</em>` : 'Choisis un pseudo pour proposer et soutenir des idées'; return; }
   more(); feed(t);
   if (!st.name) { $('#rk-me').innerHTML = 'Choisis un pseudo pour entrer dans le classement'; return; }
-  try { await flush(); const me = await rpc('my_rank', { p_secret: secret(), p_board: boardId() }); if (t === token) $('#rk-me').innerHTML = me ? `<b>n° ${fmt(me.rank)}</b> sur ${fmt(me.total)}<em>Top ${Math.max(1, Math.ceil((me.rank / me.total) * 100))} % · ${pts(me.score)}${board === 'all' ? ' points' : ''}</em>` : 'Tu n\'as pas encore de score ici.<em>Lance une partie pour entrer au classement</em>'; } catch (e) { /* le classement s'affiche quand même */ }
+  try { await flush(); const me = await rpc('my_rank', { p_secret: secret(), p_board: boardId() }); if (t === token) $('#rk-me').innerHTML = me ? `<b>n° ${fmt(me.rank)}</b> sur ${fmt(me.total)}<em>Top ${Math.max(1, Math.ceil((me.rank / me.total) * 100))} % · ${pts(me.score)}${board === 'day' ? '' : ' points'}</em>` : 'Tu n\'as pas encore de score ici.<em>Lance une partie pour entrer au classement</em>'; } catch (e) { /* le classement s'affiche quand même */ }
 }
 const ago = (iso) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? 'à l\'instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
 async function feed(t) { // faits réels uniquement : dernières parties classées, part des joueurs ayant atteint les gros astres

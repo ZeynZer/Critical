@@ -37,6 +37,9 @@ export const need = (depth) => Math.min(260, 30 + depth * 24);
 const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { inset: 0.4, n: 'Cuve étroite' }, { g: 1.15, n: 'Gravité accrue' }, { g: 1.3, n: 'Gravité forte' },
   { g: 0.7, n: 'Légèreté' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, inset: 0.4, n: 'Chaos originel' }];
 export const mod = (d) => ({ g: 1, inset: 0, n: '', ...MODS[d % MODS.length] });
+// Blitz : cuve resserrée en permanence, chrono qui ne tourne qu'une fois le 1er astre lâché, tempo (lâchers rapprochés) qui multiplie les points.
+export const BLITZ = { max: 10, inset: 1.2, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
+const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; return m; };
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
 export function mulberry32(a) { return () => { let t = (a = (a + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -54,9 +57,9 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
-  G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
+  G.mod = modOf(G, 0); G.inset = G.mod.inset; G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
 }
 
@@ -74,6 +77,10 @@ export function drop(G, x) {
   const dx = Math.round(clampX(it, x, G.inset) * 1000) / 1000; // position arrondie au millième : c'est exactement ce que le journal enregistre
   const nb = add(G, it.k, it.tier, dx, DROP_Y); nb.fresh = true; if (it.v) nb.v = it.v;
   if (!G.sandbox) { G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
+  if (G.blitz) { // tempo : un lâcher dans la seconde qui suit le précédent prolonge le combo (×1 à ×5) et rend plus de temps
+    const B = G.blitz, gap = G.t - B.last, fast = gap < BLITZ.fast; B.started = true; B.combo = fast ? B.combo + 1 : 0; B.last = G.t; B.mult = 1 + Math.min(4, Math.floor(B.combo / 3)); B.maxMult = Math.max(B.maxMult, B.mult);
+    const gain = fast ? BLITZ.gainFast : BLITZ.gainSlow; B.left = Math.min(BLITZ.max, B.left + gain); G.score += BLITZ.drop * B.mult; G.ev.push({ t: 'tgain', gain, mult: B.mult, x: dx, y: DROP_Y });
+  }
   G.cool = COOLDOWN; G.swapped = false; G.drops++; G.log.push(G.n, Math.round(dx * 1000)); // journal (pas de calcul, position) : permet de rejouer la partie à l'identique
   return true;
 }
@@ -102,10 +109,11 @@ function fuse(G, a, b) {
   // une chaîne = la cascade déclenchée par UN lâcher : le noyau fraîchement lâché ouvre toujours une nouvelle chaîne
   G.chain = G.chainT > 0 && !a.fresh && !b.fresh ? G.chain + 1 : 1; G.chainT = CHAIN_WINDOW;
   if (G.chain > G.maxChain) G.maxChain = G.chain;
-  G.fusions++;
+  G.fusions++; const bm = G.blitz ? G.blitz.mult : 1;
+  if (G.blitz) G.blitz.left = Math.min(BLITZ.max, G.blitz.left + Math.min(1.2, 0.35 + 0.15 * G.chain)); // une fusion rend aussi du temps
   const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2, tier = a.tier;
   if (tier >= MAX_TIER) { // deux galaxies : Big Bang. Tout disparaît (secteur vierge), puis le saut de secteur suit.
-    const pts = 5000 * Math.min(G.chain, 8), gone = []; G.score += pts;
+    const pts = 5000 * Math.min(G.chain, 8) * bm, gone = []; G.score += pts;
     for (const o of G.bodies) {
       if (!o.dead) { o.dead = true; if (o.k === 'c') G.score += TIERS[o.tier].pts; }
       gone.push({ x: o.x, y: o.y, k: o.k, tier: o.k === 'c' ? o.tier : -1, v: o.v | 0, r: o.r }); // pour l'animation : les astres sont aspirés vers le point d'impact
@@ -123,7 +131,7 @@ function fuse(G, a, b) {
     if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
     else if (STYLES[tier + 1]) { let u = roll2(G.seed | 0, G.fusions); STYLES[tier + 1].some((p, i) => { if (u < p) { n.v = 2 + i; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: n.v, p }); return true; } u -= p; return false; }); }
   }
-  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v === 1 || (n.v && tier + 1 === MAX_TIER) ? 3 : 1); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
+  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * (n.v === 1 || (n.v && tier + 1 === MAX_TIER) ? 3 : 1) * bm; G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
   if (!G.sandbox && tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
@@ -145,7 +153,7 @@ function explode(G, b) {
 }
 
 function pierce(G) {
-  G.drill = 0; G.depth++; G.mod = mod(G.depth);
+  G.drill = 0; G.depth++; G.mod = modOf(G, G.depth);
   let n = 0;
   for (const b of G.bodies) {
     if (b.dead) continue;
@@ -230,6 +238,7 @@ export function trace(G, x0) {
 function sub(G) {
   const dt = STEP; G.t += dt; G.n++;
   if (G.cool > 0) G.cool -= dt;
+  if (G.blitz && G.blitz.started) { const B = G.blitz; if (B.combo && G.t - B.last > BLITZ.fast) { B.combo = 0; B.mult = 1; } B.left -= dt; if (B.left <= 0 && !G.over) { B.left = 0; G.over = true; G.timeout = true; G.ev.push({ t: 'over', timeout: true }); } } // le tempo retombe si on s'arrête ; temps écoulé = fin
   G.inset += (G.mod.inset - G.inset) * Math.min(1, dt * 1.5);
   if (G.chainT > 0) { G.chainT -= dt; if (G.chainT <= 0) { if (G.chain >= 3) G.ev.push({ t: 'chainEnd', chain: G.chain }); G.chain = 0; } }
   for (let i = G.pend.length - 1; i >= 0; i--) {
@@ -283,8 +292,8 @@ export function tick(G, dt) {
 
 // Rejoue une partie depuis sa graine et son journal jusqu'au pas `end` : même moteur, même résultat.
 // Sert à vérifier un score (côté serveur plus tard) : un score qui ne se rejoue pas à l'identique est faux.
-export function replay(seed, log, end) {
-  const G = newGame(seed);
+export function replay(seed, log, end, opt) {
+  const G = newGame(seed, opt);
   for (let i = 0; i < log.length && !G.over; i += 2) {
     while (G.n < log[i] && !G.over) sub(G);
     if (log[i + 1] < 0) swapHold(G); else drop(G, log[i + 1] / 1000);

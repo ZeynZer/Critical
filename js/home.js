@@ -14,6 +14,7 @@ const ICONS = {
   theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 000 17c2 0 2.4-1.6 1.4-2.8-1-1.3 0-3 1.8-3h2.3a3 3 0 003-3"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="10" r="1"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4.2 4.2-6 8-6s6.8 1.8 8 6"/>',
   rank: '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4.5c0 3 1.5 4.5 3.7 4.8M16 6h3.5c0 3-1.5 4.5-3.7 4.8M12 13v4M8.5 20h7M10 17h4"/>',
+  bolt: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
   more: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
   fuse: '<circle cx="9" cy="12" r="5.2"/><circle cx="15" cy="12" r="5.2"/>',
   goal: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
@@ -251,7 +252,8 @@ export function init(o = {}) {
   if (play) { reskin(play, ['hm-core-btn']); play.textContent = ''; play.setAttribute('aria-label', 'Jouer'); play.append(title || make('span', 'hm-t', 'Jouer')); if (title) title.textContent = 'Jouer'; slot.append(play); }
   const chips = make('div', 'hm-chips'), daily = $('#b-daily'), qb = $('#b-quests');
   if (daily) { reskin(daily, ['gl', 'hm-chip', 'hm-in']); const t = titleOf(daily), s = daily.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); daily.textContent = ''; daily.append(make('span', 'hm-sbi', ico(ICONS.cal)), tx); live = make('span', 'hm-live'); daily.append(live); chips.append(daily); }
-  if (qb) { qb.classList.remove('glass'); qb.classList.add('gl', 'hm-chip', 'hm-in'); chips.append(qb); }
+  const bz = $('#b-blitz'); if (bz) { reskin(bz, ['gl', 'hm-chip', 'hm-in']); const t = titleOf(bz), s = bz.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); bz.textContent = ''; bz.append(make('span', 'hm-sbi', ico(ICONS.bolt)), tx); chips.append(bz); }
+  if (qb) { place(pg[3], '#b-quests', ICONS.goal, '.43s'); }
   pg[1].append(...[logo, tag, slot, rec && make('p', 'hm-rec'), chips].filter(Boolean)); const rc = $('.hm-rec', pg[1]); if (rc && rec) rc.append(rec);
   wrap.remove(); menu.remove(); scr.append(pager);
 

@@ -78,14 +78,14 @@ begin
   select id into v_id from players where secret_hash = critical_hash(p_secret);
   if v_id is null then raise exception 'unknown_player'; end if;
   if exists (select 1 from players where id = v_id and banned) then raise exception 'banned'; end if;
-  if p_board <> 'all' and p_board !~ '^day:\d{4}-\d{2}-\d{2}$' then raise exception 'invalid_board'; end if;
+  if p_board not in ('all', 'blitz') and p_board !~ '^day:\d{4}-\d{2}-\d{2}$' then raise exception 'invalid_board'; end if;
   -- univers du jour : seulement pour aujourd'hui (un jour de marge pour les fuseaux horaires)
-  if p_board <> 'all' and abs(substr(p_board, 5)::date - (now() at time zone 'utc')::date) > 1 then raise exception 'invalid_day'; end if;
+  if p_board like 'day:%' and abs(substr(p_board, 5)::date - (now() at time zone 'utc')::date) > 1 then raise exception 'invalid_day'; end if;
   if p_log is null or jsonb_typeof(p_log) <> 'array' or jsonb_array_length(p_log) > 40000 then raise exception 'invalid_log'; end if;
   v_drops := jsonb_array_length(p_log) / 2;
   -- garde-fous de plausibilité (le rejeu complet du journal, lui, se fait hors de la base)
   if p_score < 0 or p_sector < 1 or p_sector > 500 or p_tier < 0 or p_tier > 12 or p_steps < 1
-     or p_score > 2500 * v_drops + 50000   -- aucun lâcher ne rapporte autant en moyenne
+     or p_score > (case when p_board = 'blitz' then 15000 else 2500 end) * v_drops + 50000   -- aucun lâcher ne rapporte autant en moyenne (le tempo du Blitz multiplie jusqu'à ×5)
      or p_steps < v_drops * 30             -- 0,3 s minimum entre deux lâchers (120 pas par seconde)
   then raise exception 'implausible'; end if;
   select updated_at into v_last from scores where player_id = v_id and board = p_board;

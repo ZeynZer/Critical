@@ -8,6 +8,7 @@ import * as INTRO from './intro.js';
 import * as FORGE from './forge.js';
 import * as GOALS from './goals.js';
 import * as ADMIN from './admin.js';
+import * as INSTALL from './install.js';
 import * as PACKUI from './packui.js';
 
 const $ = (s) => document.querySelector(s);
@@ -29,7 +30,8 @@ document.addEventListener('pointerdown', () => { try { screen.orientation.lock('
 // réglages
 const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f(); });
 tap('#o-prof', () => { $('#m-settings').classList.remove('on'); RANK.openMyProfile(); });
-tap('#b-set2', () => { $('#o-admin').hidden = !RANK.isAdmin(); $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-quick').checked = S.quick; $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
+tap('#o-install', () => { $('#m-settings').classList.remove('on'); INSTALL.show(); });
+tap('#b-set2', () => { $('#o-admin').hidden = !RANK.isAdmin(); $('#o-install').hidden = !INSTALL.canInstall(); $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-quick').checked = S.quick; $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
 tap('#o-close', () => $('#m-settings').classList.remove('on'));
 $('#o-sfx').onchange = (e) => { S.sfx = e.target.checked; A.setSfx(S.sfx); save(); };
 $('#o-mus').onchange = (e) => { S.mus = e.target.checked; A.setMusic(S.mus); save(); };
@@ -42,7 +44,7 @@ $('#o-vib').onchange = (e) => { S.vib = e.target.checked; save(); vib([14, 40, 1
 MINE.init({ goal: GOALS.event, back: () => { if (!MINE.isNew()) HOME.hint(); }, vib, toast, today, time: (sec) => { QS.time(); RANK.reportTime(sec); }, track: QS.track, quests: QS.html, refresh, submit: RANK.submit, rank: RANK.open, challenge: RANK.challenge, challengeCancel: RANK.challengeCancel, name: RANK.name, rival: RANK.rival, runOf: RANK.runOf, askName: RANK.askName, named: () => !!RANK.name(), online: RANK.ready });
 RANK.init({ view: MINE.viewCard, level: () => MINE.levelInfo().level, replay: MINE.openReplay, invite: MINE.inviteDuel, joinDuel: MINE.joinDuel, canNotify: MINE.canNotify, track: (...a) => { QS.track(...a); if (a[0] === 'likes') GOALS.event('like'); }, receive: (d, x, note, pack, n) => { if (d) MINE.grant(d, note || 'Cadeau'); if (x) MINE.giveXp(x); if (pack && n) MINE.packAdd(pack, n); toast('Cadeau reçu : ' + [d && d.toLocaleString('fr-FR') + ' Éclats', x && x + ' XP', pack && n && `${n} pack${n > 1 ? 's' : ''}`].filter(Boolean).join(' + ') + (note ? ' · ' + note : '')); }, toast, vib, today, astres: MINE.astres, astreInfo: MINE.astreInfo, paint: MINE.paintAstre, codexN: MINE.codexN, tierName: MINE.tierName, local: MINE.localStats }); RANK.whenNamed(MINE.rankLine);
 const menu = $('#s-title .menu');
-for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec un code', MINE.openDuel], ['b-goals', 'Défis', ' ', GOALS.open], ['b-sandbox', 'Bac à sable', 'Tous tes astres, sans limite', MINE.openSandbox], ['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex], ['b-profile', 'Profil', '', RANK.openMyProfile]]) {
+for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec un code', MINE.openDuel], ['b-goals', 'Défis', ' ', GOALS.open], ['b-sandbox', 'Bac à sable', 'Tous tes astres, sans limite', MINE.openSandbox], ['b-daily', 'Défi du jour', ' ', MINE.openDaily], ['b-blitz', 'Blitz', 'Chrono · tempo', MINE.openBlitz], ['b-themes', 'Thèmes', 'Change le décor', MINE.openThemes], ['b-codex', 'Codex', '', MINE.openCodex], ['b-profile', 'Profil', '', RANK.openMyProfile]]) {
   const b = document.createElement('button'); b.id = id; b.className = 'big glass'; b.innerHTML = `<span>${label}</span>` + (sub ? `<small>${sub}</small>` : ''); menu.appendChild(b); b.addEventListener('click', () => { A.ui(); vib(9); f(); });
 }
 QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
@@ -61,7 +63,7 @@ const sp = $('#splash');
 setTimeout(() => sp.classList.add('ready'), 1700);
 sp.addEventListener('pointerup', () => { if (!sp.classList.contains('ready')) return; A.init(); A.resume(); A.ui(); sp.classList.add('out'); setTimeout(() => sp.remove(), 700);
   // premier lancement : présentation animée puis partie guidée ; sinon, simple indice de glissement dans le menu
-  if (MINE.isNew() && !INTRO.seen()) INTRO.show({ paint: MINE.paintAstre, sfx: A.ui, onPlay: () => MINE.open(), onSkip: () => setTimeout(HOME.hint, 600) }); else setTimeout(HOME.hint, 1400);
+  INSTALL.maybe(() => { if (MINE.isNew() && !INTRO.seen()) INTRO.show({ paint: MINE.paintAstre, sfx: A.ui, onPlay: () => MINE.open(), onSkip: () => setTimeout(HOME.hint, 600) }); else setTimeout(HOME.hint, 1400); }); // d'abord le guide d'installation (téléphone, app non installée), puis la présentation
 });
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { /* hors-ligne indisponible */ });
