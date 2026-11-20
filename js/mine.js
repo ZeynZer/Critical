@@ -9,7 +9,7 @@ import * as IM from './immersive.js';
 import { channel } from './realtime.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
-const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, pk: { etoile: 0, nebuleuse: 0, galaxie: 0 }, pity: {}, pkDay: '', pkN: 0, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
+const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, power: {}, pk: { etoile: 0, nebuleuse: 0, galaxie: 0 }, pity: {}, pkDay: '', pkN: 0, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 if (!Object.keys(sv.inv).length) for (const k of Object.keys(sv.cx)) if (/^\d+:[1-8]$/.test(k) && !k.startsWith('12:')) sv.inv[k] = 1; // les variantes déjà découvertes comptent pour un exemplaire chacune
 if (!sv.eco) { sv.eco = 1; sv.dust = Math.round((sv.dust || 0) * 10); } // l'économie est passée à l'échelle ×10 (Éclats) : on convertit l'ancien solde une seule fois
@@ -592,7 +592,7 @@ function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisi
   R.acc = Math.min(R.acc + dt * 120 * R.speed, 240);
   while (R.acc >= 1 && !R.done) {
     R.acc--;
-    if (R.i < R.log.length && G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.swapHold(G); else { aimT = aimX = x / 1000; if (F.drop(G, x / 1000)) A.release(); } R.i += 2; }
+    if (R.i < R.log.length && G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.act(G, x); else { aimT = aimX = x / 1000; if (F.drop(G, x / 1000)) A.release(); } R.i += 2; }
     else if (G.n < R.steps && !G.over) F.step(G); else R.done = true;
   }
   if (R.done) $('#mn-rpp').textContent = '↻';
@@ -719,6 +719,8 @@ function showCodex() {
     d.addEventListener('click', () => {
       $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.';
       if (e.ok && e.tier >= 0) viewCard(e.key); // un clic = la carte immersive (le pouvoir et l'équipement restent sous la grille)
+      const pb = e.ok && e.tier >= 0 && e.tier < F.MAX_TIER && e.v === 1 && F.RARE[e.tier]; // variante à pouvoir : équipable comme pouvoir
+      if (pb) { const b = $('#mn-cxe'), on = hasPower(e.tier); b.hidden = false; b.textContent = on ? 'Retirer ce pouvoir' : 'Équiper ce pouvoir'; b.onclick = () => { equipPower(e.tier, !on); showCodex(); $('#mn-cxd').textContent = on ? 'Pouvoir retiré.' : `${e.name} équipé : chaque fusion de ce rang donnera cet astre et son pouvoir (sans le bonus de points d'un tirage rare). Pas actif en duel, défi du jour ni bac à sable.`; }; return; }
       const b = $('#mn-cxe'); b.hidden = !(e.ok && e.tier >= 0 && equipable(e.tier, e.v)); if (!b.hidden) { const on = sv.skin[e.tier] === e.v; b.textContent = on ? 'Retirer cette apparence' : 'Équiper cette apparence'; b.onclick = () => { equip(e.tier, on ? 0 : e.v); showCodex(); $('#mn-cxd').textContent = on ? 'Apparence d\'origine rétablie.' : `${e.name} équipé : tous les astres de ce rang l'afficheront.`; }; }
     });
   }
@@ -772,6 +774,8 @@ export function forge(t) { // consomme d'abord les variantes les plus courantes,
   let need = i.need; for (const v of Object.keys(VAR[t]).map(Number).filter((v) => v < 9).sort((a, b) => b - a)) { const k = t + ':' + v, n = Math.min(need, sv.inv[k] | 0); if (n) { sv.inv[k] -= n; need -= n; } }
   sv.inv[t + ':9'] = 1; sv.cx[t + ':9'] = 1; sv.skin[t] = 9; sprites.clear(); addXp(60, true); save(); H.refresh(); H.goal('forge'); return t + ':9';
 }
+export const hasPower = (t) => !!(sv.power && sv.power[t]);
+export function equipPower(t, on) { sv.power = sv.power || {}; if (on && sv.cx[t + ':1']) sv.power[t] = 1; else delete sv.power[t]; save(); H.refresh(); } // pouvoir : la variante rare de ce rang à chaque fusion (hors duel, défi du jour, bac à sable)
 export function equip(t, v) { if (v && sv.cx[t + ':' + v]) sv.skin[t] = v; else delete sv.skin[t]; sprites.clear(); save(); H.refresh(); } // v : 0 = apparence d'origine
 export const dust = () => sv.dust;
 export const themeStat = () => [Object.keys(sv.themes).length, THEMES.length];
@@ -798,7 +802,7 @@ export function openBlitz() { // cuve resserrée, chrono, tempo : même moteur, 
   open(true); blitzMult = 1; newRun((Math.random() * 2 ** 32) >>> 0, true, { blitz: true }); say('BLITZ', 'LÂCHE VITE · LE TEMPS FILE', MG);
 }
 export function openDaily() { // même tirage pour tout le monde ; on peut retenter, la récompense tombe une fois par jour
-  open(true); const d = H.today(); newRun(hash('critical:defi:seed:' + d), true); G.chal = todayChal(); G.day = d; say('DÉFI DU JOUR', G.chal[3].toUpperCase(), AM);
+  open(true); const d = H.today(); newRun(hash('critical:defi:seed:' + d), true, { daily: true }); G.chal = todayChal(); G.day = d; say('DÉFI DU JOUR', G.chal[3].toUpperCase(), AM);
 }
 function share() {
   const t = `Critical — défi du jour réussi avec ${sv.daily.best.toLocaleString('fr-FR')} s d'avance : « ${todayChal()[3]} ». À toi !`;
@@ -891,6 +895,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
+  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && Object.keys(sv.power || {}).some((t) => sv.power[t] && sv.cx[t + ':1'])) { const pw = {}; for (const t of Object.keys(sv.power)) if (sv.power[t] && sv.cx[t + ':1']) pw[t] = 1; G.powers = pw; G.log.push(0, -1e6 - F.maskOf(pw)); } // l'en-tête consigne les pouvoirs équipés
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
@@ -901,7 +906,7 @@ function newRun(seed, keep, opt) {
 function stepGhost() { // le fantôme rejoue la partie du rival, calée sur le temps de la mienne (même nombre de pas)
   const R = gh; if (R.done) return; let k = 0;
   while (R.G.n < G.n && k++ < 800 && !R.done) {
-    if (R.i < R.log.length && R.G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.swapHold(R.G); else F.drop(R.G, x / 1000); R.i += 2; }
+    if (R.i < R.log.length && R.G.n >= R.log[R.i]) { const x = R.log[R.i + 1]; if (x < 0) F.act(R.G, x); else F.drop(R.G, x / 1000); R.i += 2; }
     else if (R.G.n < R.steps && !R.G.over) F.step(R.G); else R.done = true;
   }
   R.G.ev.length = 0;

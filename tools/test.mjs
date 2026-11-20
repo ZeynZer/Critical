@@ -170,3 +170,12 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   const a = F.replay(h.seed, h.log, h.n, { blitz: true }); assert.equal(a.score, h.score, 'le Blitz se rejoue à l\'identique'); assert.equal(F.newGame(5).blitz, null, 'le mode normal ne change pas');
   console.log('blitz OK (tempo max ×' + h.blitz.maxMult + ', score ' + h.score + ')');
 }
+{ // pouvoirs équipés : la variante à pouvoir à chaque fusion de ce rang, sans bonus de points ; consignés dans le journal, rejouables
+  const mk = (G, t) => { G.bodies.length = 0; const r = F.TIERS[t].r; G.bodies.push({ id: 1, k: 'c', tier: t, v: 0, x: 4, y: 10, vx: 0, vy: 0, r, ang: 0, av: 0, age: 5, hit: true, dead: false }, { id: 2, k: 'c', tier: t, v: 0, x: 4 + r * 1.9, y: 10, vx: 0, vy: 0, r, ang: 0, av: 0, age: 5, hit: true, dead: false }); G.chain = 0; G.chainT = 0; };
+  const run = (power) => { const G = F.newGame(41); if (power) { G.log.push(0, -1e6 - F.maskOf({ 8: 1 })); F.act(G, G.log[1]); } mk(G, 7); G.score = 0; for (let k = 0; k < 20 && !G.bodies.some((b) => b.tier === 8); k++) F.tick(G, 1 / 60); return [G, G.bodies.find((b) => b.tier === 8)]; };
+  const [g0, b0] = run(false), [g1, b1] = run(true);
+  assert.ok(b0 && !b0.v, 'sans pouvoir équipé : astre ordinaire'); assert.ok(b1 && b1.v === 1 && b1.eq, 'pouvoir équipé : supergéante à chaque fusion'); assert.equal(g1.score, g0.score, 'aucun bonus de points pour un pouvoir équipé');
+  assert.deepEqual(F.powersOf(F.maskOf({ 8: 1, 3: 1 })), { 3: 1, 8: 1 }, 'masque aller-retour');
+  const r = F.replay(g1.seed, g1.log, g1.n); assert.deepEqual(r.powers, { 8: 1 }, 'le rejeu lit les pouvoirs dans le journal');
+  console.log('pouvoirs équipés OK');
+}
