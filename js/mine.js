@@ -9,10 +9,10 @@ import * as IM from './immersive.js';
 import { channel } from './realtime.js';
 
 const KEY = 'critical.forage.v2', TAU = Math.PI * 2;
-const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, power: {}, pk: { etoile: 0, nebuleuse: 0, galaxie: 0 }, pity: {}, pkDay: '', pkN: 0, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
+const sv = { best: 0, depth: 0, chain: 0, tier: 0, runs: 0, tut: 0, cx: {}, xp: 0, inv: {}, skin: {}, power: {}, ledger: [], pk: { etoile: 0, nebuleuse: 0, galaxie: 0 }, pity: {}, pkDay: '', pkN: 0, dust: 0, themes: { base: 1 }, theme: 'base', time: 0, daily: { day: '', done: false, best: 0 } };
 try { Object.assign(sv, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 if (!Object.keys(sv.inv).length) for (const k of Object.keys(sv.cx)) if (/^\d+:[1-8]$/.test(k) && !k.startsWith('12:')) sv.inv[k] = 1; // les variantes déjà découvertes comptent pour un exemplaire chacune
-if (!sv.eco) { sv.eco = 1; sv.dust = Math.round((sv.dust || 0) * 10); } // l'économie est passée à l'échelle ×10 (Éclats) : on convertit l'ancien solde une seule fois
+if (!sv.eco) { sv.eco = 1; sv.dust = Math.round((sv.dust || 0) * 10); } // l'économie est passée à l'échelle ×10 (Voidium) : on convertit l'ancien solde une seule fois
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sv)); } catch (e) { /* ignore */ } };
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -31,7 +31,7 @@ export const BODIES = [
   ['Naine orange', [255, 150, 60]], ['Soleil', [255, 226, 110]], ['Géante rouge', [255, 84, 66]], ['Étoile à neutrons', [170, 212, 255]], ['Trou noir', [190, 110, 255]], ['Quasar', [255, 214, 130]], ['Galaxie', [200, 215, 255]],
 ];
 const CY = [77, 243, 255], MG = [255, 79, 216], AM = [255, 194, 71];
-// Thèmes d'arrière-plan : la récompense du jeu, achetée en Éclats. h = teinte de la nébuleuse pour chacun des 9 secteurs.
+// Thèmes d'arrière-plan : la récompense du jeu, achetée en Voidium. h = teinte de la nébuleuse pour chacun des 9 secteurs.
 export const THEMES = [
   { id: 'base', n: 'Nébuleuse', cost: 0, h: [215, 280, 330, 190, 20, 260, 160, 300, 45], s: 55, a: 0.2, sp: 45 },
   { id: 'aurore', n: 'Aurore', cost: 3000, h: [150, 170, 130, 190, 160, 140, 180, 120, 165], s: 65, a: 0.24, sp: 60 },
@@ -141,11 +141,11 @@ function onEvents() {
 function makeTex(depth, th = theme(), w = Math.max(64, Math.round(W / 2)), h = Math.max(64, Math.round(Hh / 2))) {
   const c = document.createElement('canvas'), x = c.getContext('2d'); c.width = w; c.height = h;
   const hue = th.h[depth % th.h.length], s0 = depth * 31.7;
-  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `hsl(${hue} ${th.s}% 7%)`); g.addColorStop(1, `hsl(${hue + 40} ${th.s}% 3%)`); x.fillStyle = g; x.fillRect(0, 0, w, h);
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, `hsl(${hue} ${th.s}% 13%)`); g.addColorStop(1, `hsl(${hue + 40} ${th.s}% 5%)`); // fond nettement teinté : le décor se voit x.fillStyle = g; x.fillRect(0, 0, w, h);
   x.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 6; i++) { // nuages de nébuleuse
-    const px = rnd(s0 + i) * w, py = rnd(s0 + i * 2.7) * h, r = (0.25 + rnd(s0 + i * 4.1) * 0.4) * w;
-    const n = x.createRadialGradient(px, py, 0, px, py, r); n.addColorStop(0, `hsla(${hue + (i % 3 - 1) * th.sp},90%,55%,${th.a})`); n.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = n; x.fillRect(px - r, py - r, r * 2, r * 2);
+  for (let i = 0; i < 8; i++) { // nuages de nébuleuse
+    const px = rnd(s0 + i) * w, py = rnd(s0 + i * 2.7) * h, r = (0.3 + rnd(s0 + i * 4.1) * 0.45) * w;
+    const n = x.createRadialGradient(px, py, 0, px, py, r); n.addColorStop(0, `hsla(${hue + (i % 3 - 1) * th.sp},90%,58%,${Math.min(0.62, th.a * 2.5).toFixed(2)})`); n.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = n; x.fillRect(px - r, py - r, r * 2, r * 2);
   }
   for (let i = 0; i < 150; i++) { x.fillStyle = `rgba(255,255,255,${0.15 + rnd(s0 + i * 1.7) * 0.6})`; const s = rnd(i * 3.3) > 0.9 ? 1.6 : 0.8; x.fillRect(rnd(s0 + i) * w, rnd(s0 + i * 2.1) * h, s, s); }
   return c;
@@ -729,16 +729,19 @@ function showCodex() {
     d.addEventListener('click', () => {
       $('#mn-cxd').textContent = e.ok ? `${e.name}${e.sub && e.tier >= 0 ? ' · ' + e.sub : ''}. ${e.info || (e.tier < 0 ? e.sub : 'Aucun pouvoir particulier.')}` : 'Pas encore découvert.';
       if (e.ok && e.tier >= 0) viewCard(e.key); // un clic = la carte immersive (le pouvoir et l'équipement restent sous la grille)
-      const pb = e.ok && e.tier >= 0 && e.tier < F.MAX_TIER && e.v === 1 && F.RARE[e.tier]; // variante à pouvoir : équipable comme pouvoir
-      if (pb) { const b = $('#mn-cxe'), on = hasPower(e.tier); b.hidden = false; b.textContent = on ? 'Retirer ce pouvoir' : 'Équiper ce pouvoir'; b.onclick = () => { equipPower(e.tier, !on); showCodex(); $('#mn-cxd').textContent = on ? 'Pouvoir retiré.' : `${e.name} équipé : chaque fusion de ce rang donnera cet astre et son pouvoir (sans le bonus de points d'un tirage rare). Pas actif en duel, défi du jour ni bac à sable.`; }; return; }
+      const pb = e.ok && e.tier >= 0 && DECK_TIERS.includes(e.tier) && e.v === 1; // capacité : se range dans le deck
+      if (pb) { const b = $('#mn-cxe'), on = deckTiers().includes(e.tier); b.hidden = false; b.textContent = on ? 'Retirer du deck' : 'Mettre dans le deck'; b.onclick = () => { if (on) deckRemove(e.tier); else { const r = deckAdd(e.tier); if (r === 'full') return H.toast('Deck plein : retire une capacité (Collection › Deck)'); } showCodex(); $('#mn-cxd').textContent = on ? 'Capacité retirée du deck.' : `${e.name} est dans ton deck : chaque fusion de ce rang donnera cet astre et son pouvoir.`; }; return; }
       const b = $('#mn-cxe'); b.hidden = !(e.ok && e.tier >= 0 && equipable(e.tier, e.v)); if (!b.hidden) { const on = sv.skin[e.tier] === e.v; b.textContent = on ? 'Retirer cette apparence' : 'Équiper cette apparence'; b.onclick = () => { equip(e.tier, on ? 0 : e.v); showCodex(); $('#mn-cxd').textContent = on ? 'Apparence d\'origine rétablie.' : `${e.name} équipé : tous les astres de ce rang l'afficheront.`; }; }
     });
   }
   $('#mn-cxd').textContent = 'Touche un astre pour voir son pouvoir.'; $('#mn-cxe').hidden = true;
-  $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent des Éclats.`;
+  $('#mn-cxs').textContent = `${n}/${all.length} découvertes. Les variantes rares triplent les points et rapportent des Voidium.`;
   $('#mn-m-codex').classList.add('on');
 }
-export function grant(n, label = '') { if (n > 0) { sv.dust += n; save(); H.toast(`+${fmt(n)} Éclats${label ? ' · ' + label : ''}`); H.refresh(); } } // poussière d'étoile : la monnaie des thèmes
+const note = (n, l) => { sv.ledger = (sv.ledger || []).concat({ t: Date.now(), n, l: l || '' }).slice(-30); }; // registre des 30 derniers mouvements de Voidium
+export function grant(n, label = '') { if (n > 0) { sv.dust += n; note(n, label); save(); H.toast(`+${fmt(n)} Voidium${label ? ' · ' + label : ''}`); H.refresh(); } }
+export const spend = (n, label) => { if (sv.dust < n) return false; sv.dust -= n; note(-n, label); save(); H.refresh(); return true; };
+export const ledger = () => (sv.ledger || []).slice(); // poussière d'étoile : la monnaie des thèmes
 /* ============================== niveaux, expérience, fusion de collection ============================== */
 const LV_COL = [[77, 243, 255], [93, 255, 192], [180, 255, 90], [255, 226, 90], [255, 160, 60], [255, 96, 96], [255, 79, 216], [170, 110, 255], [255, 255, 255]]; // la fissure du débris change de couleur tous les 5 niveaux
 const xpNeed = (l) => 100 + 40 * (l - 1); // expérience pour passer du niveau l au suivant
@@ -757,11 +760,11 @@ export const giveXp = (n) => addXp(n, true);
 export const packInfo = () => ({ stock: { ...sv.pk }, pity: sv.pity, free: sv.pkDay !== H.today(), dust: sv.dust });
 export function packAdd(id, n = 1) { if (!PACKS[id] || !(n > 0)) return; sv.pk[id] = (sv.pk[id] | 0) + Math.round(n); save(); H.refresh(); }
 export function packFree() { if (sv.pkDay === H.today()) return false; sv.pkDay = H.today(); packAdd('etoile', 1); return true; }
-// Ouvre un pack : prend un exemplaire en stock, sinon paie en Éclats. Le tirage est appliqué tout de suite (rien ne se perd si on quitte en route).
+// Ouvre un pack : prend un exemplaire en stock, sinon paie en Voidium. Le tirage est appliqué tout de suite (rien ne se perd si on quitte en route).
 // preview : aperçu administrateur (rareté forcée), n'enregistre rien.
 export function packOpen(id, preview = false, force = null) {
   const pk = PACKS[id]; if (!pk) return null;
-  if (!preview) { if ((sv.pk[id] | 0) > 0) sv.pk[id]--; else if (sv.dust >= pk.cost) sv.dust -= pk.cost; else return null; }
+  if (!preview) { if ((sv.pk[id] | 0) > 0) sv.pk[id]--; else if (sv.dust >= pk.cost) { sv.dust -= pk.cost; note(-pk.cost, pk.n); } else return null; }
   const res = drawPack(id, preview ? {} : sv.pity[id] || {}, undefined, force);
   res.cards = res.cards.map((c) => ({ ...c, n: astreInfo(c.key).name, isNew: !sv.cx[c.key] }));
   if (!preview) {
@@ -784,8 +787,6 @@ export function forge(t) { // consomme d'abord les variantes les plus courantes,
   let need = i.need; for (const v of Object.keys(VAR[t]).map(Number).filter((v) => v < 9).sort((a, b) => b - a)) { const k = t + ':' + v, n = Math.min(need, sv.inv[k] | 0); if (n) { sv.inv[k] -= n; need -= n; } }
   sv.inv[t + ':9'] = 1; sv.cx[t + ':9'] = 1; sv.skin[t] = 9; sprites.clear(); addXp(60, true); save(); H.refresh(); H.goal('forge'); return t + ':9';
 }
-export const hasPower = (t) => !!(sv.power && sv.power[t]);
-export function equipPower(t, on) { sv.power = sv.power || {}; if (on && sv.cx[t + ':1']) sv.power[t] = 1; else delete sv.power[t]; save(); H.refresh(); } // pouvoir : la variante rare de ce rang à chaque fusion (hors duel, défi du jour, bac à sable)
 export function equip(t, v) { if (v && sv.cx[t + ':' + v]) sv.skin[t] = v; else delete sv.skin[t]; sprites.clear(); save(); H.refresh(); } // v : 0 = apparence d'origine
 export const dust = () => sv.dust;
 export const themeStat = () => [Object.keys(sv.themes).length, THEMES.length];
@@ -793,7 +794,7 @@ export const themeStat = () => [Object.keys(sv.themes).length, THEMES.length];
 export function giveTheme(id) {
   const t = THEMES.find((x) => x.id === id); if (!t) return '';
   if (!sv.themes[id]) { sv.themes[id] = 1; save(); H.refresh(); return `Thème « ${t.n} » débloqué`; }
-  const back = Math.round(t.cost / 2); grant(back, 'Thème déjà possédé'); return `Thème déjà possédé : +${fmt(back)} Éclats`;
+  const back = Math.round(t.cost / 2); grant(back, 'Thème déjà possédé'); return `Thème déjà possédé : +${fmt(back)} Voidium`;
 }
 const todayChal = () => CHAL[hash('critical:defi:' + H.today()) % CHAL.length];
 export const daily = () => ({ txt: todayChal()[3], done: sv.daily.day === H.today() && sv.daily.done });
@@ -818,13 +819,45 @@ function share() {
   const t = `Critical — défi du jour réussi avec ${sv.daily.best.toLocaleString('fr-FR')} s d'avance : « ${todayChal()[3]} ». À toi !`;
   if (navigator.share) navigator.share({ text: t }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => H.toast('Résultat copié'), () => {});
 }
+/* ============================== deck de capacités, collection, décors ============================== */
+// Capacités équipables : les cartes à pouvoir réel (variante « :1 » de ces rangs). Le deck n'a qu'un nombre limité d'emplacements : il faut choisir.
+export const DECK_TIERS = [7, 8, 9, 10, 11], DECK_MAX = 5, SLOT_COST = { 3: 2500, 4: 8000, 5: 20000 }; // emplacements 1 et 2 offerts
+const ownedPower = (t) => !!sv.cx[t + ':1'];
+const deckRaw = () => { sv.decks = sv.decks || [[], []]; return sv.decks[sv.deckSel | 0] || (sv.decks[sv.deckSel | 0] = []); };
+export const deckTiers = () => deckRaw().filter((t, i) => i < (sv.slots || 2) && ownedPower(t));
+export const deckPowers = () => { const p = {}; for (const t of deckTiers()) p[t] = 1; return p; };
+function migrateDeck() { if (!sv.decks) { const old = Object.keys(sv.power || {}).map(Number).filter((t) => DECK_TIERS.includes(t) && ownedPower(t)).sort((a, b) => b - a); sv.decks = [old.slice(0, 2), []]; sv.deckSel = 0; } sv.slots = Math.max(2, Math.min(DECK_MAX, sv.slots | 0 || 2)); }
+migrateDeck();
+const abilityCard = (t) => { const k = t + ':1', i = astreInfo(k) || {}; return { tier: t, key: k, name: i.name || k, rar: Math.max(0, i.rar | 0), info: powerText(t, 1), own: ownedPower(t) }; };
+export function deckInfo() {
+  const slots = sv.slots || 2, cards = deckTiers().map(abilityCard), inDeck = new Set(cards.map((c) => c.tier));
+  return { slots, max: DECK_MAX, nextCost: slots < DECK_MAX ? SLOT_COST[slots + 1] : 0, sel: sv.deckSel | 0, cards, free: slots - cards.length, dust: sv.dust,
+    pool: DECK_TIERS.map(abilityCard).map((c) => ({ ...c, inDeck: inDeck.has(c.tier) })), skins: Object.keys(sv.skin || {}).map((t) => ({ tier: +t, key: t + ':' + sv.skin[t], name: (astreInfo(t + ':' + sv.skin[t]) || {}).name || '' })) };
+}
+export function deckAdd(t) { t = +t; if (!DECK_TIERS.includes(t) || !ownedPower(t)) return 'locked'; const d = deckRaw(); if (d.includes(t)) return 'already'; if (deckTiers().length >= (sv.slots || 2)) return 'full'; d.push(t); sv.decks[sv.deckSel | 0] = d.filter((x) => ownedPower(x)); save(); H.refresh(); return 'ok'; }
+export function deckRemove(t) { const d = deckRaw(); const i = d.indexOf(+t); if (i >= 0) d.splice(i, 1); save(); H.refresh(); }
+export function deckPreset(i) { sv.deckSel = i ? 1 : 0; deckRaw(); save(); H.refresh(); }
+export function buySlot() { const s = sv.slots || 2; if (s >= DECK_MAX) return 'max'; const c = SLOT_COST[s + 1]; if (!spend(c, 'Emplacement de deck ' + (s + 1))) return 'poor'; sv.slots = s + 1; save(); H.refresh(); return 'ok'; }
+// Toutes les cartes du jeu pour l'écran Collection : rareté 0..5, genre, exemplaires, état d'équipement
+export function collectionEntries() {
+  return entries().map((e) => { const i = e.tier >= 0 ? astreInfo(e.key) : null, kind = e.tier < 0 ? 'secret' : e.tier === F.MAX_TIER ? 'galaxie' : e.v === 0 ? 'base' : e.v === 1 ? (DECK_TIERS.includes(e.tier) ? 'capacite' : 'rare') : e.v === 9 ? 'prisme' : e.v >= 4 ? 'skin' : 'style';
+    return { ...e, kind, rar: e.tier < 0 ? 5 : Math.max(0, i ? i.rar : 0), copies: sv.inv[e.key] | 0, skinOn: e.tier >= 0 && e.tier < F.MAX_TIER && e.v >= 2 && sv.skin[e.tier] === e.v, inDeck: kind === 'capacite' && deckTiers().includes(e.tier), ability: kind === 'capacite' || e.tier === F.MAX_TIER || e.tier === 7 || e.tier === 8 || e.tier === 9 || e.tier === 10 || e.tier === 11 }; });
+}
+export const skinOf = (t) => sv.skin[t] | 0;
+export const themeList = () => THEMES.map((t) => ({ id: t.id, n: t.n, cost: t.cost, own: !!sv.themes[t.id], on: sv.theme === t.id, th: t }));
+export const themePreview = (t, w, h) => makeTex(1, t, w, h);
+export function themeUse(id) { // acheter si besoin, puis équiper
+  const t = THEMES.find((x) => x.id === id); if (!t) return 'none';
+  if (!sv.themes[id]) { if (!spend(t.cost, 'Décor ' + t.n)) return 'poor'; sv.themes[id] = 1; A.rare(2); H.vib([20, 40, 40]); }
+  sv.theme = id; save(); H.refresh(); if (G && W) texB = makeTex(G.depth); return 'ok';
+}
 export function openThemes() {
-  const g = $('#mn-th'); g.innerHTML = ''; $('#mn-ths').textContent = `Tu as ${fmt(sv.dust)} Éclats. Ils se gagnent en jouant, avec les missions, le défi du jour et le temps de jeu.`;
+  const g = $('#mn-th'); g.innerHTML = ''; $('#mn-ths').textContent = `Tu as ${fmt(sv.dust)} Voidium. Ils se gagnent en jouant, avec les missions, le défi du jour et le temps de jeu.`;
   for (const t of THEMES) {
     const own = !!sv.themes[t.id], b = document.createElement('button'); b.className = 'th' + (sv.theme === t.id ? ' on' : own ? '' : ' lock');
-    b.append(makeTex(1, t, 160, 84)); b.insertAdjacentHTML('beforeend', `<b>${t.n}</b><small>${sv.theme === t.id ? 'Équipé' : own ? 'Équiper' : fmt(t.cost) + ' Éclats'}</small>`);
+    b.append(makeTex(1, t, 160, 84)); b.insertAdjacentHTML('beforeend', `<b>${t.n}</b><small>${sv.theme === t.id ? 'Équipé' : own ? 'Équiper' : fmt(t.cost) + ' Voidium'}</small>`);
     b.addEventListener('click', () => {
-      if (!own) { if (sv.dust < t.cost) return H.toast(`Il te manque ${fmt(t.cost - sv.dust)} Éclats`); sv.dust -= t.cost; sv.themes[t.id] = 1; A.rare(2); H.vib([20, 40, 40]); }
+      if (!own) { if (sv.dust < t.cost) return H.toast(`Il te manque ${fmt(t.cost - sv.dust)} Voidium`); sv.dust -= t.cost; note(-t.cost, 'Décor ' + t.n); sv.themes[t.id] = 1; A.rare(2); H.vib([20, 40, 40]); }
       sv.theme = t.id; save(); H.refresh(); if (G && W) texB = makeTex(G.depth); openThemes();
     });
     g.append(b);
@@ -905,7 +938,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
-  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && Object.keys(sv.power || {}).some((t) => sv.power[t] && sv.cx[t + ':1'])) { const pw = {}; for (const t of Object.keys(sv.power)) if (sv.power[t] && sv.cx[t + ':1']) pw[t] = 1; G.powers = pw; G.log.push(0, -1e6 - F.maskOf(pw)); } // l'en-tête consigne les pouvoirs équipés
+  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && deckTiers().length) { const pw = deckPowers(); G.powers = pw; G.log.push(0, -1e6 - F.maskOf(pw)); } // l'en-tête consigne les pouvoirs du deck
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
@@ -1071,7 +1104,7 @@ export function cardSpec(key) { // données d'une carte immersive (Codex, packs)
   const rig = astreRig(key); if (!rig) return null; const info = astreInfo(key), k = parseKey(key), e = entries().find((x) => x.key === key);
   return { rig, name: info.name, rar: Math.max(0, info.rar), rname: k.tier === F.MAX_TIER ? 'Galaxie · ' + RAR[Math.max(0, info.rar)] : RAR[Math.max(0, info.rar)], sub: info.sub, info: e && e.info ? e.info : '' };
 }
-export function viewCard(key) { const sp = cardSpec(key); if (sp) IM.show(sp); }
+export function viewCard(key, actions) { const sp = cardSpec(key); if (sp) IM.show({ ...sp, actions }); }
 export const buildCard = (key, host, aim, hmax) => { const sp = cardSpec(key); return sp && IM.show({ ...sp, host, aim, hmax }); }; // carte intégrée (ouverture de pack)
 export function paintCard(c, key, px) { // astre net à grande taille (cartes de pack) : on agrandit l'échelle de dessin le temps de la vignette
   const keep = B.u; B.u = 56; try { paintAstre(c, key, px, false); } finally { B.u = keep; }

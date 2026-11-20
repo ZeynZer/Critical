@@ -30,10 +30,10 @@ export function mount(page, api) {
   const lowFx = (navigator.hardwareConcurrency || 4) <= 4;
   const run = (res, id, preview) => FX.play({
     result: res, names: { pack: PACKS[id].n, rar: RAR }, paintCard: api.paintCard, onView: api.view, buildCard: api.buildCard, sfx: api.sfx, vib: api.vib, quick: api.quick && api.quick(), lowFx,
-    canAgain: () => { if (preview) return { ok: false, label: 'Aperçu administrateur' }; const i = api.info(), n = i.stock[id]; return n > 0 ? { ok: true, label: `Ouvrir un autre (${n})` } : i.dust >= PACKS[id].cost ? { ok: true, label: `Ouvrir un autre · ${fmt(PACKS[id].cost)}` } : { ok: false, label: 'Plus assez d\'Éclats' }; },
+    canAgain: () => { if (preview) return { ok: false, label: 'Aperçu administrateur' }; const i = api.info(), n = i.stock[id]; return n > 0 ? { ok: true, label: `Ouvrir un autre (${n})` } : i.dust >= PACKS[id].cost ? { ok: true, label: `Ouvrir un autre · ${fmt(PACKS[id].cost)}` } : { ok: false, label: 'Plus assez d\'Voidium' }; },
     onDone: (act) => { sig = ''; api.refresh(); if (act === 'again') start(id); },
   });
-  function start(id) { const res = api.open(id); if (!res) return api.toast(`Il te faut ${fmt(PACKS[id].cost)} Éclats`); sig = ''; run(res, id, false); }
+  function start(id) { const res = api.open(id); if (!res) return api.toast(`Il te faut ${fmt(PACKS[id].cost)} Voidium`); sig = ''; run(res, id, false); }
   function odds() {
     const m = make('div', 'modal on', '<div class="card glass"><h2>Probabilités</h2><table><tr><th></th>' + Object.values(PACKS).map((p) => `<th>${p.n.replace('Pack ', '')}</th>`).join('') + '</tr>' + RAR.map((r, i) => `<tr><td style="color:${RC[i]}">${r}</td>` + Object.values(PACKS).map((p) => `<td>${p.odds[i].toLocaleString('fr-FR')} %</td>`).join('') + '</tr>').join('') + '</table>'
       + '<p>Probabilités par astre (5 astres par pack). Garanties : ' + Object.values(PACKS).map((p) => `<b>${p.n}</b> : ${RAR[p.min]} minimum${p.min ? '' : ' (aucun minimum)'} · un épique au moins tous les ${p.pity[0]} packs · un légendaire au moins tous les ${p.pity[1]} packs`).join(' ; ') + '.</p><p>Les doublons ne sont jamais perdus : chaque exemplaire compte pour la Fusion. Le tirage est décidé avant l\'animation, qui ne fait que le raconter : ses indices sont toujours vrais.</p><div class="btns"><button class="big primary">Fermer</button></div></div>'); m.id = 'pk-od';
@@ -47,7 +47,7 @@ export function mount(page, api) {
       const card = make('div', 'pk-card'); card.style.setProperty('--c', `rgb(${c})`);
       const art = make('div', 'pk-art'), cv = document.createElement('canvas'); emblem(cv, c); art.append(cv);
       const tx = make('div', 'pk-tx', `<b>${pk.n}</b><small>5 astres · ${pk.min ? RAR[pk.min] + ' minimum' : 'tous les astres du jeu'}</small><em>Épique garanti dans ${left} pack${left > 1 ? 's' : ''} au plus</em>`);
-      const act = make('div', 'pk-act'), b = make('button', 'pk-btn', n > 0 ? `Ouvrir (${n})` : `${fmt(pk.cost)} Éclats`); b.disabled = !can; b.addEventListener('click', () => { api.sfx.link(0, 0); start(id); });
+      const act = make('div', 'pk-act'), b = make('button', 'pk-btn', n > 0 ? `Ouvrir (${n})` : `${fmt(pk.cost)} Voidium`); b.disabled = !can; b.addEventListener('click', () => { api.sfx.link(0, 0); start(id); });
       act.append(b); card.append(art, tx, act); if (n > 0) card.append(make('span', 'pk-st', '×' + n)); list.append(card);
     }
     const l = make('button', 'pk-link', 'Probabilités et garanties'); l.addEventListener('click', odds); list.append(l);
