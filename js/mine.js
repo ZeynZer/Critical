@@ -57,7 +57,7 @@ let FN = 0, hud = null, hudKey = '', tut = -1;
 let duel = null; // duel 1v1 en cours (salon Realtime)
 let rv = null, rvDone = false, gh = null, runTok = 0; // rival (joueur juste au-dessus de mon record) et fantôme optionnel de sa partie
 let warp = 0, warpMsg = null, slow = 0, beatT = 0, tAcc = 0, ghosts = []; // tAcc : secondes de jeu pas encore enregistrées ; ghosts : astres aspirés par un Big Bang
-let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0, giftLock = 0, giftDur = 1, lastCur = null; // giftLock : un astre spécial (matière exotique, comète) vient de devenir l'astre en main ; on ignore les touches un instant pour ne pas le lâcher par réflexe
+let shown = 0, callout = null, texA = null, texB = null, sprites = new Map(), spriteKey = '', landT = 0, giftT = 0, giftLock = 0, giftDur = 1, lastCur = null, blitzMult = 1; // giftLock : un astre spécial (matière exotique, comète) vient de devenir l'astre en main ; on ignore les touches un instant pour ne pas le lâcher par réflexe
 const stars = Array.from({ length: 46 }, (_, i) => ({ x: rnd(i), y: rnd(i * 2.3), z: 0.3 + rnd(i * 5.1) * 0.7, p: rnd(i * 7) * 6 }));
 
 const sx = (x) => B.x + x * B.u, sy = (y) => B.y + y * B.u;
@@ -89,6 +89,8 @@ function onEvents() {
       else if (!sv.cx[e.tier]) { sv.cx[e.tier] = 1; save(); addXp(20); if (e.tier >= 4) G.bonus += 10; if (e.tier >= 3 && !reveal) { say(BODIES[e.tier][0].toUpperCase(), 'NOUVEL ASTRE · CODEX', col); A.star(2); } }
       else if (e.chain >= 2) say('×' + Math.min(8, e.chain), e.chain >= 3 ? 'CHAÎNE' : '', e.chain >= 5 ? AM : [255, 255, 255]);
       if (!G.nop) { H.track('fusions', 1); H.track('tier', e.tier + 1, true); H.track('chain', e.chain, true); }
+    } else if (e.t === 'tgain') { // Blitz : temps rendu par le lâcher, et palier de tempo
+      label(x, y + B.u * 1.6, '+' + e.gain.toFixed(1) + ' s', e.gain > 0.6 ? CY : [255, 255, 255], 12); if (e.mult > blitzMult) { label(W / 2, B.y + B.h * 0.24, 'TEMPO ×' + e.mult, AM, 26); A.star(1); H.vib([8, 20, 8]); } blitzMult = e.mult;
     } else if (e.t === 'land') { if (T - landT > 0.07) { landT = T; A.thud(Math.min(1, e.v / 30)); if (e.v > 9) burst(x, y, 3, [200, 220, 255], B.u * 2, 0.3, 1.6); } }
     else if (e.t === 'vapor') { const col = BODIES[e.tier][1]; burst(x, y, 7, col, B.u * 5, 0.6); ring(x, y, 2, B.u * 0.9, 0.3, col, 2); }
     else if (e.t === 'boom') { ring(x, y, 4, B.u * 3.4, 0.45, CY, 7); burst(x, y, 40, [200, 240, 255], B.u * 13, 0.8, 3.5); shake = 14; flash = 0.3; flashC = CY; A.breach(); H.vib([20, 30, 40]); }
@@ -424,8 +426,8 @@ function resize() {
   cv.width = Math.ceil(W * DPR); cv.height = Math.ceil(Hh * DPR);
   SAT = $('#probe-t') ? $('#probe-t').offsetHeight : 0; SAB = $('#probe-b') ? $('#probe-b').offsetHeight : 0;
   const top = SAT + 104, bar = 86, availH = Hh - top - bar - SAB - 30;
-  const u = Math.min((W - 28) / F.W, availH / F.HT, 60);
-  B = { u, w: u * F.W, h: u * F.HT, x: (W - u * F.W) / 2, y: top + (availH - u * F.HT) / 2 };
+  const ht = (G && G.ht) || F.HT, u = Math.min((W - 28) / F.W, availH / ht, 60);
+  B = { u, w: u * F.W, h: u * ht, x: (W - u * F.W) / 2, y: top + (availH - u * ht) / 2 };
   holdR = { x: B.x, y: B.y + B.h + 36, w: 78, h: 60 };
   texB = makeTex(G ? G.depth : 0); texA = null; hud = null;
 }
@@ -525,14 +527,15 @@ function draw() {
   if (sc !== hudKey || !hud) { hudKey = sc; if (!hud) hud = document.createElement('canvas'); hud.width = Math.ceil(W * DPR); hud.height = Math.ceil(64 * DPR); const hx = hud.getContext('2d'); hx.scale(DPR, DPR); hx.font = '900 32px Orbitron,system-ui,sans-serif'; hx.textAlign = 'center'; hx.shadowColor = 'rgba(77,243,255,.7)'; hx.shadowBlur = lowFx ? 0 : 16; hx.fillStyle = '#fff'; hx.fillText(sc, W / 2, 44); }
   ctx.drawImage(hud, 0, ty - 44, W, 64);
   txt(`SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
-  if (G.chal) { const left = Math.max(0, G.chal[2] - G.t), m = Math.floor(left / 60); txt(`DÉFI · ${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`, cx, ty + 37, 13, left < 15 ? '#ff6a8a' : '#ffc247', 'center', 'Orbitron', 900); }
+  if (G.blitz) blitzHud(cx, ty);
+  else if (G.chal) { const left = Math.max(0, G.chal[2] - G.t), m = Math.floor(left / 60); txt(`DÉFI · ${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`, cx, ty + 37, 13, left < 15 ? '#ff6a8a' : '#ffc247', 'center', 'Orbitron', 900); }
   else if (G.duel && duel) txt(duel.phase === 'done' ? 'DUEL TERMINÉ' : 'DUEL · ' + fmtT(Math.max(0, duel.dur - G.n / 120)), cx, ty + 35, 11, AM, 'center', 'Orbitron', 900);
   else if (G.rep) txt('REDIFFUSION · ' + G.rep.run.name.toUpperCase(), cx, ty + 35, 9.5, AM, 'center', 'Orbitron', 700);
   else if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
   }
   if (G.duel && duel && duel.op) { const o = duel.op, os = o.final != null ? o.final : o.G.score, d = G.score - os; txt(`VS ${duel.oppName.toUpperCase()} · ${fmt(os)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
-  else if (!G.nop && !G.chal && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
+  else if (!G.nop && !G.chal && !G.blitz && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
     if (gh) { const d = G.score - gh.G.score; txt(`FANTÔME ${gh.name.toUpperCase()} · ${fmt(gh.G.score)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
     else if (rv && !rvDone) txt(`CIBLE · ${rv.name.toUpperCase()} · encore ${fmt(rv.score - G.score)}`, cx, ty + 52, 9.5, '#ffc247', 'center', 'Orbitron', 700);
   }
@@ -599,6 +602,14 @@ export function openReplay(run) { // revoir la meilleure partie d'un joueur : m�
   $('#mn-rp').style.top = holdR.y - 4 + 'px'; rpSpeed(2); say('REDIFFUSION', run.name.toUpperCase(), CY);
 }
 const rpSpeed = (v) => { G.rep.speed = v; $('#mn-rpp').textContent = '❚❚'; document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.classList.toggle('on', +b.dataset.s === v)); };
+function blitzHud(cx, ty) { // chrono (barre + secondes) et tempo
+  const b = G.blitz, left = b.left, low = b.started && left < 3, pulse = low ? 0.5 + 0.5 * Math.sin(T * 14) : 0;
+  txt(b.started ? left.toFixed(1) + ' s' : 'LÂCHE POUR LANCER', cx, ty + 38, b.started ? 17 : 11, low ? `rgb(255,${(106 + pulse * 90) | 0},138)` : '#fff', 'center', 'Orbitron', 900);
+  const x0 = B.x + 8, w = B.w - 16, y0 = ty + 46, k = clamp(left / F.BLITZ.max, 0, 1);
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(x0, y0, w, 7, 3.5); ctx.fill();
+  if (k > 0.01) { const g = ctx.createLinearGradient(x0, 0, x0 + w, 0); g.addColorStop(0, low ? '#ff6a8a' : rgba(CY, 1)); g.addColorStop(1, low ? '#ffb347' : rgba(MG, 1)); ctx.fillStyle = g; rr(x0, y0, Math.max(7, w * k), 7, 3.5); ctx.fill(); }
+  if (b.mult > 1 || b.combo > 0) { txt('TEMPO ×' + b.mult, B.x + B.w - 8, ty + 38, 12 + (b.mult > 1 ? 1 : 0), AM, 'right', 'Orbitron', 900); for (let i = 0; i < 3; i++) { ctx.fillStyle = i < b.combo % 3 ? rgba(AM, 1) : 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.arc(B.x + B.w - 12 - (2 - i) * 11, ty + 54, 3, 0, TAU); ctx.fill(); } }
+}
 function bang() { // milieu du saut : le nouveau secteur naît
   const m = warpMsg || ['', '', 0], cx = W / 2, cy = B.y + B.h * 0.5;
   flash = 0.95; flashC = [255, 255, 255]; shake = 24; hitstop = 0.08;
@@ -783,6 +794,9 @@ export function openSandbox() { // tous les astres débloqués en illimité ; ni
   });
   say('BAC À SABLE', 'TOUT EN ILLIMITÉ', CY);
 }
+export function openBlitz() { // cuve resserrée, chrono, tempo : même moteur, autre rythme
+  open(true); blitzMult = 1; newRun((Math.random() * 2 ** 32) >>> 0, true, { blitz: true }); say('BLITZ', 'LÂCHE VITE · LE TEMPS FILE', MG);
+}
 export function openDaily() { // même tirage pour tout le monde ; on peut retenter, la récompense tombe une fois par jour
   open(true); const d = H.today(); newRun(hash('critical:defi:seed:' + d), true); G.chal = todayChal(); G.day = d; say('DÉFI DU JOUR', G.chal[3].toUpperCase(), AM);
 }
@@ -824,13 +838,14 @@ function tutorial() {
   fg.style.transform = `translate(${fx.toFixed(0)}px,${fy.toFixed(0)}px)`; fg.style.opacity = aiming || fx < 0 ? 0 : 1;
 }
 
-function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
+function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && !G.blitz && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
 const dropRun = () => { try { localStorage.removeItem(RUN); } catch (e) { /* ignore */ } };
-function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `Classement mondial : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
+function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `${G && G.blitz ? 'Classement Blitz' : 'Classement mondial'} : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
 function endRun() {
   if (ended || !G) return; ended = true; const c = G.chal;
-  if (!c) dropRun(); // un défi ne touche pas à la partie normale en attente
+  if (!c && !G.blitz) dropRun(); // un défi ou un Blitz ne touche pas à la partie normale en attente
   if (c) return endChal(c);
+  if (G.blitz) return endBlitz();
   rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
@@ -845,6 +860,16 @@ function endRun() {
     overPanel(rec);
   }, G.over ? 900 : 0);
   refreshTitle();
+}
+function endBlitz() { // fin d'un Blitz : record propre au mode, classement Blitz, récompenses proportionnelles
+  const B2 = G.blitz, rec = G.score > (sv.blitz | 0), lv0 = levelOf(sv.xp).level; sv.blitzRuns = (sv.blitzRuns | 0) + 1; if (rec) sv.blitz = G.score; save();
+  rankLine(null); H.submit({ blitz: true, score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
+  H.track('runs', 1); addXp(Math.min(200, Math.round(G.score / 300))); const gain = Math.min(500, Math.round(G.score / 150)); if (G.over) A.fail();
+  setTimeout(() => {
+    grant(gain); const L = levelInfo(); $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(G.xpGain | 0)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
+    $('#mn-ot').textContent = rec && sv.blitzRuns > 1 ? 'Nouveau record Blitz !' : G.timeout ? 'Temps écoulé' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer le Blitz';
+    $('#mn-os').textContent = `Tempo max ×${B2.maxMult} · record Blitz ${fmt(sv.blitz | 0)}`; overPanel({ s: rec }); refreshTitle();
+  }, G.over ? 900 : 0);
 }
 function overPanel(rec) {
   $('#mn-o1').textContent = fmt(G.score); $('#mn-o2').textContent = G.depth + 1; $('#mn-o3').textContent = '×' + G.maxChain; $('#mn-o4').textContent = G.maxTier === F.MAX_TIER ? 'Galaxie' : BODIES[G.maxTier][0];
@@ -865,6 +890,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 }
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
@@ -1023,7 +1049,7 @@ export function init(opts) {
   click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !G.nop && !ended && G.drops > 0) endRun(); else close(); });
   click('#mn-rkb', () => (H.online() && !H.named() ? H.askName() : H.rank()));
   click('#mn-help', () => { $('#mn-quit').textContent = G && G.nop ? 'Quitter' : 'Abandonner la partie'; const l = $('#mn-lad'); if (!l.firstChild) BODIES.forEach((b, i) => { const c = document.createElement('canvas'); c.title = b[0]; paintAstre(c, i + ':0', 34); l.append(c); }); $('#mn-m-help').classList.add('on'); paused = true; });
-  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
+  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.blitz ? openBlitz() : G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
   // bouton principal de l'accueil (home.js le transforme en héros) ; Cascade devient un lien discret
   const menu = $('#s-title .menu');
   if (menu && !$('#b-mine')) { const b = document.createElement('button'); b.className = 'big primary hero'; b.id = 'b-mine'; b.innerHTML = '<span>Jouer</span><small id="b-mine-s"></small>'; menu.insertBefore(b, menu.firstChild); b.addEventListener('click', () => { A.ui(); H.vib(9); open(); }); }

@@ -157,3 +157,16 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   for (let r = 0; r <= 5; r++) { const d = draw('galaxie', {}, 9 + r, r); assert.equal(d.tell.best, r, 'rareté forcée ' + r); }
   console.log('packs OK');
 }
+{ // Blitz : cuve resserrée, chrono qui ne démarre qu'au 1er lâcher, tempo, fin au temps écoulé, rejeu identique
+  const g = F.newGame(5, { blitz: true }); assert.ok(g.inset >= F.BLITZ.inset - 1e-9 && g.blitz.left === F.BLITZ.start, 'cuve étroite dès le départ');
+  for (let i = 0; i < 600; i++) F.step(g); assert.ok(!g.over && g.blitz.left === F.BLITZ.start, 'le chrono attend le premier lâcher');
+  F.drop(g, 5); assert.ok(g.blitz.started && g.blitz.left > F.BLITZ.start, 'le 1er lâcher lance le chrono et rend du temps');
+  let n = 0; while (!g.over && n++ < 120 * 30) F.step(g); assert.ok(g.over && g.timeout && g.blitz.left === 0, 'plus aucun lâcher : le temps s\'écoule et la partie se termine');
+  assert.ok(g.t < F.BLITZ.start + 12, 'fin dans le temps imparti (≈ 8 s + gain du lâcher)');
+  // tempo : lâchers rapprochés → multiplicateur ; arrêt → retombe
+  const h = F.newGame(9, { blitz: true }); let k = 0; 
+  while (h.drops < 14 && !h.over && k++ < 120 * 40) { F.step(h); if (h.cool <= 0 && h.t - h.blitz.last >= 0.5) { if (F.drop(h, 3 + (h.drops % 5))) { } } }
+  assert.ok(h.blitz.maxMult >= 3, 'un rythme soutenu monte le tempo (×' + h.blitz.maxMult + ')'); for (let i = 0; i < 160; i++) F.step(h); assert.equal(h.blitz.mult, 1, 'le tempo retombe à l\'arrêt');
+  const a = F.replay(h.seed, h.log, h.n, { blitz: true }); assert.equal(a.score, h.score, 'le Blitz se rejoue à l\'identique'); assert.equal(F.newGame(5).blitz, null, 'le mode normal ne change pas');
+  console.log('blitz OK (tempo max ×' + h.blitz.maxMult + ', score ' + h.score + ')');
+}
