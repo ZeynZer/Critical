@@ -486,6 +486,7 @@ function draw() {
     const t0 = pops.get(b.id); let sc = 1;
     if (t0 != null) { const p = (T - t0) / 0.4; if (p >= 1) pops.delete(b.id); else sc = 1 + Math.sin(p * Math.PI * 2.2) * (1 - p) * 0.26 + (p < 0.15 ? (p / 0.15 - 1) * 0.4 : 0); }
     drawItem(b, sx(b.x), sy(b.y), sc, b.ang);
+    if (G.shared && b.o != null) { ctx.strokeStyle = rgba(b.o ? MG : CY, 0.75); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), b.r * B.u * 1.04, 0, TAU); ctx.stroke(); } // couleur du joueur : cyan (créateur du salon) ou magenta
   }
   // aura des absorbeurs : jusqu'où ils avalent. Nette = prêt à avaler, discrète = en train de digérer. Les astres qui s'en approchent sont prévenus.
   for (const b of G.bodies) {
@@ -526,9 +527,10 @@ function draw() {
   const sc = fmt(shown); // le score lumineux est dessiné dans une image, refaite seulement quand le nombre change
   if (sc !== hudKey || !hud) { hudKey = sc; if (!hud) hud = document.createElement('canvas'); hud.width = Math.ceil(W * DPR); hud.height = Math.ceil(64 * DPR); const hx = hud.getContext('2d'); hx.scale(DPR, DPR); hx.font = '900 32px Orbitron,system-ui,sans-serif'; hx.textAlign = 'center'; hx.shadowColor = 'rgba(77,243,255,.7)'; hx.shadowBlur = lowFx ? 0 : 16; hx.fillStyle = '#fff'; hx.fillText(sc, W / 2, 44); }
   ctx.drawImage(hud, 0, ty - 44, W, 64);
-  txt(`SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
+  if (!G.shared) txt(`SECTEUR ${G.depth + 1} · ${sectorName(G.depth).toUpperCase()}`, cx, ty + 20, 10.5, rgba(CY, 0.95), 'center', 'Orbitron', 700);
   if (G.blitz) blitzHud(cx, ty);
   else if (G.chal) { const left = Math.max(0, G.chal[2] - G.t), m = Math.floor(left / 60); txt(`DÉFI · ${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`, cx, ty + 37, 13, left < 15 ? '#ff6a8a' : '#ffc247', 'center', 'Orbitron', 900); }
+  else if (G.shared && duel) sharedHud(cx, ty);
   else if (G.duel && duel) txt(duel.phase === 'done' ? 'DUEL TERMINÉ' : 'DUEL · ' + fmtT(Math.max(0, duel.dur - G.n / 120)), cx, ty + 35, 11, AM, 'center', 'Orbitron', 900);
   else if (G.rep) txt('REDIFFUSION · ' + G.rep.run.name.toUpperCase(), cx, ty + 35, 9.5, AM, 'center', 'Orbitron', 700);
   else if (G.mod.n) txt(G.mod.n.toUpperCase(), cx, ty + 35, 9.5, rgba(MG, 1), 'center', 'Orbitron', 700);
@@ -585,7 +587,8 @@ function update(dt) {
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
   if (G.cur !== lastCur) { lastCur = G.cur; if (G.cur && (G.cur.k === 'j' || G.cur.k === 'b') && !G.rep && !G.nop && tut < 0) { giftDur = G.cur.k === 'j' ? 1.3 : 0.8; giftLock = T + giftDur; H.vib([10, 30, 10]); } }
   if (want && T < giftLock) want = false; // touches de réflexe ignorées pendant le verrou
-  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (!(G.duel && duel.phase !== 'play') && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); if (G.duel) dsendDrop(); } } if (G.duel && duel.phase !== 'play') want = false; // un relâché pendant le temps de recharge est mémorisé
+  const turnOk = !G.shared || (duel && duel.phase === 'play' && G.shared.turn === duel.my && G.shared.sim <= 0); // duel de cuve : seulement à mon tour, une fois les astres posés
+  if (want && G.cool <= 0 && !ended && !paused) { want = false; if (!(G.duel && duel.phase !== 'play') && turnOk && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); if (G.duel) dsendDrop(); } } if (G.duel && (duel.phase !== 'play' || !turnOk)) want = false; // un relâché pendant le temps de recharge est mémorisé
 }
 function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisie ; les lâchers tombent exactement au pas où ils ont eu lieu
   const R = G.rep; if (R.done) return;
@@ -602,6 +605,14 @@ export function openReplay(run) { // revoir la meilleure partie d'un joueur : m�
   $('#mn-rp').style.top = holdR.y - 4 + 'px'; rpSpeed(2); say('REDIFFUSION', run.name.toUpperCase(), CY);
 }
 const rpSpeed = (v) => { G.rep.speed = v; $('#mn-rpp').textContent = '❚❚'; document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.classList.toggle('on', +b.dataset.s === v)); };
+function sharedHud(cx, ty) { // à qui de jouer, temps restant, couleurs des joueurs
+  const d = duel, S = G.shared, nm = d.names || ['', ''], mine = S.turn === d.my, col = (i) => (i ? MG : CY);
+  txt(nm[0].toUpperCase().slice(0, 10), B.x + 8, ty + 20, 10, rgba(CY, 1), 'left', 'Orbitron', 800); txt(nm[1].toUpperCase().slice(0, 10), B.x + B.w - 8, ty + 20, 10, rgba(MG, 1), 'right', 'Orbitron', 800);
+  if (d.phase === 'done') return txt('DUEL TERMINÉ', cx, ty + 38, 12, AM, 'center', 'Orbitron', 900);
+  if (S.sim > 0) txt('LES ASTRES SE POSENT…', cx, ty + 38, 10.5, 'rgba(255,255,255,.55)', 'center', 'Orbitron', 700);
+  else { const left = Math.max(0, d.tleft), low = left < 3; txt(mine ? 'À TOI · ' + Math.ceil(left) + ' s' : 'AU TOUR DE ' + (nm[S.turn] || '').toUpperCase().slice(0, 10), cx, ty + 38, 12.5, mine ? (low ? '#ff6a8a' : '#5dffc0') : rgba(col(S.turn), 1), 'center', 'Orbitron', 900); }
+  const x0 = B.x + 8, w = B.w - 16, y0 = ty + 46, k = S.sim > 0 ? 1 - S.sim / F.SHARED.steps : clamp(d.tleft / F.SHARED.turn, 0, 1); ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(x0, y0, w, 6, 3); ctx.fill(); if (k > 0.01) { ctx.fillStyle = S.sim > 0 ? 'rgba(255,255,255,.4)' : rgba(col(S.turn), 0.9); rr(x0, y0, Math.max(6, w * k), 6, 3); ctx.fill(); }
+}
 function blitzHud(cx, ty) { // chrono (barre + secondes) et tempo
   const b = G.blitz, left = b.left, low = b.started && left < 3, pulse = low ? 0.5 + 0.5 * Math.sin(T * 14) : 0;
   txt(b.started ? left.toFixed(1) + ' s' : 'LÂCHE POUR LANCER', cx, ty + 38, b.started ? 17 : 11, low ? `rgb(255,${(106 + pulse * 90) | 0},138)` : '#fff', 'center', 'Orbitron', 900);
@@ -666,7 +677,7 @@ const CSS = `
 #mn-sbl button{flex:none;width:54px;height:54px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);display:grid;place-items:center;padding:0}#mn-sbl button.on{border-color:#4df3ff;background:rgba(77,243,255,.16);box-shadow:0 0 14px rgba(77,243,255,.4)}#mn-sbc{flex:none;height:54px;padding:0 14px;border-radius:18px;color:#fff;font:700 12px Orbitron,system-ui,sans-serif;border:1px solid rgba(255,255,255,.14)}
 #mn-rp{position:absolute;left:12px;right:12px;display:none;align-items:center;gap:8px;justify-content:center}#mn.rpl #mn-rp{display:flex}#mn-rpn{display:none;flex:1;font:700 12px Orbitron,system-ui,sans-serif;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#mn-rp button{height:44px;min-width:44px;border-radius:16px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;font:700 12px Orbitron,system-ui,sans-serif}#mn-rp div{display:flex;gap:6px}#mn-rp div button.on{border-color:#4df3ff;background:rgba(77,243,255,.18)}
 #dl-code{font:900 44px Orbitron,system-ui,sans-serif;letter-spacing:.16em;text-align:center;min-height:0;color:#4df3ff}#dl-code:empty{display:none}#dl-in{width:100%;height:52px;border-radius:18px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);color:#fff;font:700 20px Orbitron,system-ui,sans-serif;text-align:center;letter-spacing:.2em;text-transform:uppercase;outline:none;user-select:text;-webkit-user-select:text}
-#mn-m-duel:not([data-s=menu]) #dl-in,#mn-m-duel:not([data-s=menu]) #dl-join,#mn-m-duel[data-s=wait] #dl-new,#mn-m-duel[data-s=end] #dl-code{display:none}#mn-m-duel[data-s=end] #dl-new{display:block}
+#mn-m-duel:not([data-s=menu]) #dl-sh,#mn-m-duel:not([data-s=menu]) #dl-in,#mn-m-duel:not([data-s=menu]) #dl-join,#mn-m-duel[data-s=wait] #dl-new,#mn-m-duel[data-s=end] #dl-code{display:none}#mn-m-duel[data-s=end] #dl-new{display:block}
 #mn-xp{width:100%;display:flex;flex-direction:column;gap:5px}#mn-xp span{font:800 11px Orbitron,system-ui,sans-serif;letter-spacing:.1em;color:#fff}#mn-xp i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden}#mn-xp b{display:block;height:100%;border-radius:4px;box-shadow:0 0 12px currentColor}#mn-xp small{font-size:12px;color:rgba(255,255,255,.7)}
 #mn-ht{font-size:13px;color:rgba(255,255,255,.7);text-align:center;margin:0}#mn-lad{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin:6px 0 4px}#mn-lad canvas{opacity:.92}
 `;
@@ -679,7 +690,7 @@ const HTML = `
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Pause</h2><p class="sub" id="mn-ht">Deux astres identiques qui se touchent fusionnent.</p><div id="mn-lad"></div><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
-const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-new">Créer un salon</button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
+const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-new">Créer un salon</button><button class="big primary" id="dl-sh">Duel de cuve · classé Elo</button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
 <div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
 // Toutes les entrées du codex, découvertes ou non. key = identifiant public (« rang » ou « rang:variante »), le même que celui des profils.
 const entries = () => [
@@ -914,22 +925,23 @@ function stepGhost() { // le fantôme rejoue la partie du rival, calée sur le t
 /* ============================== duel 1v1 (salon par code, Supabase Realtime) ============================== */
 const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const dsend = (m) => { if (duel && duel.ch) duel.ch.send({ ...m, id: duel.id }); };
-function dsendDrop() { const L = G.log; dsend({ e: 'd', n: L[L.length - 2], x: L[L.length - 1] }); }
+function dsendDrop() { const L = G.log; if (G.shared) dsend({ e: 'sd', x: L[L.length - 1] }); else dsend({ e: 'd', n: L[L.length - 2], x: L[L.length - 1] }); }
 function dview(state, title, sub) { // une seule fenêtre : salon, attente, résultat
   const m = $('#mn-m-duel'); m.classList.add('on'); m.dataset.s = state; $('#dl-t').textContent = title; $('#dl-s').textContent = sub || ''; $('#dl-new').textContent = state === 'end' ? 'Nouveau duel' : 'Créer un salon'; if (state === 'menu') $('#dl-code').textContent = '';
 }
 export function openDuel() {
   if (!H.online()) return H.toast('Le duel demande une connexion');
-  duelClose(); dview('menu', 'Duel 1v1', 'Même graine, 2 minutes, le meilleur score gagne.'); $('#dl-code').textContent = ''; $('#dl-in').value = '';
+  duelClose(); dview('menu', 'Duel 1v1', 'Classique : même graine, 2 minutes, le meilleur score gagne. Duel de cuve : une seule cuve, un astre chacun, celui qui fait déborder perd (Elo).'); $('#dl-code').textContent = ''; $('#dl-in').value = '';
 }
 function duelClose() { if (duel && duel.invited && !duel.guest) H.challengeCancel(); if (duel) { clearInterval(duel.tm); if (duel.ch) { try { duel.ch.send({ e: 'bye', id: duel.id }); } catch (e) { /* ignore */ } const c = duel.ch; setTimeout(() => c.close(), 300); } } duel = null; }
 function duelNew(role, code) {
-  duelClose(); duel = { role, code, id: Math.random().toString(36).slice(2, 8), name: H.name() || 'Invité', oppName: '', dur: 120, phase: 'lobby', op: null, me: null, lastMsg: 0, ch: null };
+  duelClose(); duel = { mode: code[0] === 'Z' ? 'shared' : 'classic', role, code, id: Math.random().toString(36).slice(2, 8), name: H.name() || 'Invité', oppName: '', dur: 120, phase: 'lobby', op: null, me: null, lastMsg: 0, ch: null };
   duel.ch = channel('duel-' + code, duelMsg, () => { if (duel && duel.phase !== 'done') { const was = duel.phase; if (was === 'lobby') dview('menu', 'Connexion impossible', 'Vérifie ta connexion puis réessaie.'); else if (was === 'play' || was === 'count') duelResult('forfait'); } });
   return duel;
 }
-function duelHost() {
-  const code = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b & 31]).join(''), d = duelNew('host', code);
+function duelHost(mode) {
+  let code = Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b & 31]).join(''); code = (mode === 'shared' ? 'Z' : code[0] === 'Z' ? 'Y' : code[0]) + code.slice(1); // le code dit le mode : « Z… » = duel de cuve
+  const d = duelNew('host', code);
   d.seed = (Math.random() * 2 ** 32) >>> 0; dview('wait', 'Salon créé', 'Donne ce code à ton adversaire :'); $('#dl-code').textContent = code;
   d.tm = setInterval(() => dsend({ e: 'hello', name: d.name }), 1500); dsend({ e: 'hello', name: d.name });
 }
@@ -940,19 +952,27 @@ function duelJoin(code) {
 }
 export const canNotify = () => !isOpen && !duel && !$('#mn-m-duel').classList.contains('on'); // pas d'invitation pendant une partie ni un duel
 export const joinDuel = (code) => { $('#dl-in').value = code; duelJoin(code); };
-export function inviteDuel(name) { // salon créé pour toi + invitation envoyée au joueur (en ligne) depuis son profil
-  duelHost(); const d = duel; d.invited = true;
+export function inviteDuel(name, mode) { // salon créé pour toi + invitation envoyée au joueur (en ligne) depuis son profil
+  duelHost(mode); const d = duel; d.invited = true;
   H.challenge(name, d.code).then(() => { if (duel === d) dview('wait', 'Invitation envoyée', `${name} a 2 minutes pour répondre. Code du salon :`); }).catch((e) => { if (duel === d) { duelClose(); dview('menu', 'Invitation impossible', e.message); } });
+}
+function sharedMsg(m) { // duel de cuve : les lâchers de l'adversaire, sa visée, la fin
+  const d = duel; d.lastMsg = performance.now();
+  if (m.e === 'sd' && G && G.shared && G.shared.turn !== d.my && d.q.length < 3) d.q.push(m.x | 0);
+  else if (m.e === 'sa') d.oppAim = Math.max(0.5, Math.min(F.W - 0.5, (m.x | 0) / 1000));
+  else if (m.e === 'end') { if (G && G.over && G.shared.loser !== (m.loser | 0)) d.desync = true; }
+  else if (m.e === 'bye' && d.phase !== 'done') sharedResult('forfait');
 }
 function duelMsg(m) {
   if (!duel || !m || m.id === duel.id) return; const d = duel;
   if (d.phase === 'lobby') {
-    if (d.role === 'host' && m.e === 'join' && !d.guest) { d.guest = m.id; d.oppName = String(m.name || 'Joueur').slice(0, 16); dsend({ e: 'go', to: m.id, seed: d.seed, dur: d.dur, name: d.name }); duelStart(); }
+    if (d.role === 'host' && m.e === 'join' && !d.guest) { d.guest = m.id; d.oppName = String(m.name || 'Joueur').slice(0, 16); dsend({ e: 'go', to: m.id, seed: d.seed, dur: d.dur, name: d.name, mode: d.mode }); duelStart(); }
     else if (d.role === 'guest' && m.e === 'hello' && !d.helloSeen) { d.helloSeen = true; dsend({ e: 'join', name: d.name }); }
     else if (d.role === 'guest' && m.e === 'go' && m.to === d.id) { d.oppName = String(m.name || 'Joueur').slice(0, 16); d.seed = m.seed >>> 0; d.dur = Math.min(300, Math.max(30, +m.dur || 120)); duelStart(); }
     else if (d.role === 'guest' && m.e === 'go' && m.to !== d.id) { duelClose(); dview('menu', 'Salon complet', 'Cet adversaire a déjà quelqu\'un.'); }
     return;
   }
+  if (d.mode === 'shared') return sharedMsg(m);
   d.lastMsg = performance.now(); const o = d.op; if (!o) return;
   if (m.e === 'd') { o.ev.push([m.n | 0, m.x | 0]); o.known = Math.max(o.known, m.n | 0); }
   else if (m.e === 's') { o.known = Math.max(o.known, m.n | 0); if (m.ov) o.over = true; }
@@ -961,8 +981,9 @@ function duelMsg(m) {
 }
 function duelStart() {
   const d = duel; clearInterval(d.tm); d.phase = 'count'; d.cd = 3.2; d.lastCd = 4; d.hb = 0; d.lastMsg = performance.now();
-  $('#mn-m-duel').classList.remove('on'); open(true); newRun(d.seed, true, { duel: true }); ended = false;
-  d.op = { G: F.newGame(d.seed), ev: [], i: 0, known: 0, final: null, over: false };
+  $('#mn-m-duel').classList.remove('on'); open(true); ended = false;
+  if (d.mode === 'shared') { newRun(d.seed, true, { duel: true, shared: true }); d.my = d.role === 'host' ? 0 : 1; d.names = d.role === 'host' ? [d.name, d.oppName] : [d.oppName, d.name]; d.q = []; d.oppAim = F.W / 2; d.tleft = F.SHARED.turn; d.aimSent = 0; d.lastAim = -1; d.op = null; return; }
+  newRun(d.seed, true, { duel: true }); d.op = { G: F.newGame(d.seed), ev: [], i: 0, known: 0, final: null, over: false };
 }
 function stepOpp() { // l'adversaire rejoue ses lâchers, calé sur mon nombre de pas (jamais plus loin que ce qu'il m'a annoncé)
   const o = duel.op, tgt = Math.min(duel.me != null ? o.known : G.n, o.known); let k = 0;
@@ -972,14 +993,40 @@ function stepOpp() { // l'adversaire rejoue ses lâchers, calé sur mon nombre d
 function duelTick(dt) {
   const d = duel; if (!d) return;
   if (d.phase === 'count') { d.cd -= dt; const c = Math.ceil(d.cd); if (c !== d.lastCd && c >= 1) { d.lastCd = c; say(String(c), 'DUEL · ' + d.oppName.toUpperCase(), CY); A.select(); } if (d.cd <= 0) { d.phase = 'play'; d.lastMsg = performance.now(); say('GO !', '', AM); A.win(); } return; }
+  if (d.mode === 'shared') return sharedTick(dt);
   if (d.phase !== 'play') { if (d.phase === 'done') stepOpp(); return; }
   F.tick(G, slow > 0 ? dt * 0.3 : dt); stepOpp();
   if ((d.hb += dt) >= 1) { d.hb = 0; dsend({ e: 's', n: G.n, sc: G.score, ov: G.over }); }
   if (G.n >= d.dur * 120) duelFinish();
   if (d.me == null && performance.now() - d.lastMsg > 15000) duelResult('forfait'); // plus aucun signe de l'adversaire
 }
+function sharedTick(dt) {
+  const d = duel; if (d.phase !== 'play' || ended) return; const S = G.shared, mine = S.turn === d.my;
+  F.tick(G, slow > 0 ? dt * 0.3 : dt); if (G.over) return;
+  if ((d.hb = (d.hb || 0) + dt) >= 1) { d.hb = 0; dsend({ e: 's', n: G.n }); }
+  if (performance.now() - d.lastMsg > 15000) return sharedResult('forfait'); // plus aucun signe de l'adversaire
+  if (S.sim > 0) { d.tleft = F.SHARED.turn; return; }
+  if (mine) {
+    d.tleft -= dt; const now = performance.now(); if (now - d.aimSent > 100 && Math.abs(aimT - d.lastAim) > 0.01) { d.aimSent = now; d.lastAim = aimT; dsend({ e: 'sa', x: Math.round(aimT * 1000) }); } // l'adversaire voit où je vise
+    if (d.tleft <= 0 && G.cool <= 0 && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(8); dsendDrop(); } // temps écoulé : lâcher automatique
+  } else {
+    aimT = aimX = d.oppAim; d.tleft -= dt; // je vois où il vise
+    if (d.q.length && G.cool <= 0) { const x = d.q.shift(); aimT = aimX = x / 1000; if (F.drop(G, x / 1000)) { A.release(); d.tleft = F.SHARED.turn; } }
+    else if (d.tleft < -7) sharedResult('forfait'); // il n'a pas joué, même après le délai
+  }
+}
+function sharedFinish() { const d = duel; if (!d || d.phase === 'done') return; dsend({ e: 'end', loser: G.shared.loser }); sharedResult(G.shared.loser === d.my ? 'lose' : 'win'); }
+function sharedResult(r) {
+  const d = duel; if (!d || d.phase === 'done') return; d.phase = 'done'; ended = true; const won = r === 'win' || r === 'forfait'; if (won) H.goal('duelwin');
+  setTimeout(() => {
+    if (duel !== d) return; (won ? A.win : A.fail)();
+    dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : 'Défaite', r === 'lose' ? 'Ton astre a fait déborder la cuve.' : r === 'win' ? `${d.oppName} a fait déborder la cuve.` : `${d.oppName} a quitté la partie.`);
+    if (d.desync) { $('#dl-s').textContent += ' · Les deux écrans ne sont pas d\'accord : match sans Elo.'; return; }
+    if (H.eloReport) H.eloReport(d.code + ':' + d.seed, won, d.oppName).then((x) => { if (duel === d && x) $('#dl-s').textContent += x.settled ? ` · Elo ${x.delta >= 0 ? '+' : ''}${x.delta} (${x.elo})` : ' · Elo mis à jour dès que ton adversaire confirme'; }).catch(() => {});
+  }, 1300);
+}
 function duelFinish() {
-  const d = duel; if (!d || d.me != null) return; d.me = G.score; dsend({ e: 'f', sc: G.score, n: G.n });
+  const d = duel; if (d && d.mode === 'shared') return sharedFinish(); if (!d || d.me != null) return; d.me = G.score; dsend({ e: 'f', sc: G.score, n: G.n });
   if (d.op.final == null) say('EN ATTENTE…', 'LA PARTIE DE L\'ADVERSAIRE SE TERMINE', CY); duelCheck();
   d.wait = setTimeout(() => { if (duel === d && d.phase !== 'done') duelResult('forfait'); }, 20000);
 }
@@ -1046,6 +1093,7 @@ export function init(opts) {
   document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.addEventListener('click', () => { if (G && G.rep) { rpSpeed(+b.dataset.s); A.select(); } }));
   click('#mn-rpp', () => { const R = G && G.rep; if (!R) return; if (R.done) { const run = R.run; openReplay(run); } else { R.speed = R.speed ? 0 : +(document.querySelector('#mn-rp [data-s].on') || { dataset: { s: 2 } }).dataset.s; $('#mn-rpp').textContent = R.speed ? '❚❚' : '▶'; } });
   $('#mn-tut').addEventListener('click', (e) => { if (e.target.id === 'mn-tutx') tutEnd(false); });
+  click('#dl-sh', () => duelHost('shared'));
   click('#dl-new', () => { if ($('#mn-m-duel').dataset.s === 'end') { duelClose(); close(); openDuel(); } else duelHost(); });
   click('#dl-join', () => duelJoin($('#dl-in').value));
   click('#dl-x', () => { $('#mn-m-duel').classList.remove('on'); if (isOpen && G && G.duel) close(); else duelClose(); });
@@ -1061,3 +1109,4 @@ export function init(opts) {
   refreshTitle();
   window.__mine = { get G() { return G; }, get B() { return B; }, F };
 }
+export const dbg = () => G && ({ n: G.n, drops: G.drops, turn: G.shared ? G.shared.turn : -1, sim: G.shared ? G.shared.sim : -1, score: G.score, nb: G.bodies.length, over: G.over, loser: G.shared ? G.shared.loser : -1, hash: Math.round(G.bodies.reduce((s, b) => s + b.x * 7 + b.y * 13 + b.tier, 0) * 1e6) }); // état résumé (tests de synchronisation)

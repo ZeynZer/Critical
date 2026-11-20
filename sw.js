@@ -1,6 +1,6 @@
 // Service worker : le jeu fonctionne hors-ligne après la première visite.
 // Pour publier une mise à jour, change simplement VERSION.
-const VERSION = 'critical-v56';
+const VERSION = 'critical-v57';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest', 'favicon.ico',
   'js/app.js', 'js/fusion.js', 'js/mine.js', 'js/home.js', 'assets/hole.webp', 'js/audio.js', 'js/quests.js', 'js/rank.js', 'js/intro.js', 'js/forge.js', 'js/goals.js', 'js/admin.js', 'js/catalog.js', 'js/packs.js', 'js/packfx.js', 'js/packui.js', 'js/immersive.js', 'js/style.js', 'js/ideas.js', 'js/install.js', 'js/config.js', 'js/realtime.js',

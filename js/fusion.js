@@ -39,7 +39,11 @@ const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { inset: 0.4, n: 'Cuv
 export const mod = (d) => ({ g: 1, inset: 0, n: '', ...MODS[d % MODS.length] });
 // Blitz : cuve resserrée en permanence, chrono qui ne tourne qu'une fois le 1er astre lâché, tempo (lâchers rapprochés) qui multiplie les points.
 export const BLITZ = { max: 10, inset: 1.2, ht: 11, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
-const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; return m; };
+// Cuve partagée (duel 1v1 à tour de rôle) : le temps n'avance que pendant `steps` pas après chaque lâcher, puis la partie attend le lâcher de l'autre ;
+// celui dont l'astre reste au-dessus de la ligne a perdu. Pas de secteurs ni de réserve ; hypot remplacé par sqrt (exact) pour que deux navigateurs calculent les mêmes bits.
+export const SHARED = { inset: 1.0, ht: 11.5, steps: 240, turn: 8 };
+const hyp = (G, x, y) => (G.shared ? Math.sqrt(x * x + y * y) : Math.hypot(x, y));
+const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; if (G.shared && m.inset < SHARED.inset) m.inset = SHARED.inset; return m; };
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
 export function mulberry32(a) { return () => { let t = (a = (a + 0x6D2B79F5) | 0); t = Math.imul(t ^ (t >>> 15), 1 | t); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -57,7 +61,7 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : HT, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : opt.shared ? SHARED.ht : HT, shared: opt.shared ? { turn: 0, sim: 0, last: 0, hot: -1, loser: -1, drops: [0, 0] } : null, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
   G.mod = modOf(G, 0); G.inset = G.mod.inset; G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
@@ -72,10 +76,11 @@ function add(G, k, tier, x, y, vx = 0, vy = 0) {
 }
 
 export function drop(G, x) {
-  if (G.over || G.cool > 0) return false;
+  if (G.over || G.cool > 0 || (G.shared && G.shared.sim > 0)) return false;
   const it = G.cur;
   const dx = Math.round(clampX(it, x, G.inset) * 1000) / 1000; // position arrondie au millième : c'est exactement ce que le journal enregistre
   const nb = add(G, it.k, it.tier, dx, DROP_Y); nb.fresh = true; if (it.v) nb.v = it.v;
+  if (G.shared) { const S = G.shared; nb.o = S.turn; S.last = S.turn; S.drops[S.turn]++; S.turn ^= 1; S.sim = SHARED.steps; } // à l'autre de jouer, une fois les astres posés
   if (!G.sandbox) { G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
   if (G.blitz) { // tempo : un lâcher dans la seconde qui suit le précédent prolonge le combo (×1 à ×5) et rend plus de temps
     const B = G.blitz, gap = G.t - B.last, fast = gap < BLITZ.fast; B.started = true; B.combo = fast ? B.combo + 1 : 0; B.last = G.t; B.mult = 1 + Math.min(4, Math.floor(B.combo / 3)); B.maxMult = Math.max(B.maxMult, B.mult);
@@ -90,21 +95,22 @@ export const maskOf = (p) => Object.keys(p || {}).reduce((m, t) => (p[t] ? m | (
 export const powersOf = (m) => { const p = {}; for (let t = 0; t <= MAX_TIER; t++) if ((m >> t) & 1) p[t] = 1; return p; };
 export function act(G, x) { if (x <= -1e6) { G.powers = powersOf(-1e6 - x); return true; } return swapHold(G); } // entrée négative du journal : en-tête de pouvoirs, sinon échange de réserve
 export function swapHold(G) {
-  if (G.over || G.swapped) return false;
+  if (G.over || G.swapped || G.shared) return false;
   if (G.hold) { const h = G.hold; G.hold = G.cur; G.cur = h; } else { G.hold = G.cur; G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
   G.swapped = true; G.log.push(G.n, -1); return true;
 }
 
-const gift = (G, k) => { G.queue.unshift({ k, tier: -1 }); G.queue.length = 2; G.ev.push({ t: 'gift', k }); };
+const gift = (G, k) => { if (G.shared) return; G.queue.unshift({ k, tier: -1 }); G.queue.length = 2; G.ev.push({ t: 'gift', k }); };
 
 function kick(G, x, y, rad, force) {
   for (const b of G.bodies) {
     if (b.dead || !b.hit) continue; // un astre encore en chute n'est jamais poussé de côté
-    const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy) || 1e-6;
+    const dx = b.x - x, dy = b.y - y, d = hyp(G, dx, dy) || 1e-6;
     if (d < rad) { const f = force * (1 - d / rad); b.vx += (dx / d) * f; b.vy += (dy / d) * f; }
   }
 }
 function charge(G, n) {
+  if (G.shared) return;
   G.drill += n;
   if (G.drill >= need(G.depth) && !G.pend.some((p) => p.t === 'pierce')) G.pend.push({ t: 'pierce', at: G.t + 0.35 });
 }
@@ -129,6 +135,7 @@ function fuse(G, a, b) {
     return;
   }
   const n = add(G, 'c', tier + 1, x, y, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2);
+  if (G.shared) n.o = a.fresh && a.o != null ? a.o : b.fresh && b.o != null ? b.o : G.shared.last; // le nouvel astre appartient à celui qui a lancé la fusion
   n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(G.ht - n.r, n.y); n.hit = true; n.age = 0.5;
   if (G.sandbox) { /* aucun tirage : une variante rare ne se débloque pas ici */ }
   else if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
@@ -151,7 +158,7 @@ function explode(G, b) {
   b.dead = true;
   for (const o of G.bodies) {
     if (o.dead || o === b) continue;
-    const d = Math.hypot(o.x - b.x, o.y - b.y);
+    const d = hyp(G, o.x - b.x, o.y - b.y);
     if (o.k === 'c' && o.tier <= 3 && d < 2.3 + o.r) { o.dead = true; G.score += TIERS[o.tier].pts; G.ev.push({ t: 'vapor', x: o.x, y: o.y, tier: o.tier }); }
   }
   kick(G, b.x, b.y, 5, 13);
@@ -182,7 +189,7 @@ function collide(G) {
       if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
       const d2 = dx * dx + dy * dy; if (d2 >= rr * rr) continue;
       const d = Math.sqrt(d2) || 1e-6, nx = dx / d, ny = dy / d;
-      if (!a.hit || !b.hit) { const v = Math.hypot(a.vx - b.vx, a.vy - b.vy); if (v > 3) G.ev.push({ t: 'land', x: a.x + nx * a.r, y: a.y + ny * a.r, v }); a.hit = b.hit = true; }
+      if (!a.hit || !b.hit) { const v = hyp(G, a.vx - b.vx, a.vy - b.vy); if (v > 3) G.ev.push({ t: 'land', x: a.x + nx * a.r, y: a.y + ny * a.r, v }); a.hit = b.hit = true; }
       if (a.k === 'b' || b.k === 'b') { (a.k === 'b' ? a : b).fuse = true; }
       if (a.k === 'j' && b.k === 'c') { a.k = 'c'; a.tier = b.tier; a.r = b.r; G.ev.push({ t: 'morph', x: a.x, y: a.y, tier: b.tier }); }
       else if (b.k === 'j' && a.k === 'c') { b.k = 'c'; b.tier = a.tier; b.r = a.r; G.ev.push({ t: 'morph', x: b.x, y: b.y, tier: a.tier }); }
@@ -207,7 +214,7 @@ function absorb(G) {
     let best = null, bd = 1e9;
     for (const o of G.bodies) {
       if (o === a || o.dead || o.k !== 'c' || o.tier > pw[0]) continue;
-      const d = Math.hypot(o.x - a.x, o.y - a.y) - a.r - o.r; // distance entre les bords (négative si ça se chevauche)
+      const d = hyp(G, o.x - a.x, o.y - a.y) - a.r - o.r; // distance entre les bords (négative si ça se chevauche)
       if (d < pw[2] + 0.02 && d < bd) { bd = d; best = o; }
     }
     if (!best) continue;
@@ -235,7 +242,7 @@ export function trace(G, x0) {
   for (let i = 0; i < 150; i++) {
     v += fall(G) / 60; y += v / 60; if (i % 2 === 0) pts.push(x, y);
     if (y > G.ht - r) break;
-    let hit = false; for (const b of G.bodies) if (Math.hypot(b.x - x, b.y - y) < b.r + r) { hit = true; break; }
+    let hit = false; for (const b of G.bodies) if (hyp(G, b.x - x, b.y - y) < b.r + r) { hit = true; break; }
     if (hit) break;
   }
   return pts;
@@ -244,6 +251,7 @@ export function trace(G, x0) {
 function sub(G) {
   const dt = STEP; G.t += dt; G.n++;
   if (G.cool > 0) G.cool -= dt;
+  if (G.shared && G.shared.sim > 0) G.shared.sim--;
   if (G.blitz && G.blitz.started) { const B = G.blitz; if (B.combo && G.t - B.last > BLITZ.fast) { B.combo = 0; B.mult = 1; } B.left -= dt; if (B.left <= 0 && !G.over) { B.left = 0; G.over = true; G.timeout = true; G.ev.push({ t: 'over', timeout: true }); } } // le tempo retombe si on s'arrête ; temps écoulé = fin
   G.inset += (G.mod.inset - G.inset) * Math.min(1, dt * 1.5);
   if (G.chainT > 0) { G.chainT -= dt; if (G.chainT <= 0) { if (G.chain >= 3) G.ev.push({ t: 'chainEnd', chain: G.chain }); G.chain = 0; } }
@@ -260,7 +268,7 @@ function sub(G) {
       else if (b.tier === NEUTRON) { const pu = PULSE[b.v === 1 ? 1 : 0]; b.pt = (b.pt || 0) + dt; if (b.pt >= pu[0]) { b.pt = 0; kick(G, b.x, b.y, b.r * pu[1], pu[2]); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: b.v | 0, reach: pu[1] }); } } // l'étoile à neutrons repousse par impulsions ; le magnétar plus souvent et plus fort
       else if (b.et > 0) b.et -= dt;
     }
-    const sp = Math.hypot(b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
+    const sp = hyp(G, b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
     b.x += b.vx * dt; b.y += b.vy * dt; b.vx *= 0.9992; b.ang += b.av * dt; b.av *= 0.985;
   }
   for (const b of G.bodies) { b.touch = false; }
@@ -282,18 +290,20 @@ function sub(G) {
   for (const b of G.bodies) if (b.fuse && !b.dead) explode(G, b);
   if (G.bodies.some((b) => b.dead)) G.bodies = G.bodies.filter((b) => !b.dead);
   // défaite : un astre posé ENTIÈREMENT au-dessus de la ligne (son bord bas compris) pendant DANGER_TIME ; un simple dépassement ne compte pas
-  let hot = false, near = false;
-  if (!G.sandbox) for (const b of G.bodies) if (b.hit && b.age > 1) { if (b.y + b.r < LINE) { hot = true; break; } if (b.y - b.r < LINE) near = true; }
+  let hot = false, near = false, hotO = -1;
+  if (!G.sandbox) for (const b of G.bodies) if (b.hit && b.age > 1) { if (b.y + b.r < LINE) { hot = true; hotO = b.o == null ? -1 : b.o; break; } if (b.y - b.r < LINE) near = true; }
   G.near = near || hot; // avertissement visuel seulement
   G.danger = hot ? G.danger + dt / DANGER_TIME : Math.max(0, G.danger - dt * 1.5);
-  if (G.danger >= 1 && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; G.ev.push({ t: 'over' }); }
+  if (G.shared && hot && hotO >= 0) G.shared.hot = hotO;
+  if (G.danger >= 1 && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; if (G.shared) G.shared.loser = G.shared.hot >= 0 ? G.shared.hot : G.shared.last; G.ev.push({ t: 'over' }); }
 }
 
 export const step = sub; // un pas de simulation (utilisé par la rediffusion)
 export function tick(G, dt) {
   if (G.over) return;
+  if (G.shared && G.shared.sim <= 0) { G.acc = 0; return; } // cuve partagée : le temps est figé tant que le prochain joueur n'a pas lâché
   G.acc += Math.min(dt, 0.05);
-  while (G.acc >= STEP && !G.over) { G.acc -= STEP; sub(G); }
+  while (G.acc >= STEP && !G.over && !(G.shared && G.shared.sim <= 0)) { G.acc -= STEP; sub(G); }
 }
 
 // Rejoue une partie depuis sa graine et son journal jusqu'au pas `end` : même moteur, même résultat.

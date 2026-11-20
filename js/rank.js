@@ -81,7 +81,7 @@ const NEWCSS = `
 .hub-t h2{margin:0;font:900 26px var(--disp);letter-spacing:.02em;background:linear-gradient(90deg,#fff,#9ff9ff 45%,#ff9ae8);-webkit-background-clip:text;background-clip:text;color:transparent}.hub-t p{margin:2px 0 0;font-size:12px;color:rgba(255,255,255,.55)}
 .hub-x{flex:none;width:44px;height:44px;border-radius:22px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#fff;font-size:18px}
 .hub-tabs{position:relative;display:flex;gap:4px;padding:4px;border-radius:22px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
-.hub-tabs button{flex:1;height:38px;border-radius:18px;font:700 12px var(--disp);letter-spacing:.04em;color:rgba(255,255,255,.58);transition:background .25s,color .25s}
+.hub-tabs button{flex:1;height:38px;border-radius:18px;font:700 11.5px var(--disp);letter-spacing:.02em;padding:0 2px;color:rgba(255,255,255,.58);transition:background .25s,color .25s}
 .hub-tabs button.on{color:#fff;background:linear-gradient(135deg,rgba(77,243,255,.36),rgba(255,79,216,.32));box-shadow:0 4px 18px rgba(120,80,255,.25)}
 .hub-body{position:relative;flex:1;min-height:0;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;scrollbar-width:none;padding:12px 0 18px}.hub-body::-webkit-scrollbar{display:none}
 .hub-dock{position:relative;flex:none;display:flex;align-items:center;gap:10px;padding:10px 14px calc(env(safe-area-inset-bottom,0px) + 12px);margin:0 -14px;background:linear-gradient(180deg,rgba(6,8,24,0),rgba(6,8,24,.97) 38%)}
@@ -138,14 +138,14 @@ const CROWN = '<svg viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 1
 const HTML = INVHTML + `
 <div class="modal hub" id="rk"><div class="hub-in">
 <div class="hub-hd"><div class="hub-t"><h2>Communauté</h2><p id="hub-sub"></p></div><button class="hub-x" id="rk-close" aria-label="Fermer">✕</button></div>
-<div class="hub-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Défi du jour</button><button data-b="blitz">Blitz</button><button data-b="ideas">Idées</button></div>
+<div class="hub-tabs"><button data-b="all" class="on">Mondial</button><button data-b="day">Du jour</button><button data-b="blitz">Blitz</button><button data-b="elo">Duels</button><button data-b="ideas">Idées</button></div>
 <div class="hub-body" id="rk-body"><div id="rk-feed"></div><div id="rk-pod"></div><div id="rk-list"></div><div id="rk-ideas" hidden></div></div>
 <div class="hub-dock"><div id="rk-me"></div><button id="rk-name"></button></div></div></div>
 <div class="modal" id="rk-prof"><div class="card glass"><div class="pf-ban" id="pf-ban"></div><div class="pf-in"><div id="pf-av"></div><h2 id="pf-name"></h2><p id="pf-title"></p><p id="pf-lvl"></p><p id="pf-motto"></p>
 <div id="pf-soc"><button class="pf-like" id="pf-like" aria-label="Liker ce profil"><svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.7 8 3.4 5 6.6 5c2 0 3.6 1.1 5.4 3.2C13.8 6.100 15.400 5 17.400 5c3.200 0 4.900 3 3.800 6.200-1.700 4.700-9.200 9.300-9.200 9.300z"/></svg><b id="pf-lk">0</b></button><span id="pf-on"></span></div>
 <div id="pf-stats" hidden><div><b id="pf-rank">–</b><span>rang</span></div><div><b id="pf-score">–</b><span>meilleur score</span></div><div><b id="pf-tier" style="font-size:14px">–</b><span>plus gros astre</span></div><div><b id="pf-wins">0</b><span>défis réussis</span></div><div><b id="pf-time" style="font-size:14px">–</b><span>temps de jeu</span></div><div><b id="pf-cdx">0</b><span>astres découverts</span></div></div>
 <p class="pf-lab" id="pf-lab" hidden>Vitrine</p><div id="pf-show"></div><p id="pf-meta"></p>
-<div class="btns" id="pf-in-btns"><button class="big primary" id="pf-duel" hidden>⚔ Défier en duel</button><button class="big glass" id="pf-replay" hidden>▶ Revoir sa meilleure partie</button><button class="big glass" id="pf-edit" hidden>✎ Personnaliser mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div></div>
+<div class="btns" id="pf-in-btns"><button class="big primary" id="pf-duel" hidden>⚔ Défier en duel</button><button class="big primary" id="pf-duel2" hidden>💧 Duel de cuve · Elo</button><button class="big glass" id="pf-replay" hidden>▶ Revoir sa meilleure partie</button><button class="big glass" id="pf-edit" hidden>✎ Personnaliser mon profil</button><button class="big primary" id="pf-close">Fermer</button></div></div></div></div>
 <div class="modal" id="rk-edit"><div class="ed-in">
 <div class="ed-prev" id="ed-prev"><div class="pf-ban"></div><div class="pf-in"><div id="ed-av"></div><div id="ed-pn"></div><div id="ed-pt"></div><div id="ed-pm"></div></div></div>
 <div class="ed-body"><h3>Avatar et vitrine<small>le ★ est ton avatar, 2 astres de plus en vitrine</small></h3><div id="ed-grid"></div>
@@ -153,17 +153,18 @@ const HTML = INVHTML + `
 <h3>Devise</h3><input id="ed-motto" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Ta devise (facultatif)" enterkeyhint="done"><p id="ed-err"></p></div>
 <div class="ed-ft"><button id="ed-cancel">Annuler</button><button id="ed-name">Pseudo</button><button id="ed-ok">Enregistrer</button></div></div></div>
 ` + ASKHTML;
-const pts = (v) => (board === 'all' || board === 'blitz' ? fmt(v) : (v / 100).toLocaleString('fr-FR') + ' s d\'avance'); // défi : temps restant
+const pts = (v) => (board === 'all' || board === 'blitz' || board === 'elo' ? fmt(v) : (v / 100).toLocaleString('fr-FR') + ' s d\'avance'); // défi : temps restant
 const fmtTime = (sec) => (sec < 60 ? '< 1 min' : sec < 3600 ? `${Math.floor(sec / 60)} min` : `${Math.floor(sec / 3600)} h ${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}`);
 const fmtMonth = (iso) => { try { return new Date(iso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); } catch (e) { return ''; } };
 let board = 'all', off = 0, done = false, busy = false, token = 0, ideasUi = null, inIdeas = false;
 const boardId = () => (board === 'all' ? 'all' : board === 'blitz' ? 'blitz' : 'day:' + H.today());
+const eloRows = (rows) => rows.map((r) => ({ ...r, score: r.elo, _sub: `${r.games} duel${r.games > 1 ? 's' : ''} · ${r.wins} victoire${r.wins > 1 ? 's' : ''}` }));
 const avOf = (box, key, px, a, f, still) => avatar(box, { key, px, accent: a, frame: f, still, paint: H.paint });
 const rgbOf = (i) => accentRgb(i);
 function rowEl(r) {
   const d = document.createElement('div'); d.className = 'rk-row' + (r.name === st.name ? ' me' : ''); d.dataset.name = r.name; const av = document.createElement('div'); avOf(av, r.badge, 38, r.accent, r.frame, true);
   d.innerHTML = `<i>${r.rank}</i>`; d.append(av); const t = titleName(r.title);
-  d.insertAdjacentHTML('beforeend', `<div class="who"><b>${esc(r.name)}${r.online ? '<u class="on-dot" title="En ligne"></u>' : ''}</b><small style="${t ? `color:rgb(${rgbOf(r.accent)})` : ''}">${t ? esc(t) : 'Secteur ' + (r.sector + 0) + ' · ' + esc(H.tierName(r.tier))}</small></div>${r.level ? `<span class="lv">NIV ${r.level}</span>` : ''}<span class="sc">${pts(r.score)}</span>`);
+  d.insertAdjacentHTML('beforeend', `<div class="who"><b>${esc(r.name)}${r.online ? '<u class="on-dot" title="En ligne"></u>' : ''}</b><small style="${t ? `color:rgb(${rgbOf(r.accent)})` : ''}">${r._sub ? esc(r._sub) : t ? esc(t) : 'Secteur ' + (r.sector + 0) + ' · ' + esc(H.tierName(r.tier))}</small></div>${r.level ? `<span class="lv">NIV ${r.level}</span>` : ''}<span class="sc">${pts(r.score)}</span>`);
   return d;
 }
 function podium(rows) { // les trois premiers : 2 · 1 · 3, la couronne pour le premier
@@ -171,13 +172,13 @@ function podium(rows) { // les trois premiers : 2 · 1 · 3, la couronne pour le
   for (const idx of [1, 0, 2]) {
     const r = rows[idx]; if (!r) continue; const d = document.createElement('div'); d.className = 'pd p' + (idx + 1); d.dataset.name = r.name; const av = document.createElement('div'); avOf(av, r.badge, idx === 0 ? 84 : 66, r.accent, r.frame, false);
     d.innerHTML = idx === 0 ? `<div class="crown">${CROWN}</div>` : ''; d.append(av); const t = titleName(r.title);
-    d.insertAdjacentHTML('beforeend', `<div class="nm">${esc(r.name)}${r.online ? '<u class="on-dot"></u>' : ''}</div><div class="tt" style="color:rgb(${rgbOf(r.accent)})">${t ? esc(t) : r.level ? 'Niveau ' + r.level : ''}</div><div class="sc">${pts(r.score)}</div><div class="blk">${idx + 1}</div>`); pod.append(d);
+    d.insertAdjacentHTML('beforeend', `<div class="nm">${esc(r.name)}${r.online ? '<u class="on-dot"></u>' : ''}</div><div class="tt" style="color:rgb(${rgbOf(r.accent)})">${r._sub ? esc(r._sub) : t ? esc(t) : r.level ? 'Niveau ' + r.level : ''}</div><div class="sc">${pts(r.score)}</div><div class="blk">${idx + 1}</div>`); pod.append(d);
   }
 }
 async function more() { // charge la page suivante (défilement infini)
   if (busy || done) return; busy = true; const t = token, list = $('#rk-list');
   try {
-    const rows = await rpc('leaderboard', { p_board: boardId(), p_offset: off, p_limit: PAGE });
+    let rows = board === 'elo' ? eloRows(await rpc('elo_board', { p_offset: off, p_limit: PAGE })) : await rpc('leaderboard', { p_board: boardId(), p_offset: off, p_limit: PAGE });
     if (t !== token) return;
     if (!off && !rows.length) list.innerHTML = '<div id="rk-msg">Personne ici pour l\'instant.<br>Sois le premier à y entrer.</div>';
     let rest = rows; if (!off) { podium(rows.slice(0, 3)); rest = rows.slice(3); }
@@ -190,10 +191,11 @@ async function show(b) {
   document.querySelectorAll('.hub-tabs button').forEach((x) => x.classList.toggle('on', x.dataset.b === b));
   $('#rk-list').textContent = ''; $('#rk-pod').textContent = ''; $('#rk-body').scrollTop = 0; $('#rk-me').innerHTML = ''; $('#rk-ideas').hidden = !tab; $('#rk-list').hidden = tab; $('#rk-pod').hidden = tab; $('#rk-feed').hidden = tab;
   $('#rk-name').textContent = st.name ? 'Mon profil' : 'Choisir un pseudo';
-  $('#hub-sub').textContent = tab ? 'Propose, soutiens, façonne le jeu' : b === 'day' ? 'Le défi du jour, tous contre la montre' : b === 'blitz' ? 'Cuve étroite, chrono, tempo : le plus rapide gagne' : 'Les meilleurs univers du monde';
+  $('#hub-sub').textContent = tab ? 'Propose, soutiens, façonne le jeu' : b === 'day' ? 'Le défi du jour, tous contre la montre' : b === 'blitz' ? 'Cuve étroite, chrono, tempo : le plus rapide gagne' : b === 'elo' ? 'Duel de cuve : celui qui fait déborder perd' : 'Les meilleurs univers du monde';
   if (tab) { if (!ideasUi) ideasUi = mountIdeas($('#rk-ideas'), { call: (fn, args) => rpc(fn, { p_secret: secret(), ...args }).catch((e) => { throw new Error(ERR[e.message] || ERR.network); }), name: () => st.name, askName, isAdmin: () => !!st.admin, toast: (x) => H.toast(x), vib: (x) => H.vib(x) }); ideasUi.refresh(); $('#rk-me').innerHTML = st.name ? `Connecté : <b style="font-size:13px">${esc(st.name)}</b><em>Les idées les plus soutenues passent en premier</em>` : 'Choisis un pseudo pour proposer et soutenir des idées'; return; }
   more(); feed(t);
   if (!st.name) { $('#rk-me').innerHTML = 'Choisis un pseudo pour entrer dans le classement'; return; }
+  if (board === 'elo') { try { const e = await rpc('elo_sync', { p_secret: secret() }); if (t !== token || !e) return; $('#rk-me').innerHTML = e.games ? `<b>n° ${fmt(e.rank)}</b> sur ${fmt(e.total)}<em>Elo ${fmt(e.elo)} · ${e.games} duel${e.games > 1 ? 's' : ''}</em>` : 'Pas encore de duel classé.<em>Défie un joueur en ligne : « Duel de cuve » depuis son profil</em>'; const seen = st.eloSeen || []; for (const x of e.recent || []) if (!seen.includes(x.match) && x.delta) { H.toast(`Duel ${x.won ? 'gagné' : 'perdu'} : Elo ${x.delta > 0 ? '+' : ''}${x.delta}`); seen.push(x.match); } st.eloSeen = seen.slice(-30); save(); } catch (e) { /* l'Elo s'affichera au prochain passage */ } return; }
   try { await flush(); const me = await rpc('my_rank', { p_secret: secret(), p_board: boardId() }); if (t === token) $('#rk-me').innerHTML = me ? `<b>n° ${fmt(me.rank)}</b> sur ${fmt(me.total)}<em>Top ${Math.max(1, Math.ceil((me.rank / me.total) * 100))} % · ${pts(me.score)}${board === 'day' ? '' : ' points'}</em>` : 'Tu n\'as pas encore de score ici.<em>Lance une partie pour entrer au classement</em>'; } catch (e) { /* le classement s'affiche quand même */ }
 }
 const ago = (iso) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? 'à l\'instant' : m < 60 ? `il y a ${m} min` : m < 1440 ? `il y a ${Math.round(m / 60)} h` : `il y a ${Math.round(m / 1440)} j`; };
@@ -204,6 +206,9 @@ async function feed(t) { // faits réels uniquement : dernières parties classé
     const pc = (n) => (r.total ? Math.max(0.1, Math.round((n / r.total) * 1000) / 10).toLocaleString('fr-FR') : '0');
     box.innerHTML = (r.total >= 3 ? `<div class="rf-c s">${pc(r.hole)} % des joueurs ont atteint un trou noir · ${pc(r.galaxy)} % une galaxie (sur ${fmt(r.total)})</div>` : '') + (a || []).slice(0, 2).map((x) => `<div class="rf-c"><b>${esc(x.name)}</b> · ${fmt(x.score)} pts · ${esc(H.tierName(x.tier))} · ${ago(x.at)}</div>`).join('');
   } catch (e) { /* le fil est un bonus : pas d'erreur affichée */ }
+}
+export async function eloReport(match, won, opp) { // fin d'un duel de cuve : compte rendu au serveur (l'Elo est réglé quand les deux joueurs concordent)
+  if (!ready() || !st.name) return null; try { return await rpc('duel_report', { p_secret: secret(), p_match: match, p_won: !!won, p_opp: opp }); } catch (e) { return null; }
 }
 export const rival = (score) => (ready() ? rpc('rival', { p_score: Math.round(score || 0) }) : Promise.resolve(null));
 export const runOf = (name) => rpc('get_run', { p_name: name });
@@ -218,7 +223,7 @@ async function pulse() { // « je suis là » toutes les 30 s ; renvoie une éve
     const r = await rpc('pulse', { p_secret: secret() }), d = r && r.duel; st.admin = !!(r && r.admin);
     if (r && r.gift && !giftBusy) { giftBusy = true; try { const g = await rpc('claim_gift', { p_secret: secret(), p_id: r.gift.id }); H.receive(g.eclats, g.xp, g.note, g.pack, g.packs); } catch (e) { /* déjà pris ou hors ligne */ } giftBusy = false; } // cadeau de l'administrateur : encaissé une seule fois, confirmé par le serveur
     if (r && r.msg && r.msg.id !== st.msgSeen && H.canNotify()) { st.msgSeen = r.msg.id; save(); showBanner(r.msg.text, true); } // annonce : montrée une fois
-    if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; showBanner(`${d.from} te défie en duel 1v1`, false); invT = setTimeout(hideInv, 20000); }
+    if (d && d.code !== lastInv && H.canNotify()) { lastInv = d.code; showBanner(`${d.from} te défie en ${d.code && d.code[0] === 'Z' ? 'duel de cuve (Elo)' : 'duel 1v1'}`, false); invT = setTimeout(hideInv, 20000); }
   } catch (e) { /* hors connexion : on réessaiera */ }
 }
 function startPulse() {
@@ -269,7 +274,7 @@ const closeProfile = () => { clearInterval(pfTimer); $('#rk-prof').classList.rem
 const myStats = () => { const l = H.local() || {}; return { level: H.level() || 1, codex: H.codexN() || 0, sector: l.sector || 0, tier: l.tier == null ? -1 : l.tier, score: l.score || 0, playtime: l.playtime || 0, admin: !!st.admin }; };
 function renderProfile(p, me, offline) {
   const keys = (p.featured || []).filter((k) => H.astreInfo(k)), card = $('#rk-prof .card'); card.style.setProperty('--a', rgbOf(p.accent));
-  $('#pf-lvl').textContent = p.level ? 'NIVEAU ' + p.level : ''; $('#pf-name').textContent = p.name; $('#pf-title').textContent = titleName(p.title); $('#pf-motto').textContent = p.motto ? '« ' + p.motto + ' »' : '';
+  $('#pf-lvl').textContent = (p.level ? 'NIVEAU ' + p.level : '') + (p.elo_games > 0 ? ' · ELO ' + p.elo : ''); $('#pf-name').textContent = p.name; $('#pf-title').textContent = titleName(p.title); $('#pf-motto').textContent = p.motto ? '« ' + p.motto + ' »' : '';
   avOf($('#pf-av'), keys[0], 108, p.accent, p.frame, false);
   const show = $('#pf-show'); show.innerHTML = '';
   for (const key of keys.slice(1)) {
@@ -285,14 +290,14 @@ function renderProfile(p, me, offline) {
   const pt = me ? Math.max(p.playtime || 0, H.local().playtime || 0) : p.playtime || 0; $('#pf-time').textContent = pt ? fmtTime(pt) : '–'; $('#pf-cdx').textContent = p.codex != null ? fmt(p.codex) : '–'; $('#pf-stats').hidden = false;
   $('#pf-meta').textContent = offline ? 'Hors connexion : profil enregistré sur cet appareil.' : (p.since ? 'Membre depuis ' + fmtMonth(p.since) : '');
   const lk = $('#pf-like'); lk.classList.toggle('on', !!p.liked); lk.disabled = !!me || !!offline; $('#pf-lk').textContent = fmt(p.likes || 0); $('#pf-soc').hidden = !!offline;
-  $('#pf-on').innerHTML = p.online ? '<u class="on-dot" style="margin:0"></u>En ligne' : ''; $('#pf-duel').hidden = !!me || !!offline || !p.online || p.duel === false;
+  $('#pf-on').innerHTML = p.online ? '<u class="on-dot" style="margin:0"></u>En ligne' : ''; $('#pf-duel').hidden = $('#pf-duel2').hidden = !!me || !!offline || !p.online || p.duel === false;
   $('#pf-edit').hidden = !me; $('#pf-replay').hidden = offline || !p.score;
 }
 const localProfile = () => ({ name: st.name, motto: st.prof.motto, featured: st.prof.featured, accent: st.prof.accent | 0, frame: st.prof.frame | 0, title: st.prof.title || '', codex: H.codexN(), level: H.level(), ...H.local() });
 async function openProfile(name) {
   const m = $('#rk-prof'); pfName = name; m.classList.add('on'); clearInterval(pfTimer);
   const me = !!st.name && name.toLowerCase() === st.name.toLowerCase();
-  $('#pf-name').textContent = name; $('#pf-title').textContent = ''; $('#pf-motto').textContent = ''; $('#pf-av').innerHTML = ''; $('#pf-show').innerHTML = ''; $('#pf-lab').hidden = true; $('#pf-stats').hidden = true; $('#pf-lvl').textContent = ''; $('#pf-meta').textContent = 'Chargement…'; m.querySelector('.card').style.setProperty('--a', rgbOf(0)); $('#pf-edit').hidden = true; $('#pf-duel').hidden = true; $('#pf-replay').hidden = true; $('#pf-on').textContent = ''; $('#pf-lk').textContent = '0'; $('#pf-like').classList.remove('on'); $('#pf-soc').hidden = true;
+  $('#pf-name').textContent = name; $('#pf-title').textContent = ''; $('#pf-motto').textContent = ''; $('#pf-av').innerHTML = ''; $('#pf-show').innerHTML = ''; $('#pf-lab').hidden = true; $('#pf-stats').hidden = true; $('#pf-lvl').textContent = ''; $('#pf-meta').textContent = 'Chargement…'; m.querySelector('.card').style.setProperty('--a', rgbOf(0)); $('#pf-edit').hidden = true; $('#pf-duel').hidden = $('#pf-duel2').hidden = true; $('#pf-replay').hidden = true; $('#pf-on').textContent = ''; $('#pf-lk').textContent = '0'; $('#pf-like').classList.remove('on'); $('#pf-soc').hidden = true;
   let p = null;
   try { p = await rpc('get_profile', { p_name: name, p_secret: st.secret || null }); }
   catch (e) {
@@ -379,6 +384,7 @@ export function init(opts) {
     catch (e) { H.toast(ERR[e.message] || ERR.network); } b.disabled = false;
   });
   $('#pf-duel').addEventListener('click', () => { if (!st.name) return H.toast(ERR.no_profile); const n = pfName; closeProfile(); $('#rk').classList.remove('on'); H.invite(n); });
+  $('#pf-duel2').addEventListener('click', () => { if (!st.name) return H.toast(ERR.no_profile); const n = pfName; closeProfile(); $('#rk').classList.remove('on'); H.invite(n, 'shared'); });
   $('#inv-no').addEventListener('click', () => answer(false)); $('#inv-ok').addEventListener('click', () => answer(true));
   if (ready() && st.name) startPulse();
   $('#pf-replay').addEventListener('click', async () => { const b = $('#pf-replay'); b.disabled = true; try { const run = await rpc('get_run', { p_name: pfName }); if (!run || !Array.isArray(run.log)) H.toast('Aucune rediffusion disponible'); else { closeProfile(); H.replay(run); } } catch (e) { H.toast(ERR.network); } b.disabled = false; });
