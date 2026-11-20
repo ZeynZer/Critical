@@ -38,7 +38,7 @@ const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { inset: 0.4, n: 'Cuv
   { g: 0.7, n: 'Légèreté' }, { g: 0.6, n: 'Gravité faible' }, { inset: 0.8, n: 'Puits resserré' }, { g: 1.15, inset: 0.4, n: 'Chaos originel' }];
 export const mod = (d) => ({ g: 1, inset: 0, n: '', ...MODS[d % MODS.length] });
 // Blitz : cuve resserrée en permanence, chrono qui ne tourne qu'une fois le 1er astre lâché, tempo (lâchers rapprochés) qui multiplie les points.
-export const BLITZ = { max: 10, inset: 1.2, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
+export const BLITZ = { max: 10, inset: 1.7, ht: 11.5, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
 const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; return m; };
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
 
@@ -57,7 +57,7 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : HT, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
   G.mod = modOf(G, 0); G.inset = G.mod.inset; G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
@@ -124,7 +124,7 @@ function fuse(G, a, b) {
     return;
   }
   const n = add(G, 'c', tier + 1, x, y, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2);
-  n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(HT - n.r, n.y); n.hit = true; n.age = 0.5;
+  n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(G.ht - n.r, n.y); n.hit = true; n.age = 0.5;
   if (G.sandbox) { /* aucun tirage : une variante rare ne se débloque pas ici */ }
   else if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
   else {
@@ -214,9 +214,9 @@ function walls(G, b) {
   const L = G.inset + b.r, R = W - G.inset - b.r;
   if (b.x < L) { b.x = L; if (b.vx < 0) b.vx *= -REST; }
   else if (b.x > R) { b.x = R; if (b.vx > 0) b.vx *= -REST; }
-  if (b.y > HT - b.r) {
-    b.y = HT - b.r; b.touch = true;
-    if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: HT, v: b.vy }); if (b.k === 'b') b.fuse = true; }
+  if (b.y > G.ht - b.r) {
+    b.y = G.ht - b.r; b.touch = true;
+    if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: G.ht, v: b.vy }); if (b.k === 'b') b.fuse = true; }
     if (b.vy > 0) b.vy *= -REST;
   }
 }
@@ -228,7 +228,7 @@ export function trace(G, x0) {
   const it = G.cur, r = itemR(it), x = clampX(it, x0, G.inset), pts = []; let y = DROP_Y, v = 0;
   for (let i = 0; i < 150; i++) {
     v += fall(G) / 60; y += v / 60; if (i % 2 === 0) pts.push(x, y);
-    if (y > HT - r) break;
+    if (y > G.ht - r) break;
     let hit = false; for (const b of G.bodies) if (Math.hypot(b.x - x, b.y - y) < b.r + r) { hit = true; break; }
     if (hit) break;
   }
@@ -265,7 +265,7 @@ function sub(G) {
   }
   // frottement de repos : un astre en contact et presque immobile s'arrête, au lieu de glisser lentement sous la pression
   // résistance de roulement au sol, UNE fois par pas (elle était appliquée à chaque passe de résolution, donc multipliée par 3 puis 6)
-  for (const b of G.bodies) if (b.y >= HT - b.r - 1e-6) { b.vx *= 0.995; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; }
+  for (const b of G.bodies) if (b.y >= G.ht - b.r - 1e-6) { b.vx *= 0.995; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; }
   // … et gel des micro-mouvements (< 0,008 unité/s) d'un astre en contact, sinon les piles rampent ; assez bas pour ne jamais retenir un astre qui veut rouler
   for (const b of G.bodies) if (b.touch) {
     b.av *= 0.96;

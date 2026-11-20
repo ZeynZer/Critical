@@ -426,8 +426,8 @@ function resize() {
   cv.width = Math.ceil(W * DPR); cv.height = Math.ceil(Hh * DPR);
   SAT = $('#probe-t') ? $('#probe-t').offsetHeight : 0; SAB = $('#probe-b') ? $('#probe-b').offsetHeight : 0;
   const top = SAT + 104, bar = 86, availH = Hh - top - bar - SAB - 30;
-  const u = Math.min((W - 28) / F.W, availH / F.HT, 60);
-  B = { u, w: u * F.W, h: u * F.HT, x: (W - u * F.W) / 2, y: top + (availH - u * F.HT) / 2 };
+  const ht = (G && G.ht) || F.HT, u = Math.min((W - 28) / F.W, availH / ht, 60);
+  B = { u, w: u * F.W, h: u * ht, x: (W - u * F.W) / 2, y: top + (availH - u * ht) / 2 };
   holdR = { x: B.x, y: B.y + B.h + 36, w: 78, h: 60 };
   texB = makeTex(G ? G.depth : 0); texA = null; hud = null;
 }
@@ -890,6 +890,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 }
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
