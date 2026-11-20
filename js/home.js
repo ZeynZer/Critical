@@ -69,6 +69,19 @@ const CSS = `
 
 @media (prefers-reduced-motion:reduce){.hm-blob,.hm-gem,.hm-hero,.hm-hero::before,.hm-orb *,#s-title.hm .logo{animation:none!important}}
 
+/* sélecteur de modes : un astre par mode, en profondeur ; on glisse (ou on touche un voisin) pour changer, toucher l'astre central lance le mode */
+.hm-deck{position:relative;flex:none;width:min(86vw,400px,44vh);height:min(86vw,400px,44vh);margin:2px 0 0;perspective:900px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.hm-dg{position:absolute;left:50%;top:50%;width:92%;height:92%;margin:-46% 0 0 -46%;border-radius:50%;pointer-events:none;will-change:opacity}
+.hm-it{position:absolute;left:50%;top:50%;width:70%;height:70%;margin:-35% 0 0 -35%;display:grid;place-items:center;cursor:pointer;will-change:transform,opacity}
+.hm-it>*{pointer-events:none}.hm-it canvas{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 22px rgba(var(--c),.6))}.hm-it img{width:132%;height:132%;object-fit:contain;max-width:none}
+.hm-it.on .hm-ib{animation:hm-fl 5s ease-in-out infinite}.hm-ib{display:grid;place-items:center;width:100%;height:100%}@keyframes hm-fl{50%{transform:translateY(-3%) scale(1.02)}}
+.hm-it .hm-live{right:18%;top:18%}
+.hm-di{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-top:2px}.hm-dn{margin:0;font:900 clamp(20px,6.4vw,26px)/1 var(--disp);letter-spacing:.06em;text-transform:uppercase;text-shadow:0 0 22px rgba(var(--c,190,110,255),.7);transition:opacity .2s}
+.hm-ds{margin:0;font:600 13px/1.3 var(--font);color:rgba(238,244,255,.72);min-height:17px;transition:opacity .2s}
+.hm-cta{height:54px;min-width:min(72vw,260px);padding:0 26px;border-radius:27px;border:0;color:#fff;font:900 14px var(--disp);letter-spacing:.12em;text-transform:uppercase;background:linear-gradient(135deg,rgba(var(--c,190,110,255),.95),rgba(255,79,216,.85));box-shadow:0 8px 30px rgba(var(--c,190,110,255),.4);transition:transform .15s}.hm-cta:active{transform:scale(.95)}
+.hm-dots{display:flex;gap:7px;margin-top:2px}.hm-dots i{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.28);transition:width .25s,background .25s}.hm-dots i.on{width:20px;background:rgb(var(--c,190,110,255))}
+.hm-hid{display:none!important}
+@media (max-height:700px){.hm-cta{height:46px}.hm-dn{font-size:19px}.hm-di{gap:4px}}
 /* pager : trois pages qui glissent (aimantées), la page centrale est celle du jeu */
 .hm-pager{position:absolute;inset:0;z-index:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch}
 .hm-pager::-webkit-scrollbar{display:none}
@@ -96,7 +109,7 @@ const CSS = `
 .set-h{align-self:flex-start;margin:12px 2px 0!important;font:700 11px var(--disp);letter-spacing:1.4px;text-transform:uppercase;color:rgba(255,255,255,.5)!important}
 .sw small{display:block;margin-top:3px;font-size:12px;font-weight:500;line-height:1.3;color:rgba(255,255,255,.55);max-width:220px}
 .set-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 16px var(--font)}.set-row small{color:rgba(255,255,255,.6);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.set-row:active{transform:scale(.97)}
-.hm-slot{width:min(86vw,400px,44vh)!important;height:min(86vw,400px,44vh)!important}.hm-chips{margin-top:auto!important}.hm-pg:nth-child(2){gap:0}.hm-core-btn .hm-t{text-shadow:0 0 6px rgba(0,0,0,.9),0 0 14px rgba(255,190,110,.9),0 0 30px rgba(255,120,60,.55)}.hm-camp .hm-tx small{white-space:normal}
+.hm-slot,.hm-deck{width:min(86vw,400px,44vh)!important;height:min(86vw,400px,44vh)!important}.hm-chips{margin-top:auto!important}.hm-pg:nth-child(2){gap:0}.hm-core-btn .hm-t{text-shadow:0 0 6px rgba(0,0,0,.9),0 0 14px rgba(255,190,110,.9),0 0 30px rgba(255,120,60,.55)}.hm-camp .hm-tx small{white-space:normal}
 /* onglets */
 .hm-tabs{position:absolute;left:18px;right:18px;max-width:400px;margin:0 auto;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);height:68px;border-radius:34px;display:grid;grid-template-columns:repeat(4,1fr);padding:6px;z-index:3}
 .hm-ind{position:absolute;left:6px;top:6px;bottom:6px;width:calc((100% - 12px) / 4);border-radius:28px;background:linear-gradient(135deg,rgba(77,243,255,.34),rgba(255,79,216,.3));box-shadow:0 0 22px rgba(77,243,255,.3),inset 0 1px 0 rgba(255,255,255,.5);will-change:transform}
@@ -181,7 +194,7 @@ function space(cv, scr) {
   let cx = 0, cy = 0, tcy = 0, SZ = 340, since = 99;
   const S = Array.from({ length: 140 }, (_, i) => ({ a: rnd(i) * TAU, r: 0.1 + rnd(i * 3) ** 0.7 * 1.35, z: 0.3 + rnd(i * 7) * 0.7 }));
   const place = () => { // le trou noir se pose sur l'emplacement du bouton Jouer
-    const sl = document.querySelector('.hm-slot'), r = sl && sl.getBoundingClientRect(); SZ = Math.min(W * 0.98, 440, sl && sl.clientWidth ? sl.clientWidth * 1.04 : 340);
+    const sl = document.querySelector('.hm-deck'), r = sl && sl.getBoundingClientRect(); SZ = Math.min(W * 0.98, 440, sl && sl.clientWidth ? sl.clientWidth * 1.04 : 340);
     cx = W / 2; tcy = r && r.height ? r.top + r.height / 2 : H * 0.3; if (!cy) cy = tcy;
     hw.style.width = hw.style.height = SZ + 'px'; hw.style.left = cx - SZ / 2 + 'px';
   };
@@ -247,14 +260,70 @@ export function init(o = {}) {
   // page centrale : le trou noir EST le bouton Jouer
   const logo = $('.logo', wrap); if (logo) { logo.textContent = 'CRITICAL'; logo.classList.add('hm-in'); }
   const tag = $('.tag', wrap); if (tag) tag.classList.add('hm-in');
-  const slot = make('div', 'hm-slot'), play = $('#b-mine') || $('#b-endless');
-  const rec = play && ($('#b-mine-s', play) || $('#b-endless-s', play)), title = play && titleOf(play);
-  if (play) { reskin(play, ['hm-core-btn']); play.textContent = ''; play.setAttribute('aria-label', 'Jouer'); play.append(title || make('span', 'hm-t', 'Jouer')); if (title) title.textContent = 'Jouer'; slot.append(play); }
-  const chips = make('div', 'hm-chips'), daily = $('#b-daily'), qb = $('#b-quests');
-  if (daily) { reskin(daily, ['gl', 'hm-chip', 'hm-in']); const t = titleOf(daily), s = daily.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); daily.textContent = ''; daily.append(make('span', 'hm-sbi', ico(ICONS.cal)), tx); live = make('span', 'hm-live'); daily.append(live); chips.append(daily); }
-  const bz = $('#b-blitz'); if (bz) { reskin(bz, ['gl', 'hm-chip', 'hm-in']); const t = titleOf(bz), s = bz.querySelector('small'), tx = make('span', 'hm-tx'); tx.append(...grab(t, s)); bz.textContent = ''; bz.append(make('span', 'hm-sbi', ico(ICONS.bolt)), tx); chips.append(bz); }
-  if (qb) { place(pg[3], '#b-quests', ICONS.goal, '.43s'); }
-  pg[1].append(...[logo, tag, slot, rec && make('p', 'hm-rec'), chips].filter(Boolean)); const rc = $('.hm-rec', pg[1]); if (rc && rec) rc.append(rec);
+  const play = $('#b-mine') || $('#b-endless'), daily = $('#b-daily'), qb = $('#b-quests'), bz = $('#b-blitz');
+  const rec = play && ($('#b-mine-s', play) || $('#b-endless-s', play));
+  live = make('span', 'hm-live');
+  if (qb) place(pg[3], '#b-quests', ICONS.goal, '.43s');
+  const hid = make('div', 'hm-hid'); for (const b of [play, daily, bz]) if (b) hid.append(b); scr.append(hid); // les boutons d'origine restent dans la page (câblage, textes mis à jour) mais cachés : l'astre central est le bouton
+  // — modes : un astre par mode (key = astre du jeu, peint en direct) ; ajouter un mode = ajouter une ligne ici
+  const MODES = [
+    { id: 'play', n: 'Univers', col: [190, 110, 255], btn: play, cta: 'Jouer', sub: () => (rec && rec.textContent) || 'Fusionne, monte de secteur, bats ton record', art: 'hole' },
+    { id: 'blitz', n: 'Blitz', col: [77, 243, 255], btn: bz, cta: 'Lancer le Blitz', sub: () => 'Cuve étroite · chrono · tempo jusqu\'à ×5', key: '9' },
+    { id: 'daily', n: 'Défi du jour', col: [255, 194, 71], btn: daily, cta: 'Relever le défi', sub: () => (daily && daily.querySelector('small') && daily.querySelector('small').textContent) || 'Une règle, tout le monde', key: '7', live: true },
+    { id: 'duel', n: 'Duel 1v1', col: [255, 106, 138], btn: pager.querySelector('#b-duel') || $('#b-duel'), cta: 'Choisir un duel', sub: () => 'Duel de cuve classé Elo · duel classique', key: '11' },
+    { id: 'sandbox', n: 'Bac à sable', col: [110, 170, 255], btn: pager.querySelector('#b-sandbox') || $('#b-sandbox'), cta: 'Explorer', sub: () => 'Tous tes astres, sans limite', key: '12:2' },
+  ].filter((m) => m.btn);
+  const slot = make('div', 'hm-deck'), items = [], glows = [], N = MODES.length; let pos = 0, target = 0, sel = 0, anim = 0, paintAt = 0;
+  const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  MODES.forEach((m, i) => {
+    const g = make('div', 'hm-dg'); g.style.background = `radial-gradient(circle,rgba(${m.col.join(',')},.34),transparent 66%)`; glows.push(g); slot.append(g);
+    const it = make('div', 'hm-it'); it.style.setProperty('--c', m.col.join(',')); const ib = make('div', 'hm-ib');
+    if (m.art === 'hole') { const im = new Image(); im.src = 'assets/hole.webp'; im.alt = ''; im.decoding = 'async'; ib.append(im); }
+    else { const c = document.createElement('canvas'); c.dataset.key = m.key; m.cv = c; if (opts.paint) opts.paint(c, m.key, 200, false); ib.append(c); }
+    it.append(ib); if (m.live) it.append(live); it.setAttribute('role', 'button'); it.setAttribute('aria-label', m.n); items.push(it); slot.append(it);
+  });
+  const info = make('div', 'hm-di'), nm = make('p', 'hm-dn'), ds = make('p', 'hm-ds'), cta = make('button', 'hm-cta'), dots = make('div', 'hm-dots'); dots.append(...MODES.map(() => make('i')));
+  info.append(nm, ds, cta, dots);
+  const layout = () => { // cover-flow : o = écart à l'astre central (fractionnaire pendant le glissé)
+    const S = slot.clientWidth || 300;
+    items.forEach((it, i) => {
+      const o = i - pos, a = Math.min(Math.abs(o), 2.2), s = 1 - 0.34 * Math.min(a, 1.5), sg = o < 0 ? -1 : 1;
+      it.style.transform = reduce ? `translate3d(${(o * S * 0.6).toFixed(1)}px,0,0) scale(${s.toFixed(3)})` : `translate3d(${(o * S * 0.58).toFixed(1)}px,${(a * 6).toFixed(1)}px,${(-a * 150).toFixed(1)}px) rotateY(${(-Math.max(-1.4, Math.min(1.4, o)) * 38).toFixed(1)}deg) scale(${s.toFixed(3)})`; it.style.opacity = (1 - 0.45 * Math.min(a, 1.5)).toFixed(2); it.style.zIndex = 20 - Math.round(a * 4); it.classList.toggle('on', Math.abs(o) < 0.5);
+      glows[i].style.opacity = Math.max(0, 1 - a * 1.3).toFixed(2);
+    });
+    const hl = document.querySelector('.hm-hole'); if (hl) hl.style.display = 'none'; // le trou noir est maintenant l'astre du mode Univers
+  };
+  const texts = () => { const m = MODES[sel]; nm.textContent = m.n; ds.textContent = typeof m.sub === 'function' ? m.sub() : m.sub; cta.textContent = m.cta; info.style.setProperty('--c', m.col.join(',')); dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === sel)); };
+  deckTexts = texts;
+  const select = (i, quiet) => { i = Math.max(0, Math.min(N - 1, i)); target = i; if (i !== sel) { sel = i; texts(); if (!quiet) { if (opts.sfx) opts.sfx(); try { navigator.vibrate && navigator.vibrate(8); } catch (e) { /* sans vibration */ } } } if (!anim) anim = requestAnimationFrame(step); };
+  function step(now) { // ressort vers l'astre visé ; l'astre central est repeint en direct (15 images/s)
+    anim = 0; const d = target - pos; if (Math.abs(d) > 0.002 && !drag) { pos += d * (reduce ? 1 : 0.2); } else if (!drag) pos = target;
+    layout(); const m = MODES[sel]; if (m.cv && opts.paint && now - paintAt > 66 && Math.abs(pos - sel) < 0.3 && scr.classList.contains('on')) { paintAt = now; opts.paint(m.cv, m.key, 200, true); }
+    if (drag || Math.abs(target - pos) > 0.002 || (m.cv && scr.classList.contains('on') && !document.hidden)) anim = requestAnimationFrame(step);
+  }
+  const launch = () => { const m = MODES[sel]; if (opts.sfx) opts.sfx(); if (m.btn) m.btn.click(); };
+  cta.addEventListener('click', launch);
+  // — geste : glisser change d'astre ; au bout de la rangée, le glissé continue sur la page voisine (Social / Fusion)
+  let drag = null; const STEP = () => (slot.clientWidth || 300) * 0.5;
+  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: pos, t0: performance.now(), s0: pager.scrollLeft, moved: false, x: e.clientX, tm: performance.now(), v: 0 }; slot.setPointerCapture(e.pointerId); if (!anim) anim = requestAnimationFrame(step); });
+  slot.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x0; if (!drag.moved && Math.abs(dx) < 8) return;
+    if (!drag.moved) { drag.moved = true; pager.style.scrollSnapType = 'none'; } const now = performance.now(); drag.v = (e.clientX - drag.x) / Math.max(1, now - drag.tm); drag.x = e.clientX; drag.tm = now;
+    const raw = drag.p0 - dx / STEP(); pos = Math.max(0, Math.min(N - 1, raw)); const over = (raw - pos) * STEP(); pager.scrollLeft = drag.s0 + over; // au-delà du bout : la page voisine suit le doigt
+    const ns = Math.round(pos); if (ns !== sel) { sel = ns; texts(); if (opts.sfx) opts.sfx(); }
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null; const w = pager.clientWidth || 1;
+    if (!d.moved) { // simple toucher : l'astre central se lance, un voisin devient l'astre central
+      const r = slot.getBoundingClientRect(), x = e.clientX - (r.left + r.width / 2), o = Math.round(x / (r.width * 0.58)); const i = Math.max(0, Math.min(N - 1, Math.round(pos) + o)); if (o === 0 || i === Math.round(pos)) launch(); else select(i); return;
+    }
+    const over = pager.scrollLeft - d.s0; if (Math.abs(over) > w * 0.2) pager.scrollTo({ left: Math.round(pager.scrollLeft / w + Math.sign(over) * 0.45) * w, behavior: 'smooth' }); else pager.scrollTo({ left: d.s0, behavior: 'smooth' });
+    setTimeout(() => { pager.style.scrollSnapType = ''; }, 500); select(Math.round(pos - (Math.abs(d.v) > 0.3 ? Math.sign(d.v) * 0.6 : 0))); // un coup de pouce rapide saute à l'astre voisin
+  };
+  slot.addEventListener('pointerup', end); slot.addEventListener('pointercancel', end);
+  slot.addEventListener('pointerdown', () => { const hl = document.querySelector('.hm-hole'); if (hl) hl.classList.add('press'); }); ['pointerup', 'pointercancel'].forEach((ev) => slot.addEventListener(ev, () => { const hl = document.querySelector('.hm-hole'); if (hl) hl.classList.remove('press'); }));
+  texts(); requestAnimationFrame(() => { layout(); anim = requestAnimationFrame(step); });
+  pg[1].append(...[logo, tag, slot, info].filter(Boolean));
   wrap.remove(); menu.remove(); scr.append(pager);
 
   // barre d'onglets : l'indicateur suit le doigt (variable --p = position de la page, 0 à 2)
@@ -271,7 +340,6 @@ export function init(o = {}) {
   pager.addEventListener('scroll', () => { if (!tick) tick = requestAnimationFrame(go); }, { passive: true });
   const park = () => { IW = ind.offsetWidth; pager.style.scrollBehavior = 'auto'; pager.scrollLeft = cur * pager.clientWidth; pager.style.scrollBehavior = ''; go(); }; // garde la page courante quand la taille change (barre d'adresse du navigateur, rotation)
   window.addEventListener('resize', park); requestAnimationFrame(park);
-  const slotBtn = $('#b-mine'); if (slotBtn) { const on = (v) => () => hole.classList.toggle('press', v); slotBtn.addEventListener('pointerdown', on(true)); ['pointerup', 'pointercancel', 'pointerleave'].forEach((e) => slotBtn.addEventListener(e, on(false))); }
 }
 
 // Appelé par refreshTitle() : anneau de progression de la campagne + point « défi disponible »
@@ -288,6 +356,7 @@ function levelModal() {
   const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Éclats. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
   m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
 }
+let deckTexts = () => {};
 export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null, goals = null } = {}) {
   if (goals) { const s = $('#b-goals small'); if (s) s.textContent = goals.claimable ? `${goals.claimable} à valider` : `${goals.claimed} sur ${goals.total} validés`; const t = qa('.hm-tab').pop(); if (t) t.classList.toggle('dot', goals.claimable > 0); }
   if (fg) fg.refresh();
@@ -303,4 +372,5 @@ export function update({ dust = 0, daily = null, codex = 0, themes = null, level
       const step = (t) => { const k = Math.min(1, (t - t0) / 900); shownDust = Math.round(from + (n - from) * (1 - (1 - k) ** 3)); el.textContent = shownDust.toLocaleString('fr-FR'); if (k < 1) dustRaf = requestAnimationFrame(step); }; dustRaf = requestAnimationFrame(step); }
   }
   const d = $('#b-daily small'); if (d && daily) { d.textContent = daily.done ? 'Réussi aujourd\'hui' : 'Nouveau défi'; if (live) live.style.display = daily.done ? 'none' : ''; }
+  deckTexts();
 }
