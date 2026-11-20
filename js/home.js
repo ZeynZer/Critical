@@ -70,16 +70,16 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.hm-blob,.hm-gem,.hm-hero,.hm-hero::before,.hm-orb *,#s-title.hm .logo{animation:none!important}}
 
 /* sélecteur de modes : un astre par mode, en profondeur ; on glisse (ou on touche un voisin) pour changer, toucher l'astre central lance le mode */
-.hm-deck{position:relative;flex:none;width:min(86vw,400px,44vh);height:min(86vw,400px,44vh);margin:2px 0 0;perspective:900px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.hm-deck{position:relative;flex:none;width:min(86vw,400px,44vh);height:min(86vw,400px,44vh);margin:2px 0 0;perspective:900px;touch-action:pan-x;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .hm-dg{position:absolute;left:50%;top:50%;width:92%;height:92%;margin:-46% 0 0 -46%;border-radius:50%;pointer-events:none;will-change:opacity}
 .hm-it{position:absolute;left:50%;top:50%;width:70%;height:70%;margin:-35% 0 0 -35%;display:grid;place-items:center;cursor:pointer;will-change:transform,opacity}
 .hm-it>*{pointer-events:none}.hm-it canvas{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 22px rgba(var(--c),.6))}.hm-it img{width:132%;height:132%;object-fit:contain;max-width:none}
 .hm-it.on .hm-ib{animation:hm-fl 5s ease-in-out infinite}.hm-ib{display:grid;place-items:center;width:100%;height:100%}@keyframes hm-fl{50%{transform:translateY(-3%) scale(1.02)}}
 .hm-it .hm-live{right:18%;top:18%}
-.hm-di{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-top:2px}.hm-dn{margin:0;font:900 clamp(20px,6.4vw,26px)/1 var(--disp);letter-spacing:.06em;text-transform:uppercase;text-shadow:0 0 22px rgba(var(--c,190,110,255),.7);transition:opacity .2s}
+.hm-di{position:relative;z-index:40;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-top:2px}.hm-dn{margin:0;font:900 clamp(20px,6.4vw,26px)/1 var(--disp);letter-spacing:.06em;text-transform:uppercase;text-shadow:0 0 22px rgba(var(--c,190,110,255),.7);transition:opacity .2s}
 .hm-ds{margin:0;font:600 13px/1.3 var(--font);color:rgba(238,244,255,.72);min-height:17px;transition:opacity .2s}
 .hm-cta{height:54px;min-width:min(72vw,260px);padding:0 26px;border-radius:27px;border:0;color:#fff;font:900 14px var(--disp);letter-spacing:.12em;text-transform:uppercase;background:linear-gradient(135deg,rgba(var(--c,190,110,255),.95),rgba(255,79,216,.85));box-shadow:0 8px 30px rgba(var(--c,190,110,255),.4);transition:transform .15s}.hm-cta:active{transform:scale(.95)}
-.hm-dots{display:flex;gap:7px;margin-top:2px}.hm-dots i{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.28);transition:width .25s,background .25s}.hm-dots i.on{width:20px;background:rgb(var(--c,190,110,255))}
+.hm-dots{position:absolute;right:-2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:30;pointer-events:none}.hm-dots i{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.3);transition:height .25s,background .25s}.hm-dots i.on{height:22px;background:rgb(var(--c,190,110,255))}
 .hm-hid{display:none!important}
 @media (max-height:700px){.hm-cta{height:46px}.hm-dn{font-size:19px}.hm-di{gap:4px}}
 /* pager : trois pages qui glissent (aimantées), la page centrale est celle du jeu */
@@ -283,17 +283,17 @@ export function init(o = {}) {
     it.append(ib); if (m.live) it.append(live); it.setAttribute('role', 'button'); it.setAttribute('aria-label', m.n); items.push(it); slot.append(it);
   });
   const info = make('div', 'hm-di'), nm = make('p', 'hm-dn'), ds = make('p', 'hm-ds'), cta = make('button', 'hm-cta'), dots = make('div', 'hm-dots'); dots.append(...MODES.map(() => make('i')));
-  info.append(nm, ds, cta, dots);
-  const layout = () => { // cover-flow : o = écart à l'astre central (fractionnaire pendant le glissé)
-    const S = slot.clientWidth || 300;
+  info.append(nm, ds, cta); slot.append(dots);
+  const layout = () => { // pile verticale en profondeur : o = écart à l'astre central (fractionnaire pendant le glissé) ; les voisins dépassent au-dessus et en dessous
+    const S = slot.clientHeight || 300;
     items.forEach((it, i) => {
-      const o = i - pos, a = Math.min(Math.abs(o), 2.2), s = 1 - 0.34 * Math.min(a, 1.5), sg = o < 0 ? -1 : 1;
-      it.style.transform = reduce ? `translate3d(${(o * S * 0.6).toFixed(1)}px,0,0) scale(${s.toFixed(3)})` : `translate3d(${(o * S * 0.58).toFixed(1)}px,${(a * 6).toFixed(1)}px,${(-a * 150).toFixed(1)}px) rotateY(${(-Math.max(-1.4, Math.min(1.4, o)) * 38).toFixed(1)}deg) scale(${s.toFixed(3)})`; it.style.opacity = (1 - 0.45 * Math.min(a, 1.5)).toFixed(2); it.style.zIndex = 20 - Math.round(a * 4); it.classList.toggle('on', Math.abs(o) < 0.5);
+      const o = i - pos, a = Math.min(Math.abs(o), 2.2), s = 1 - 0.4 * Math.min(a, 1.4), oc = Math.max(-1.3, Math.min(1.3, o));
+      it.style.transform = reduce ? `translate3d(0,${(o * S * 0.42).toFixed(1)}px,0) scale(${s.toFixed(3)})` : `translate3d(0,${(o * S * 0.31).toFixed(1)}px,${(-a * 150).toFixed(1)}px) rotateX(${(oc * 22).toFixed(1)}deg) scale(${s.toFixed(3)})`; it.style.opacity = (1 - 0.62 * Math.min(a, 1.4)).toFixed(2); it.style.zIndex = 20 - Math.round(a * 4); it.classList.toggle('on', Math.abs(o) < 0.5);
       glows[i].style.opacity = Math.max(0, 1 - a * 1.3).toFixed(2);
     });
     const hl = document.querySelector('.hm-hole'); if (hl) hl.style.display = 'none'; // le trou noir est maintenant l'astre du mode Univers
   };
-  const texts = () => { const m = MODES[sel]; nm.textContent = m.n; ds.textContent = typeof m.sub === 'function' ? m.sub() : m.sub; cta.textContent = m.cta; info.style.setProperty('--c', m.col.join(',')); dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === sel)); };
+  const texts = () => { const m = MODES[sel]; nm.textContent = m.n; ds.textContent = typeof m.sub === 'function' ? m.sub() : m.sub; cta.textContent = m.cta; info.style.setProperty('--c', m.col.join(',')); dots.style.setProperty('--c', m.col.join(',')); dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === sel)); };
   deckTexts = texts;
   const select = (i, quiet) => { i = Math.max(0, Math.min(N - 1, i)); target = i; if (i !== sel) { sel = i; texts(); if (!quiet) { if (opts.sfx) opts.sfx(); try { navigator.vibrate && navigator.vibrate(8); } catch (e) { /* sans vibration */ } } } if (!anim) anim = requestAnimationFrame(step); };
   function step(now) { // ressort vers l'astre visé ; l'astre central est repeint en direct (15 images/s)
@@ -303,22 +303,21 @@ export function init(o = {}) {
   }
   const launch = () => { const m = MODES[sel]; if (opts.sfx) opts.sfx(); if (m.btn) m.btn.click(); };
   cta.addEventListener('click', launch);
-  // — geste : glisser change d'astre ; au bout de la rangée, le glissé continue sur la page voisine (Social / Fusion)
-  let drag = null; const STEP = () => (slot.clientWidth || 300) * 0.5;
-  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: pos, t0: performance.now(), s0: pager.scrollLeft, moved: false, x: e.clientX, tm: performance.now(), v: 0 }; slot.setPointerCapture(e.pointerId); if (!anim) anim = requestAnimationFrame(step); });
+  // — geste : glisser vers le haut ou le bas change d'astre ; le glissé horizontal reste celui des pages (le navigateur le prend : touch-action pan-x)
+  let drag = null; const STEP = () => (slot.clientHeight || 300) * 0.42;
+  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, y0: e.clientY, p0: pos, moved: false, y: e.clientY, tm: performance.now(), v: 0 }; if (!anim) anim = requestAnimationFrame(step); });
   slot.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x0; if (!drag.moved && Math.abs(dx) < 8) return;
-    if (!drag.moved) { drag.moved = true; pager.style.scrollSnapType = 'none'; } const now = performance.now(); drag.v = (e.clientX - drag.x) / Math.max(1, now - drag.tm); drag.x = e.clientX; drag.tm = now;
-    const raw = drag.p0 - dx / STEP(); pos = Math.max(0, Math.min(N - 1, raw)); const over = (raw - pos) * STEP(); pager.scrollLeft = drag.s0 + over; // au-delà du bout : la page voisine suit le doigt
-    const ns = Math.round(pos); if (ns !== sel) { sel = ns; texts(); if (opts.sfx) opts.sfx(); }
+    if (!drag || e.pointerId !== drag.id) return; const dy = e.clientY - drag.y0; if (!drag.moved && Math.abs(dy) < 8) return;
+    if (!drag.moved) { drag.moved = true; try { slot.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } } const now = performance.now(); drag.v = (e.clientY - drag.y) / Math.max(1, now - drag.tm); drag.y = e.clientY; drag.tm = now;
+    pos = Math.max(-0.25, Math.min(N - 0.75, drag.p0 - dy / STEP())); const ns = Math.max(0, Math.min(N - 1, Math.round(pos))); if (ns !== sel) { sel = ns; texts(); if (opts.sfx) opts.sfx(); }
   });
   const end = (e) => {
-    if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null; const w = pager.clientWidth || 1;
+    if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null;
+    if (e.type === 'pointercancel') { select(sel); return; } // le navigateur a pris le geste (page qui défile) : on garde l'astre actuel
     if (!d.moved) { // simple toucher : l'astre central se lance, un voisin devient l'astre central
-      const r = slot.getBoundingClientRect(), x = e.clientX - (r.left + r.width / 2), o = Math.round(x / (r.width * 0.58)); const i = Math.max(0, Math.min(N - 1, Math.round(pos) + o)); if (o === 0 || i === Math.round(pos)) launch(); else select(i); return;
+      const r = slot.getBoundingClientRect(), y = e.clientY - (r.top + r.height / 2), o = Math.round(y / (r.height * 0.31)), i = Math.max(0, Math.min(N - 1, Math.round(pos) + o)); if (o === 0 || i === Math.round(pos)) launch(); else select(i); return;
     }
-    const over = pager.scrollLeft - d.s0; if (Math.abs(over) > w * 0.2) pager.scrollTo({ left: Math.round(pager.scrollLeft / w + Math.sign(over) * 0.45) * w, behavior: 'smooth' }); else pager.scrollTo({ left: d.s0, behavior: 'smooth' });
-    setTimeout(() => { pager.style.scrollSnapType = ''; }, 500); select(Math.round(pos - (Math.abs(d.v) > 0.3 ? Math.sign(d.v) * 0.6 : 0))); // un coup de pouce rapide saute à l'astre voisin
+    select(Math.round(pos - (Math.abs(d.v) > 0.3 ? Math.sign(d.v) * 0.6 : 0))); // un coup de pouce rapide saute à l'astre voisin
   };
   slot.addEventListener('pointerup', end); slot.addEventListener('pointercancel', end);
   slot.addEventListener('pointerdown', () => { const hl = document.querySelector('.hm-hole'); if (hl) hl.classList.add('press'); }); ['pointerup', 'pointercancel'].forEach((ev) => slot.addEventListener(ev, () => { const hl = document.querySelector('.hm-hole'); if (hl) hl.classList.remove('press'); }));

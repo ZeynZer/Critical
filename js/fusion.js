@@ -39,9 +39,9 @@ const MODS = [{}, { g: 0.8, n: 'Brume : chute ralentie' }, { inset: 0.4, n: 'Cuv
 export const mod = (d) => ({ g: 1, inset: 0, n: '', ...MODS[d % MODS.length] });
 // Blitz : cuve resserrée en permanence, chrono qui ne tourne qu'une fois le 1er astre lâché, tempo (lâchers rapprochés) qui multiplie les points.
 export const BLITZ = { max: 10, inset: 1.2, ht: 11, start: 8, fast: 0.9, gainFast: 0.9, gainSlow: 0.5, drop: 25 }; // secondes ; inset en unités de cuve (W = 10)
-// Cuve partagée (duel 1v1 à tour de rôle) : le temps n'avance que pendant `steps` pas après chaque lâcher, puis la partie attend le lâcher de l'autre ;
-// celui dont l'astre reste au-dessus de la ligne a perdu. Pas de secteurs ni de réserve ; hypot remplacé par sqrt (exact) pour que deux navigateurs calculent les mêmes bits.
-export const SHARED = { inset: 1.0, ht: 11.5, steps: 240, turn: 8 };
+// Cuve partagée (duel 1v1) : deux joueurs lâchent à tour de rôle dans la même cuve, en continu (aucune attente entre les lâchers) ;
+// celui dont l'astre reste au-dessus de la ligne a perdu. Pas de secteurs ni de réserve. Le créateur du salon simule et envoie l'état, l'invité reçoit (voir mine.js).
+export const SHARED = { inset: 1.0, ht: 11.5, cool: 0.2, turn: 8 };
 const hh = (G) => G.ht || HT; // parties sauvegardées avant l'ajout de G.ht : sol d'origine
 const hyp = (G, x, y) => (G.shared ? Math.sqrt(x * x + y * y) : Math.hypot(x, y));
 const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; if (G.shared && m.inset < SHARED.inset) m.inset = SHARED.inset; return m; };
@@ -62,7 +62,7 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : opt.shared ? SHARED.ht : HT, shared: opt.shared ? { turn: 0, sim: 0, last: 0, hot: -1, loser: -1, drops: [0, 0] } : null, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : opt.shared ? SHARED.ht : HT, shared: opt.shared ? { turn: 0, last: 0, hot: -1, loser: -1, drops: [0, 0] } : null, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
   G.mod = modOf(G, 0); G.inset = G.mod.inset; G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
@@ -77,17 +77,17 @@ function add(G, k, tier, x, y, vx = 0, vy = 0) {
 }
 
 export function drop(G, x) {
-  if (G.over || G.cool > 0 || (G.shared && G.shared.sim > 0)) return false;
+  if (G.over || G.cool > 0) return false;
   const it = G.cur;
   const dx = Math.round(clampX(it, x, G.inset) * 1000) / 1000; // position arrondie au millième : c'est exactement ce que le journal enregistre
   const nb = add(G, it.k, it.tier, dx, DROP_Y); nb.fresh = true; if (it.v) nb.v = it.v;
-  if (G.shared) { const S = G.shared; nb.o = S.turn; S.last = S.turn; S.drops[S.turn]++; S.turn ^= 1; S.sim = SHARED.steps; } // à l'autre de jouer, une fois les astres posés
+  if (G.shared) { const S = G.shared; nb.o = S.turn; S.last = S.turn; S.drops[S.turn]++; S.turn ^= 1; } // à l'autre de jouer, tout de suite
   if (!G.sandbox) { G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
   if (G.blitz) { // tempo : un lâcher dans la seconde qui suit le précédent prolonge le combo (×1 à ×5) et rend plus de temps
     const B = G.blitz, gap = G.t - B.last, fast = gap < BLITZ.fast; B.started = true; B.combo = fast ? B.combo + 1 : 0; B.last = G.t; B.mult = 1 + Math.min(4, Math.floor(B.combo / 3)); B.maxMult = Math.max(B.maxMult, B.mult);
     const gain = fast ? BLITZ.gainFast : BLITZ.gainSlow; B.left = Math.min(BLITZ.max, B.left + gain); G.score += BLITZ.drop * B.mult; G.ev.push({ t: 'tgain', gain, mult: B.mult, x: dx, y: DROP_Y });
   }
-  G.cool = COOLDOWN; G.swapped = false; G.drops++; G.log.push(G.n, Math.round(dx * 1000)); // journal (pas de calcul, position) : permet de rejouer la partie à l'identique
+  G.cool = G.shared ? SHARED.cool : COOLDOWN; G.swapped = false; G.drops++; G.log.push(G.n, Math.round(dx * 1000)); // journal (pas de calcul, position) : permet de rejouer la partie à l'identique
   return true;
 }
 // Pouvoirs équipés : une variante à pouvoir (v = 1) que le joueur a découverte peut être « équipée » ; elle est consignée en tête du journal (x <= -1e6 : masque de rangs)
@@ -252,7 +252,6 @@ export function trace(G, x0) {
 function sub(G) {
   const dt = STEP; G.t += dt; G.n++;
   if (G.cool > 0) G.cool -= dt;
-  if (G.shared && G.shared.sim > 0) G.shared.sim--;
   if (G.blitz && G.blitz.started) { const B = G.blitz; if (B.combo && G.t - B.last > BLITZ.fast) { B.combo = 0; B.mult = 1; } B.left -= dt; if (B.left <= 0 && !G.over) { B.left = 0; G.over = true; G.timeout = true; G.ev.push({ t: 'over', timeout: true }); } } // le tempo retombe si on s'arrête ; temps écoulé = fin
   G.inset += (G.mod.inset - G.inset) * Math.min(1, dt * 1.5);
   if (G.chainT > 0) { G.chainT -= dt; if (G.chainT <= 0) { if (G.chain >= 3) G.ev.push({ t: 'chainEnd', chain: G.chain }); G.chain = 0; } }
@@ -296,15 +295,14 @@ function sub(G) {
   G.near = near || hot; // avertissement visuel seulement
   G.danger = hot ? G.danger + dt / DANGER_TIME : Math.max(0, G.danger - dt * 1.5);
   if (G.shared && hot && hotO >= 0) G.shared.hot = hotO;
-  if (G.danger >= 1 && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; if (G.shared) G.shared.loser = G.shared.hot >= 0 ? G.shared.hot : G.shared.last; G.ev.push({ t: 'over' }); }
+  if (G.danger >= 1 && !G.noEnd && !G.pend.some((p) => p.t === 'pierce')) { G.over = true; if (G.shared) G.shared.loser = G.shared.hot >= 0 ? G.shared.hot : G.shared.last; G.ev.push({ t: 'over' }); }
 }
 
 export const step = sub; // un pas de simulation (utilisé par la rediffusion)
 export function tick(G, dt) {
   if (G.over) return;
-  if (G.shared && G.shared.sim <= 0) { G.acc = 0; return; } // cuve partagée : le temps est figé tant que le prochain joueur n'a pas lâché
   G.acc += Math.min(dt, 0.05);
-  while (G.acc >= STEP && !G.over && !(G.shared && G.shared.sim <= 0)) { G.acc -= STEP; sub(G); }
+  while (G.acc >= STEP && !G.over) { G.acc -= STEP; sub(G); }
 }
 
 // Rejoue une partie depuis sa graine et son journal jusqu'au pas `end` : même moteur, même résultat.

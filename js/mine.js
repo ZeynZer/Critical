@@ -587,7 +587,7 @@ function update(dt) {
   aimX += (aimT - aimX) * Math.min(1, dt * 26); // l'astre suit le doigt en douceur
   if (G.cur !== lastCur) { lastCur = G.cur; if (G.cur && (G.cur.k === 'j' || G.cur.k === 'b') && !G.rep && !G.nop && tut < 0) { giftDur = G.cur.k === 'j' ? 1.3 : 0.8; giftLock = T + giftDur; H.vib([10, 30, 10]); } }
   if (want && T < giftLock) want = false; // touches de réflexe ignorées pendant le verrou
-  const turnOk = !G.shared || (duel && duel.phase === 'play' && G.shared.turn === duel.my && G.shared.sim <= 0); // duel de cuve : seulement à mon tour, une fois les astres posés
+  const turnOk = !G.shared || (duel && duel.phase === 'play' && G.shared.turn === duel.my); // duel de cuve : seulement à mon tour (mais tout de suite après le lâcher de l'autre)
   if (want && G.cool <= 0 && !ended && !paused) { want = false; if (!(G.duel && duel.phase !== 'play') && turnOk && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); if (G.duel) dsendDrop(); } } if (G.duel && (duel.phase !== 'play' || !turnOk)) want = false; // un relâché pendant le temps de recharge est mémorisé
 }
 function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisie ; les lâchers tombent exactement au pas où ils ont eu lieu
@@ -609,9 +609,8 @@ function sharedHud(cx, ty) { // à qui de jouer, temps restant, couleurs des jou
   const d = duel, S = G.shared, nm = d.names || ['', ''], mine = S.turn === d.my, col = (i) => (i ? MG : CY);
   txt(nm[0].toUpperCase().slice(0, 10), B.x + 8, ty + 20, 10, rgba(CY, 1), 'left', 'Orbitron', 800); txt(nm[1].toUpperCase().slice(0, 10), B.x + B.w - 8, ty + 20, 10, rgba(MG, 1), 'right', 'Orbitron', 800);
   if (d.phase === 'done') return txt('DUEL TERMINÉ', cx, ty + 38, 12, AM, 'center', 'Orbitron', 900);
-  if (S.sim > 0) txt('LES ASTRES SE POSENT…', cx, ty + 38, 10.5, 'rgba(255,255,255,.55)', 'center', 'Orbitron', 700);
-  else { const left = Math.max(0, d.tleft), low = left < 3; txt(mine ? 'À TOI · ' + Math.ceil(left) + ' s' : 'AU TOUR DE ' + (nm[S.turn] || '').toUpperCase().slice(0, 10), cx, ty + 38, 12.5, mine ? (low ? '#ff6a8a' : '#5dffc0') : rgba(col(S.turn), 1), 'center', 'Orbitron', 900); }
-  const x0 = B.x + 8, w = B.w - 16, y0 = ty + 46, k = S.sim > 0 ? 1 - S.sim / F.SHARED.steps : clamp(d.tleft / F.SHARED.turn, 0, 1); ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(x0, y0, w, 6, 3); ctx.fill(); if (k > 0.01) { ctx.fillStyle = S.sim > 0 ? 'rgba(255,255,255,.4)' : rgba(col(S.turn), 0.9); rr(x0, y0, Math.max(6, w * k), 6, 3); ctx.fill(); }
+  { const left = Math.max(0, d.tleft), low = left < 3; txt(mine ? 'À TOI · ' + Math.ceil(left) + ' s' : 'AU TOUR DE ' + (nm[S.turn] || '').toUpperCase().slice(0, 10), cx, ty + 38, 12.5, mine ? (low ? '#ff6a8a' : '#5dffc0') : rgba(col(S.turn), 1), 'center', 'Orbitron', 900); }
+  const x0 = B.x + 8, w = B.w - 16, y0 = ty + 46, k = clamp(d.tleft / F.SHARED.turn, 0, 1); ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(x0, y0, w, 6, 3); ctx.fill(); if (k > 0.01) { ctx.fillStyle = rgba(col(S.turn), 0.9); rr(x0, y0, Math.max(6, w * k), 6, 3); ctx.fill(); }
 }
 function blitzHud(cx, ty) { // chrono (barre + secondes) et tempo
   const b = G.blitz, left = b.left, low = b.started && left < 3, pulse = low ? 0.5 + 0.5 * Math.sin(T * 14) : 0;
@@ -925,7 +924,7 @@ function stepGhost() { // le fantôme rejoue la partie du rival, calée sur le t
 /* ============================== duel 1v1 (salon par code, Supabase Realtime) ============================== */
 const fmtT = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const dsend = (m) => { if (duel && duel.ch) duel.ch.send({ ...m, id: duel.id }); };
-function dsendDrop() { const L = G.log; if (G.shared) dsend({ e: 'sd', x: L[L.length - 1] }); else dsend({ e: 'd', n: L[L.length - 2], x: L[L.length - 1] }); }
+function dsendDrop() { const L = G.log; if (G.shared) { if (duel && duel.role === 'guest') { duel.sent++; const b = G.bodies[G.bodies.length - 1]; if (b) b.pred = true; dsend({ e: 'sd', x: L[L.length - 1] }); } } else dsend({ e: 'd', n: L[L.length - 2], x: L[L.length - 1] }); }
 function dview(state, title, sub) { // une seule fenêtre : salon, attente, résultat
   const m = $('#mn-m-duel'); m.classList.add('on'); m.dataset.s = state; $('#dl-t').textContent = title; $('#dl-s').textContent = sub || ''; $('#dl-new').innerHTML = state === 'end' ? 'Nouveau duel' : '<span>Duel classique</span><small>Même graine, 2 minutes, meilleur score</small>'; if (state === 'menu') $('#dl-code').textContent = '';
 }
@@ -956,12 +955,27 @@ export function inviteDuel(name, mode) { // salon créé pour toi + invitation e
   duelHost(mode); const d = duel; d.invited = true;
   H.challenge(name, d.code).then(() => { if (duel === d) dview('wait', 'Invitation envoyée', `${name} a 2 minutes pour répondre. Code du salon :`); }).catch((e) => { if (duel === d) { duelClose(); dview('menu', 'Invitation impossible', e.message); } });
 }
-function sharedMsg(m) { // duel de cuve : les lâchers de l'adversaire, sa visée, la fin
-  const d = duel; d.lastMsg = performance.now();
-  if (m.e === 'sd' && G && G.shared && G.shared.turn !== d.my && d.q.length < 3) d.q.push(m.x | 0);
+function sharedMsg(m) { // duel de cuve : lâchers de l'invité, état envoyé par le créateur, visée, fin
+  const d = duel; d.lastMsg = performance.now(); const host = d.role === 'host';
+  if (m.e === 'sd') { if (host && G && G.shared && d.q.length < 3) d.q.push(m.x | 0); }
+  else if (m.e === 'sn') { if (!host && G && G.shared && d.phase === 'play') snapApply(m); }
   else if (m.e === 'sa') d.oppAim = Math.max(0.5, Math.min(F.W - 0.5, (m.x | 0) / 1000));
-  else if (m.e === 'end') { if (G && G.over && G.shared.loser !== (m.loser | 0)) d.desync = true; }
+  else if (m.e === 'ping') { if (host) dsend({ e: 'pong', t: m.t }); }
+  else if (m.e === 'pong') d.lat = Math.min(0.25, Math.max(0.01, d.lat * 0.6 + 0.4 * ((performance.now() - m.t) / 2000)));
+  else if (m.e === 'end') { if (!host && G && G.shared && d.phase === 'play') { G.shared.loser = m.loser | 0; G.over = true; sharedFinish(); } }
   else if (m.e === 'bye' && d.phase !== 'done') sharedResult('forfait');
+}
+const r4 = (v, k) => Math.round(v * k) / k;
+function snapshot() { // état complet de la cuve (le créateur simule, l'invité affiche)
+  const S = G.shared; return { e: 'sn', S: [S.turn, S.last, S.hot, S.drops[0], S.drops[1]], g: [G.score | 0, G.chain, Math.round(G.chainT * 1000), G.maxChain, G.maxTier, G.fusions, G.drops, Math.round(G.danger * 1000), G.rs, G.nid], c: G.cur, q: G.queue,
+    b: G.bodies.map((b) => [b.id, b.tier, b.v | 0, r4(b.x, 2000), r4(b.y, 2000), r4(b.vx, 100), r4(b.vy, 100), r4(b.r, 1000), r4(b.ang, 100), r4(b.av, 100), r4(b.age, 100), b.hit ? 1 : 0, b.o == null ? -1 : b.o, b.fresh ? 1 : 0]) };
+}
+function snapApply(m) { // l'invité se cale sur l'état du créateur, puis rattrape le temps de trajet ; son propre lâcher en attente reste affiché
+  const d = duel, S = G.shared, pend = d.sent > m.S[4], keep = pend ? G.bodies.filter((b) => b.pred) : [];
+  G.bodies = m.b.map((a) => ({ id: a[0], k: 'c', tier: a[1], v: a[2], x: a[3], y: a[4], vx: a[5], vy: a[6], r: a[7], ang: a[8], av: a[9], age: a[10], hit: !!a[11], o: a[12] < 0 ? undefined : a[12], fresh: !!a[13], dead: false })); G.bodies.push(...keep);
+  const g = m.g; G.score = g[0]; G.chain = g[1]; G.chainT = g[2] / 1000; G.maxChain = g[3]; G.maxTier = g[4]; G.fusions = g[5]; G.danger = g[7] / 1000; G.nid = Math.max(G.nid, g[9]); S.hot = m.S[2];
+  if (!pend) { S.turn = m.S[0]; S.last = m.S[1]; S.drops = [m.S[3], m.S[4]]; G.drops = g[6]; G.rs = g[8]; G.cur = m.c; G.queue = m.q; }
+  for (let i = Math.min(30, Math.round(d.lat * 120)); i > 0; i--) F.step(G); // rattrape le temps de trajet
 }
 function duelMsg(m) {
   if (!duel || !m || m.id === duel.id) return; const d = duel;
@@ -982,7 +996,7 @@ function duelMsg(m) {
 function duelStart() {
   const d = duel; clearInterval(d.tm); d.phase = 'count'; d.cd = 3.2; d.lastCd = 4; d.hb = 0; d.lastMsg = performance.now();
   $('#mn-m-duel').classList.remove('on'); open(true); ended = false;
-  if (d.mode === 'shared') { newRun(d.seed, true, { duel: true, shared: true }); d.my = d.role === 'host' ? 0 : 1; d.names = d.role === 'host' ? [d.name, d.oppName] : [d.oppName, d.name]; d.q = []; d.oppAim = F.W / 2; d.tleft = F.SHARED.turn; d.aimSent = 0; d.lastAim = -1; d.op = null; return; }
+  if (d.mode === 'shared') { newRun(d.seed, true, { duel: true, shared: true }); d.my = d.role === 'host' ? 0 : 1; d.names = d.role === 'host' ? [d.name, d.oppName] : [d.oppName, d.name]; d.q = []; d.oppAim = F.W / 2; d.tleft = F.SHARED.turn; d.aimSent = 0; d.lastAim = -1; d.op = null; d.sent = 0; d.snapT = 0; d.lat = 0.05; d.lastTurn = -1; if (d.role === 'guest') G.noEnd = true; /* l'invité reçoit l'état du créateur et ne termine jamais la partie lui-même */ return; }
   newRun(d.seed, true, { duel: true }); d.op = { G: F.newGame(d.seed), ev: [], i: 0, known: 0, final: null, over: false };
 }
 function stepOpp() { // l'adversaire rejoue ses lâchers, calé sur mon nombre de pas (jamais plus loin que ce qu'il m'a annoncé)
@@ -1001,19 +1015,19 @@ function duelTick(dt) {
   if (d.me == null && performance.now() - d.lastMsg > 15000) duelResult('forfait'); // plus aucun signe de l'adversaire
 }
 function sharedTick(dt) {
-  const d = duel; if (d.phase !== 'play' || ended) return; const S = G.shared, mine = S.turn === d.my;
-  F.tick(G, slow > 0 ? dt * 0.3 : dt); if (G.over) return;
-  if ((d.hb = (d.hb || 0) + dt) >= 1) { d.hb = 0; dsend({ e: 's', n: G.n }); }
+  const d = duel; if (d.phase !== 'play' || ended) return; const S = G.shared, host = d.role === 'host', mine = S.turn === d.my;
+  F.tick(G, slow > 0 ? dt * 0.3 : dt); if (G.over && host) return;
+  if ((d.hb = (d.hb || 0) + dt) >= 1) { d.hb = 0; dsend({ e: 's' }); if (!host) dsend({ e: 'ping', t: performance.now() }); }
   if (performance.now() - d.lastMsg > 15000) return sharedResult('forfait'); // plus aucun signe de l'adversaire
-  if (S.sim > 0) { d.tleft = F.SHARED.turn; return; }
+  if (S.turn !== d.lastTurn) { d.lastTurn = S.turn; d.tleft = F.SHARED.turn; } d.tleft -= dt;
   if (mine) {
-    d.tleft -= dt; const now = performance.now(); if (now - d.aimSent > 100 && Math.abs(aimT - d.lastAim) > 0.01) { d.aimSent = now; d.lastAim = aimT; dsend({ e: 'sa', x: Math.round(aimT * 1000) }); } // l'adversaire voit où je vise
+    const now = performance.now(); if (now - d.aimSent > 100 && Math.abs(aimT - d.lastAim) > 0.01) { d.aimSent = now; d.lastAim = aimT; dsend({ e: 'sa', x: Math.round(aimT * 1000) }); } // l'adversaire voit où je vise
     if (d.tleft <= 0 && G.cool <= 0 && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(8); dsendDrop(); } // temps écoulé : lâcher automatique
   } else {
-    aimT = aimX = d.oppAim; d.tleft -= dt; // je vois où il vise
-    if (d.q.length && G.cool <= 0) { const x = d.q.shift(); aimT = aimX = x / 1000; if (F.drop(G, x / 1000)) { A.release(); d.tleft = F.SHARED.turn; } }
-    else if (d.tleft < -7) sharedResult('forfait'); // il n'a pas joué, même après le délai
+    aimT = aimX = d.oppAim; if (d.tleft < -7) return sharedResult('forfait'); // il n'a pas joué, même après le délai
+    if (host && d.q.length && G.cool <= 0 && S.turn === 1) { const x = d.q.shift(); aimT = aimX = x / 1000; if (F.drop(G, x / 1000)) A.release(); } // lâcher de l'invité, appliqué dès réception
   }
+  if (host && (d.snapT += dt) >= 0.1) { d.snapT = 0; dsend(snapshot()); } // l'état part dix fois par seconde
 }
 function sharedFinish() { const d = duel; if (!d || d.phase === 'done') return; dsend({ e: 'end', loser: G.shared.loser }); sharedResult(G.shared.loser === d.my ? 'lose' : 'win'); }
 function sharedResult(r) {
@@ -1021,8 +1035,7 @@ function sharedResult(r) {
   setTimeout(() => {
     if (duel !== d) return; (won ? A.win : A.fail)();
     dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : 'Défaite', r === 'lose' ? 'Ton astre a fait déborder la cuve.' : r === 'win' ? `${d.oppName} a fait déborder la cuve.` : `${d.oppName} a quitté la partie.`);
-    if (d.desync) { $('#dl-s').textContent += ' · Les deux écrans ne sont pas d\'accord : match sans Elo.'; return; }
-    if (H.eloReport) H.eloReport(d.code + ':' + d.seed, won, d.oppName).then((x) => { if (duel === d && x) $('#dl-s').textContent += x.settled ? ` · Elo ${x.delta >= 0 ? '+' : ''}${x.delta} (${x.elo})` : ' · Elo mis à jour dès que ton adversaire confirme'; }).catch(() => {});
+        if (H.eloReport) H.eloReport(d.code + ':' + d.seed, won, d.oppName).then((x) => { if (duel === d && x) $('#dl-s').textContent += x.settled ? ` · Elo ${x.delta >= 0 ? '+' : ''}${x.delta} (${x.elo})` : ' · Elo mis à jour dès que ton adversaire confirme'; }).catch(() => {});
   }, 1300);
 }
 function duelFinish() {

@@ -179,13 +179,14 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   const r = F.replay(g1.seed, g1.log, g1.n); assert.deepEqual(r.powers, { 8: 1 }, 'le rejeu lit les pouvoirs dans le journal');
   console.log('pouvoirs équipés OK');
 }
-{ // cuve partagée : tours alternés, temps figé entre deux lâchers, propriétaire des astres, perdant = celui dont l'astre dépasse, rejeu identique
+{ // cuve partagée : tours alternés sans attente, propriétaire des astres, perdant = celui dont l'astre dépasse, rejeu identique
   const play = () => { const G = F.newGame(17, { shared: true }); let guard = 0; const xs = [5, 5.2, 4.8, 5, 5.1, 4.9]; // on empile au même endroit : la cuve finit par déborder
-    while (!G.over && guard++ < 300) { while (G.shared.sim > 0 && !G.over) F.step(G); if (G.over) break; const t = G.shared.turn, n0 = G.n; F.tick(G, 1); assert.equal(G.n, n0, 'le temps est figé tant que personne ne lâche'); assert.ok(F.drop(G, xs[guard % xs.length]), 'lâcher autorisé'); assert.equal(G.shared.last, t, 'le lâcheur est mémorisé'); assert.ok(!F.drop(G, 5), 'pas deux lâchers de suite'); }
+    while (!G.over && guard++ < 400) { for (let k = 0; k < 30 && !G.over; k++) F.step(G); if (G.over) break; const t = G.shared.turn; assert.ok(F.drop(G, xs[guard % xs.length]), 'lâcher autorisé tout de suite (0,25 s après le précédent)'); assert.equal(G.shared.last, t, 'le lâcheur est mémorisé'); assert.equal(G.shared.turn, t ^ 1, 'à l\'autre aussitôt'); assert.ok(!F.drop(G, 5), 'pas deux lâchers dans le même instant'); }
     return G; };
-  const a = play(), b = play(); assert.ok(a.over && (a.shared.loser === 0 || a.shared.loser === 1), 'la cuve finit par déborder : un perdant désigné'); assert.equal(a.shared.loser, b.shared.loser); assert.equal(a.score, b.score, 'même partie des deux côtés (hypot remplacé)');
-  assert.ok(a.shared.drops[0] > 0 && a.shared.drops[1] > 0 && Math.abs(a.shared.drops[0] - a.shared.drops[1]) <= 1, 'tours alternés'); assert.equal(F.swapHold(F.newGame(1, { shared: true })), false, 'pas de réserve en duel de cuve');
+  const a = play(), b = play(); assert.ok(a.over && (a.shared.loser === 0 || a.shared.loser === 1), 'la cuve finit par déborder : un perdant désigné'); assert.equal(a.shared.loser, b.shared.loser); assert.equal(a.score, b.score, 'même partie des deux côtés');
+  assert.ok(Math.abs(a.shared.drops[0] - a.shared.drops[1]) <= 1, 'tours alternés'); assert.equal(F.swapHold(F.newGame(1, { shared: true })), false, 'pas de réserve en duel de cuve');
   assert.ok(a.inset >= F.SHARED.inset - 1e-6 && a.ht === F.SHARED.ht, 'cuve réduite'); const r = F.replay(a.seed, a.log, a.n, { shared: true }); assert.equal(r.score, a.score, 'rejeu identique');
+  const rep = F.newGame(17, { shared: true }); rep.noEnd = true; for (let k = 0; k < 120 * 400 && !rep.over; k++) { F.step(rep); if (k % 40 === 0) F.drop(rep, 5); } assert.ok(!rep.over, 'une copie « noEnd » (invité) ne termine jamais la partie elle-même');
   console.log('cuve partagée OK (perdant ' + a.shared.loser + ' après ' + a.drops + ' lâchers)');
 }
 { // partie sauvegardée avant l'ajout de G.ht (sol) : rien ne doit traverser le sol à la reprise
