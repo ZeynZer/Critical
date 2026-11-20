@@ -34,6 +34,10 @@ alter table public.players add column if not exists claim_until timestamptz;
 alter table public.players add column if not exists accent smallint not null default 0;
 alter table public.players add column if not exists frame smallint not null default 0;
 alter table public.players add column if not exists title text not null default '';
+-- classement Elo des duels de cuve
+alter table public.players add column if not exists elo integer not null default 1000;
+alter table public.players add column if not exists elo_games integer not null default 0;
+alter table public.players add column if not exists elo_wins integer not null default 0;
 create unique index if not exists players_name_key on public.players (lower(name));
 
 create table if not exists public.scores (
@@ -190,7 +194,7 @@ language sql stable security definer set search_path = public as $$
     'wins', (select count(*) from scores d where d.player_id = p.id and d.board like 'day:%'),
     'likes', (select count(*) from likes l where l.to_id = p.id),
     'liked', exists (select 1 from likes l join players me on me.id = l.from_id where l.to_id = p.id and me.secret_hash = critical_hash(p_secret)),
-    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level, 'admin', p.is_admin, 'accent', p.accent, 'frame', p.frame, 'title', p.title)
+    'online', coalesce(p.seen_at > now() - interval '100 seconds', false), 'duel', not p.no_duel, 'level', p.level, 'admin', p.is_admin, 'accent', p.accent, 'frame', p.frame, 'title', p.title, 'elo', p.elo, 'elo_games', p.elo_games)
   from players p left join scores s on s.player_id = p.id and s.board = 'all'
   where lower(p.name) = lower(btrim(p_name))
 $$;
@@ -554,3 +558,83 @@ begin perform admin_id(p_secret); delete from announcements where id = p_id; end
 
 revoke all on function public.idea_post(text, text), public.idea_list(text, text, integer), public.idea_like(text, bigint), public.idea_delete(text, bigint), public.admin_idea_status(text, bigint, text, boolean), public.admin_idea_delete(text, bigint), public.admin_stats(text), public.admin_player(text, text), public.admin_clear_profile(text, text), public.admin_gift_all(text, integer, integer, text, text, integer, boolean), public.admin_announcements(text), public.admin_announce_delete(text, bigint) from public, anon, authenticated;
 grant execute on function public.idea_post(text, text), public.idea_list(text, text, integer), public.idea_like(text, bigint), public.idea_delete(text, bigint), public.admin_idea_status(text, bigint, text, boolean), public.admin_idea_delete(text, bigint), public.admin_stats(text), public.admin_player(text, text), public.admin_clear_profile(text, text), public.admin_gift_all(text, integer, integer, text, text, integer, boolean), public.admin_announcements(text), public.admin_announce_delete(text, bigint) to anon, authenticated;
+
+-- ============================== Duel de cuve : classement Elo ==============================
+create table if not exists public.duel_reports (
+  match text not null, player_id uuid not null references public.players (id) on delete cascade, opp_id uuid not null references public.players (id) on delete cascade,
+  won boolean not null, at timestamptz not null default now(), settled boolean not null default false, delta integer,
+  primary key (match, player_id)
+);
+create index if not exists duel_reports_pending on public.duel_reports (settled, at);
+alter table public.duel_reports enable row level security; revoke all on public.duel_reports from anon, authenticated;
+
+-- Règle l'Elo d'un match quand c'est possible : deux comptes rendus concordants (un vainqueur, un perdant) ; deux comptes rendus qui se contredisent = litige, aucun point ;
+-- un seul compte rendu et plus de 90 s écoulées (l'autre a quitté) = on croit celui qui a rapporté. Même paire : 4 matchs classés par 24 h au plus (anti-échange de points).
+create or replace function public.elo_settle(p_match text) returns void
+language plpgsql security definer set search_path = public as $$
+declare a duel_reports; b duel_reports; w duel_reports; l duel_reports; ew integer; el integer; ex numeric; d integer := 0; n integer;
+begin
+  select count(*) into n from duel_reports where match = p_match;
+  if n = 0 or exists (select 1 from duel_reports where match = p_match and settled) then return; end if;
+  select * into a from duel_reports where match = p_match order by at limit 1;
+  select * into b from duel_reports where match = p_match and player_id <> a.player_id limit 1;
+  if b.player_id is null then
+    if a.at > now() - interval '90 seconds' then return; end if; -- on attend encore l'autre joueur
+    if a.won then w := a; else l := a; end if;
+  elsif a.opp_id <> b.player_id or b.opp_id <> a.player_id or a.won = b.won then
+    update duel_reports set settled = true, delta = 0 where match = p_match; return; -- litige
+  else
+    if a.won then w := a; l := b; else w := b; l := a; end if;
+  end if;
+  -- un seul compte rendu : on reconstitue l'autre camp
+  if w.player_id is null then w := (p_match, l.opp_id, l.player_id, true, now(), false, null)::duel_reports; end if;
+  if l.player_id is null then l := (p_match, w.opp_id, w.player_id, false, now(), false, null)::duel_reports; end if;
+  if (select count(*) from duel_reports r where r.settled and r.delta <> 0 and r.won and ((r.player_id = w.player_id and r.opp_id = l.player_id) or (r.player_id = l.player_id and r.opp_id = w.player_id)) and r.at > now() - interval '24 hours') >= 4
+  then d := 0;
+  else
+    select elo into ew from players where id = w.player_id; select elo into el from players where id = l.player_id;
+    ex := 1 / (1 + power(10, (el - ew) / 400.0)); d := greatest(1, round(32 * (1 - ex))::integer);
+    update players set elo = elo + d, elo_games = elo_games + 1, elo_wins = elo_wins + 1 where id = w.player_id;
+    update players set elo = greatest(100, elo - d), elo_games = elo_games + 1 where id = l.player_id;
+  end if;
+  insert into duel_reports (match, player_id, opp_id, won, delta, settled) values (p_match, w.player_id, w.opp_id, true, d, true) on conflict (match, player_id) do update set settled = true, delta = d;
+  insert into duel_reports (match, player_id, opp_id, won, delta, settled) values (p_match, l.player_id, l.opp_id, false, -d, true) on conflict (match, player_id) do update set settled = true, delta = -d;
+end $$;
+revoke all on function public.elo_settle(text) from public, anon, authenticated;
+
+-- Compte rendu de fin de match (match = CODE:graine). Renvoie l'Elo et le gain si le match est réglé, sinon « en attente » de l'adversaire.
+create or replace function public.duel_report(p_secret text, p_match text, p_won boolean, p_opp text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid; v_opp uuid; r duel_reports;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret) and not banned; if v_me is null then raise exception 'unknown_player'; end if;
+  if p_match !~ '^[A-Z0-9]{4}:[0-9]{1,10}$' then raise exception 'invalid_match'; end if;
+  select id into v_opp from players where lower(name) = lower(btrim(p_opp)) and id <> v_me; if v_opp is null then raise exception 'not_found'; end if;
+  if (select count(*) from duel_reports where player_id = v_me and at > now() - interval '1 hour') >= 20 then raise exception 'too_fast'; end if;
+  insert into duel_reports (match, player_id, opp_id, won) values (p_match, v_me, v_opp, coalesce(p_won, false)) on conflict (match, player_id) do nothing;
+  perform elo_settle(p_match);
+  select * into r from duel_reports where match = p_match and player_id = v_me;
+  return json_build_object('settled', r.settled, 'delta', coalesce(r.delta, 0), 'elo', (select elo from players where id = v_me));
+end $$;
+
+-- Mes derniers matchs réglés (les comptes rendus restés seuls sont réglés au passage) + mon Elo et mon rang.
+create or replace function public.elo_sync(p_secret text) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_me uuid; m text;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret); if v_me is null then return null; end if;
+  for m in select match from duel_reports where player_id = v_me and not settled and at < now() - interval '90 seconds' limit 10 loop perform elo_settle(m); end loop;
+  return json_build_object('elo', (select elo from players where id = v_me), 'games', (select elo_games from players where id = v_me),
+    'rank', (select count(*) + 1 from players o where o.elo_games > 0 and o.elo > (select elo from players where id = v_me)), 'total', (select count(*) from players where elo_games > 0),
+    'recent', coalesce((select json_agg(json_build_object('match', x.match, 'delta', x.delta, 'won', x.won) order by x.at desc) from (select * from duel_reports where player_id = v_me and settled order by at desc limit 5) x), '[]'::json));
+end $$;
+
+create or replace function public.elo_board(p_offset integer default 0, p_limit integer default 50)
+returns table (rank bigint, name text, elo integer, games integer, wins integer, badge text, online boolean, level integer, accent smallint, frame smallint, title text)
+language sql stable security definer set search_path = public as $$
+  select row_number() over (order by p.elo desc, p.elo_games desc), p.name, p.elo, p.elo_games, p.elo_wins, p.featured[1], coalesce(p.seen_at > now() - interval '100 seconds', false), p.level, p.accent, p.frame, p.title
+  from players p where p.elo_games > 0 and not p.banned order by 1 offset greatest(p_offset, 0) limit least(greatest(p_limit, 1), 100)
+$$;
+
+revoke all on function public.duel_report(text, text, boolean, text), public.elo_sync(text), public.elo_board(integer, integer) from public, anon, authenticated;
+grant execute on function public.duel_report(text, text, boolean, text), public.elo_sync(text), public.elo_board(integer, integer) to anon, authenticated;
