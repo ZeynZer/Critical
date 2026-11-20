@@ -70,7 +70,7 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.hm-blob,.hm-gem,.hm-hero,.hm-hero::before,.hm-orb *,#s-title.hm .logo{animation:none!important}}
 
 /* sélecteur de modes : un astre par mode, en profondeur ; on glisse (ou on touche un voisin) pour changer, toucher l'astre central lance le mode */
-.hm-deck{position:relative;flex:none;width:min(86vw,400px,44vh);height:min(86vw,400px,44vh);margin:2px 0 0;perspective:900px;touch-action:pan-x;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.hm-deck{position:relative;flex:none;width:min(86vw,400px,44vh);height:min(86vw,400px,44vh);margin:2px 0 0;perspective:900px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .hm-dg{position:absolute;left:50%;top:50%;width:92%;height:92%;margin:-46% 0 0 -46%;border-radius:50%;pointer-events:none;will-change:opacity}
 .hm-it{position:absolute;left:50%;top:50%;width:70%;height:70%;margin:-35% 0 0 -35%;display:grid;place-items:center;cursor:pointer;will-change:transform,opacity}
 .hm-it>*{pointer-events:none}.hm-it canvas{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 22px rgba(var(--c),.6))}.hm-it img{width:132%;height:132%;object-fit:contain;max-width:none}
@@ -303,17 +303,25 @@ export function init(o = {}) {
   }
   const launch = () => { const m = MODES[sel]; if (opts.sfx) opts.sfx(); if (m.btn) m.btn.click(); };
   cta.addEventListener('click', launch);
-  // — geste : glisser vers le haut ou le bas change d'astre ; le glissé horizontal reste celui des pages (le navigateur le prend : touch-action pan-x)
+  // — geste : on décide de l'axe dès les premiers pixels, en favorisant le vertical (un glissé même en diagonale vers le haut/bas change d'astre) ; horizontal franc = changement de page,
+  // piloté ici (touch-action: none) pour que le navigateur ne confonde jamais les deux. L'axe reste verrouillé jusqu'à la fin du geste.
   let drag = null; const STEP = () => (slot.clientHeight || 300) * 0.42;
-  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, y0: e.clientY, p0: pos, moved: false, y: e.clientY, tm: performance.now(), v: 0 }; if (!anim) anim = requestAnimationFrame(step); });
+  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: pos, s0: pager.scrollLeft, axis: null, moved: false, y: e.clientY, x: e.clientX, tm: performance.now(), v: 0 }; try { slot.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } if (!anim) anim = requestAnimationFrame(step); });
   slot.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id) return; const dy = e.clientY - drag.y0; if (!drag.moved && Math.abs(dy) < 8) return;
-    if (!drag.moved) { drag.moved = true; try { slot.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } } const now = performance.now(); drag.v = (e.clientY - drag.y) / Math.max(1, now - drag.tm); drag.y = e.clientY; drag.tm = now;
+    if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.axis) { if (Math.max(Math.abs(dx), Math.abs(dy)) < 10) return; drag.axis = Math.abs(dy) > Math.abs(dx) * 0.75 ? 'v' : 'h'; drag.moved = true; if (drag.axis === 'h') pager.style.scrollSnapType = 'none'; }
+    const now = performance.now();
+    if (drag.axis === 'h') { drag.v = (e.clientX - drag.x) / Math.max(1, now - drag.tm); drag.x = e.clientX; drag.tm = now; pager.scrollLeft = drag.s0 - dx; return; } // la page suit le doigt
+    drag.v = (e.clientY - drag.y) / Math.max(1, now - drag.tm); drag.y = e.clientY; drag.tm = now;
     pos = Math.max(-0.25, Math.min(N - 0.75, drag.p0 - dy / STEP())); const ns = Math.max(0, Math.min(N - 1, Math.round(pos))); if (ns !== sel) { sel = ns; texts(); if (opts.sfx) opts.sfx(); }
   });
   const end = (e) => {
-    if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null;
-    if (e.type === 'pointercancel') { select(sel); return; } // le navigateur a pris le geste (page qui défile) : on garde l'astre actuel
+    if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null; const w = pager.clientWidth || 1;
+    if (d.axis === 'h') { // page voisine si on a assez tiré ou lancé le geste, sinon retour
+      const p = d.s0 / w, mv = (d.s0 - pager.scrollLeft) / w, fast = Math.abs(d.v) > 0.45; let to = Math.round(p - (Math.abs(mv) > 0.2 || fast ? Math.sign(mv || -d.v) * 1 : 0)); to = Math.max(0, Math.min(Math.round(pager.scrollWidth / w) - 1, to));
+      if (e.type === 'pointercancel') to = Math.round(p); pager.scrollTo({ left: to * w, behavior: 'smooth' }); setTimeout(() => { pager.style.scrollSnapType = ''; }, 500); select(sel, true); return;
+    }
+    if (e.type === 'pointercancel') { select(sel); return; }
     if (!d.moved) { // simple toucher : l'astre central se lance, un voisin devient l'astre central
       const r = slot.getBoundingClientRect(), y = e.clientY - (r.top + r.height / 2), o = Math.round(y / (r.height * 0.31)), i = Math.max(0, Math.min(N - 1, Math.round(pos) + o)); if (o === 0 || i === Math.round(pos)) launch(); else select(i); return;
     }
