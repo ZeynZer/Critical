@@ -1,3 +1,4 @@
+import * as VD from './voidium.js';
 // Critical — écran d'accueil « Liquid Glass ».
 // Non destructif : il réorganise les boutons EXISTANTS (mêmes identifiants, mêmes actions) et ajoute des décors.
 // Il doit être lancé après CH.init() et ED.init() (qui ajoutent leurs boutons au menu).
@@ -22,7 +23,7 @@ const ICONS = {
   duel: '<path d="M5 19L16 8M13 5h6v6M19 19L8 8M11 5H5v6"/>',
   code: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
 };
-const GEM = '<svg class="hm-gem" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="hm-gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9ff9ff"/><stop offset=".55" stop-color="#6f8cff"/><stop offset="1" stop-color="#ff6ee0"/></linearGradient></defs><path d="M7 3h10l4.5 6L12 21.5 2.5 9z" fill="url(#hm-gg)" stroke="rgba(255,255,255,.85)" stroke-width="1.2" stroke-linejoin="round"/><path d="M2.5 9h19M8.5 9L12 21.5M15.5 9L12 21.5M7 3l1.5 6M17 3l-1.5 6" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".9"/></svg>';
+const GEM = VD.icon('hm-gem');
 const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
 const CSS = `
@@ -128,6 +129,7 @@ const CSS = `
 @media (max-width:359px){.hm-chip .hm-sbi{display:none}.hm-chip{padding:0 12px}.hm-chip .hm-t{font-size:11px}.hm-pill span{display:none}.hm-hd h2{font-size:26px}}
 .hm-lv{position:absolute;right:70px;top:calc(env(safe-area-inset-top,0px) + 12px);width:46px;height:46px;border-radius:23px;padding:0;display:grid;place-items:center;z-index:2;font:900 14px var(--disp);color:#fff}
 .hm-lvr{position:absolute;inset:4px;border-radius:50%;background:conic-gradient(var(--c,#4df3ff) calc(var(--p,0) * 1%),rgba(255,255,255,.16) 0);-webkit-mask:radial-gradient(circle,transparent 57%,#000 60%);mask:radial-gradient(circle,transparent 57%,#000 60%)}.hm-lv b{position:relative}
+.hm-pf{position:absolute;right:122px;top:calc(env(safe-area-inset-top,0px) + 12px);height:46px;max-width:128px;padding:0 14px 0 6px;border-radius:23px;display:flex;align-items:center;gap:7px;z-index:2;color:#fff}.hm-pf b{font:800 12px var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:76px}.hm-pfa{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);overflow:hidden}.hm-pfa svg{width:18px;height:18px}.hm-pfa canvas{width:30px!important;height:30px!important}@media (max-width:370px){.hm-pf{padding:0 6px;right:122px}.hm-pf b{display:none}}
 .hm-lvb{width:100%;height:10px;border-radius:5px;background:rgba(255,255,255,.14);overflow:hidden}.hm-lvb i{display:block;height:100%;border-radius:5px}.hm-lvn{font-size:13px!important;line-height:1.45;color:rgba(255,255,255,.7)!important;text-align:left}
 .hm-tab span{font-size:10px!important}.hm-tab.dot::after{content:'';position:absolute;top:9px;right:calc(50% - 22px);width:9px;height:9px;border-radius:50%;background:#5dffc0;box-shadow:0 0 9px #5dffc0}
 .arming button{pointer-events:none!important;opacity:.4!important;filter:saturate(.4)}
@@ -226,8 +228,8 @@ function space(cv, scr) {
 const bgLayer = (scr) => { const d = make('div', 'hm-bg', '<canvas class="hm-space"></canvas>'); space(d.firstChild, scr); return d; };
 
 let live = null, pager = null, shownDust = null, dustRaf = 0;
-const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Fusion', ICONS.fuse], ['Collection', ICONS.coll]];
-let fg = null, opts = {};
+const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Collection', ICONS.coll], ['Défis', ICONS.goal]];
+let col = null, chp = null, opts = {};
 // Une ligne de verre : icône ronde, titre, sous-titre, valeur à droite
 const row = (b, icon) => {
   reskin(b, ['gl', 'hm-camp', 'hm-in']); const t = titleOf(b), s = b.querySelector('small'), tx = make('span', 'hm-tx');
@@ -237,25 +239,25 @@ export function init(o = {}) {
   opts = o;
   const scr = $('#s-title'); if (!scr || scr.classList.contains('hm')) return;
   const menu = $('.menu', scr), wrap = $('.title-wrap', scr); if (!menu || !wrap) return;
-  const st = make('style'); st.textContent = CSS + GCSS; document.head.appendChild(st);
+  const st = make('style'); st.textContent = CSS + GCSS + VD.CSS; document.head.appendChild(st);
   scr.classList.add('hm'); scr.prepend(bgLayer(scr));
 
-  // barre du haut : monnaie (Éclats) et réglages
+  // barre du haut : monnaie (Voidium) et réglages
   const gear = $('#b-set2'); if (gear) { reskin(gear, ['gl', 'hm-in'], ['glass', 'icon']); gear.style.setProperty('--e', '.1s'); }
   const stars = $('#t-stars'); if (stars) { reskin(stars, ['gl', 'hm-pill', 'hm-in'], ['foot']); stars.style.setProperty('--e', '.05s'); scr.appendChild(stars); }
 
   // niveau : anneau de progression à gauche de la roue des réglages
   const lv = make('button', 'gl hm-lv hm-in', '<i class="hm-lvr"></i><b>1</b>'); lv.setAttribute('aria-label', 'Niveau'); lv.style.setProperty('--e', '.08s'); scr.append(lv);
   lv.addEventListener('click', () => { opts.sfx && opts.sfx(); levelModal(); });
+  const pf = make('button', 'gl hm-pf hm-in', '<span class="hm-pfa"></span><b>Profil</b>'); pf.setAttribute('aria-label', 'Mon profil'); pf.style.setProperty('--e', '.12s'); scr.append(pf); pf.addEventListener('click', () => { opts.sfx && opts.sfx(); opts.openProfile && opts.openProfile(); });
   // pages
   pager = make('div', 'hm-pager'); const pg = PAGES.map(() => make('section', 'hm-pg')); pager.append(...pg);
   const head = (p, t, s) => p.append(make('div', 'hm-hd', `<h2>${t}</h2><p>${s}</p>`));
   head(pg[0], 'Social', 'Affronte les autres joueurs');
-  head(pg[2], 'Fusion', 'Packs d\'astres et astres uniques'); head(pg[3], 'Collection', 'Tes astres, tes décors');
-  if (opts.forge) fg = opts.forge(pg[2]);
+  head(pg[2], 'Collection', 'Tes cartes, ton deck, tes packs'); head(pg[3], 'Défis', 'Missions, objectifs, récompenses');
+  if (opts.collection) col = opts.collection(pg[2]); if (opts.challenges) chp = opts.challenges(pg[3]);
   const place = (p, id, icon, d) => { const b = $(id); if (b) { row(b, icon); b.style.setProperty('--e', d); p.append(b); } };
   place(pg[0], '#b-rank', ICONS.rank, '.15s'); place(pg[0], '#b-duel', ICONS.duel, '.22s'); place(pg[0], '#b-profile', ICONS.user, '.29s');
-  place(pg[3], '#b-codex', ICONS.coll, '.15s'); place(pg[3], '#b-themes', ICONS.theme, '.22s'); place(pg[3], '#b-goals', ICONS.goal, '.29s'); place(pg[3], '#b-sandbox', ICONS.casc, '.36s');
 
   // page centrale : le trou noir EST le bouton Jouer
   const logo = $('.logo', wrap); if (logo) { logo.textContent = 'CRITICAL'; logo.classList.add('hm-in'); }
@@ -263,15 +265,14 @@ export function init(o = {}) {
   const play = $('#b-mine') || $('#b-endless'), daily = $('#b-daily'), qb = $('#b-quests'), bz = $('#b-blitz');
   const rec = play && ($('#b-mine-s', play) || $('#b-endless-s', play));
   live = make('span', 'hm-live');
-  if (qb) place(pg[3], '#b-quests', ICONS.goal, '.43s');
-  const hid = make('div', 'hm-hid'); for (const b of [play, daily, bz]) if (b) hid.append(b); scr.append(hid); // les boutons d'origine restent dans la page (câblage, textes mis à jour) mais cachés : l'astre central est le bouton
+  const hid = make('div', 'hm-hid'); for (const b of [play, daily, bz, $('#b-sandbox')]) if (b) hid.append(b); scr.append(hid); // les boutons d'origine restent dans la page (câblage, textes mis à jour) mais cachés : l'astre central est le bouton
   // — modes : un astre par mode (key = astre du jeu, peint en direct) ; ajouter un mode = ajouter une ligne ici
   const MODES = [
     { id: 'play', n: 'Univers', col: [190, 110, 255], btn: play, cta: 'Jouer', sub: () => (rec && rec.textContent) || 'Fusionne, monte de secteur, bats ton record', art: 'hole' },
     { id: 'blitz', n: 'Blitz', col: [77, 243, 255], btn: bz, cta: 'Lancer le Blitz', sub: () => 'Cuve étroite · chrono · tempo jusqu\'à ×5', key: '9' },
     { id: 'daily', n: 'Défi du jour', col: [255, 194, 71], btn: daily, cta: 'Relever le défi', sub: () => (daily && daily.querySelector('small') && daily.querySelector('small').textContent) || 'Une règle, tout le monde', key: '7', live: true },
     { id: 'duel', n: 'Duel 1v1', col: [255, 106, 138], btn: pager.querySelector('#b-duel') || $('#b-duel'), cta: 'Choisir un duel', sub: () => 'Duel de cuve classé Elo · duel classique', key: '11' },
-    { id: 'sandbox', n: 'Bac à sable', col: [110, 170, 255], btn: pager.querySelector('#b-sandbox') || $('#b-sandbox'), cta: 'Explorer', sub: () => 'Tous tes astres, sans limite', key: '12:2' },
+    { id: 'sandbox', n: 'Bac à sable', col: [110, 170, 255], btn: $('#b-sandbox'), cta: 'Explorer', sub: () => 'Tous tes astres, sans limite', key: '12:2' },
   ].filter((m) => m.btn);
   const slot = make('div', 'hm-deck'), items = [], glows = [], N = MODES.length; let pos = 0, target = 0, sel = 0, anim = 0, paintAt = 0;
   const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -363,24 +364,27 @@ export function init(o = {}) {
 export function hint() {
   const K = 'critical.hint.v1'; try { if (localStorage.getItem(K)) return; localStorage.setItem(K, '1'); } catch (e) { return; }
   const scr = $('#s-title'), pg = $('.hm-pager', scr); if (!scr || !pg) return;
-  const el = make('div', 'gl hm-hint', '<svg viewBox="0 0 24 24"><path d="M5 12h14M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg><span>Glisse pour voir Social et Collection</span>'); scr.append(el);
+  const el = make('div', 'gl hm-hint', '<svg viewBox="0 0 24 24"><path d="M5 12h14M9 8l-4 4 4 4M15 8l4 4-4 4"/></svg><span>Glisse pour voir Social, Collection et Défis</span>'); scr.append(el);
   const off = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); pg.removeEventListener('scroll', off); };
   pg.addEventListener('scroll', off, { passive: true, once: true }); setTimeout(off, 7000);
 }
 function levelModal() {
-  const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Éclats. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
+  const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Voidium. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
   m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
 }
 let deckTexts = () => {};
+export function profile(name, key) { // pastille « profil » du haut de l'écran : astre de profil et pseudo
+  const b = $('.hm-pf'); if (!b) return; const a = $('.hm-pfa', b), t = $('b', b); t.textContent = name || 'Profil'; a.textContent = '';
+  if (key && opts.paint) { const c = document.createElement('canvas'); a.append(c); opts.paint(c, key, 30, false); } else a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4.2 4.2-6 8-6s6.8 1.8 8 6"/></svg>';
+}
 export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null, goals = null } = {}) {
-  if (goals) { const s = $('#b-goals small'); if (s) s.textContent = goals.claimable ? `${goals.claimable} à valider` : `${goals.claimed} sur ${goals.total} validés`; const t = qa('.hm-tab').pop(); if (t) t.classList.toggle('dot', goals.claimable > 0); }
-  if (fg) fg.refresh();
+  if (col) col.refresh(); if (chp) { chp.refresh(); const t = qa('.hm-tab').pop(); if (t) t.classList.toggle('dot', chp.count() > 0); }
   const lv = $('.hm-lv'); if (lv && level) { lv.style.setProperty('--p', Math.round(level.pct * 100)); lv.style.setProperty('--c', `rgb(${level.col.join(',')})`); $('b', lv).textContent = level.level; }
   const sub = (id, t) => { const e = $(id + ' small'); if (e && t) e.textContent = t; };
   sub('#b-codex', codex ? `${codex} découverte${codex > 1 ? 's' : ''}` : 'Fusionne pour découvrir'); if (themes) sub('#b-themes', `${themes[0]} sur ${themes[1]} possédés`); sub('#b-rank', 'Mondial et défi du jour'); sub('#b-profile', 'Ton astre, ta vitrine, ta devise');
   const p = $('#t-stars');
   if (p) {
-    if (!p.firstChild) p.innerHTML = GEM + '<b class="hm-eclats">0</b><span>Éclats</span>';
+    if (!p.firstChild) p.innerHTML = GEM + '<b class="hm-eclats">0</b><span>Voidium</span>'; p.addEventListener('click', () => { opts.sfx && opts.sfx(); opts.economy && opts.economy(); });
     const n = Math.round(dust), el = $('.hm-eclats', p); cancelAnimationFrame(dustRaf);
     if (shownDust === null || document.hidden) { shownDust = n; el.textContent = n.toLocaleString('fr-FR'); }
     else if (shownDust !== n) { const from = shownDust, t0 = performance.now(); p.classList.remove('pop'); void p.offsetWidth; if (n > from) p.classList.add('pop');

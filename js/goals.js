@@ -1,5 +1,5 @@
 // Critical — Défis : objectifs permanents, du très facile à l'improbable. Ils se valident tout seuls pendant qu'on joue ;
-// la récompense (Éclats + XP) n'est encaissée que par un appui volontaire sur « Valider ».
+// la récompense (Voidium + XP) n'est encaissée que par un appui volontaire sur « Valider ».
 const KEY = 'critical.goals.v1';
 const $ = (s, r = document) => r.querySelector(s);
 const make = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
@@ -98,6 +98,12 @@ export function event(type, x = {}) {
   else if (type === 'pack') { k.packs = (k.packs | 0) + 1; if (x.best >= 4) k.legend = 1; if (x.best >= 5) k.cosmic = 1; }
   save(); check(type, x);
 }
+export const list = () => DEFS.map((d) => ({ id: d.id, l: d.l, t: d.t, d: d.d, n: d.n, k: d.k, prog: prog(d), done: isDone(d), claimed: !!st.claimed[d.id], v: rw(d)[0], xp: rw(d)[1], pack: PKR[d.l] ? PKN[PKR[d.l]] : '', diff: LV[d.l], col: COL[d.l] }));
+export function claimAll() { // tous les défis accomplis d'un coup : une seule récompense cumulée
+  let v = 0, xp = 0; const packs = {}; for (const d of DEFS) { if (!isDone(d) || st.claimed[d.id]) continue; st.claimed[d.id] = Date.now(); const [a, b] = rw(d); v += a; xp += b; if (PKR[d.l]) packs[PKR[d.l]] = (packs[PKR[d.l]] | 0) + 1; }
+  if (!v && !xp) return null; save(); api.grant(v, 'Défis'); api.xp(xp); for (const p of Object.keys(packs)) api.pack(p, packs[p]); api.vib([12, 30, 12, 30, 12]); api.sfx(); api.changed(); return { v, xp, packs };
+}
+export const claimGoal = (id) => claim(id);
 export const summary = () => ({ claimable: DEFS.filter((g) => isDone(g) && !st.claimed[g.id]).length, claimed: DEFS.filter((g) => st.claimed[g.id]).length, total: DEFS.length });
 
 const CSS = `
@@ -122,7 +128,7 @@ const render = () => {
   for (const g of rows) {
     const [d, x] = rw(g), p = prog(g), it = make('div', 'gl-it' + (isDone(g) && !st.claimed[g.id] ? ' ready' : '') + (st.claimed[g.id] ? ' claimed' : '')); it.style.setProperty('--c', COL[g.l]);
     it.append(make('div', 'gl-tx', `<b>${g.t}</b><small>${g.d}</small>` + (g.k !== 'e' && !isDone(g) ? `<div class="gl-bar"><i style="width:${(p / g.n) * 100}%"></i></div><em>${fmt(p)} / ${fmt(g.n)}</em>` : `<em style="color:${COL[g.l]}">${LV[g.l].toUpperCase()}</em>`)));
-    const r = make('div', 'gl-rw', `+${fmt(d)} Éclats<br>+${fmt(x)} XP` + (PKR[g.l] ? `<br>+1 ${PKN[PKR[g.l]]}` : ''));
+    const r = make('div', 'gl-rw', `+${fmt(d)} Voidium<br>+${fmt(x)} XP` + (PKR[g.l] ? `<br>+1 ${PKN[PKR[g.l]]}` : ''));
     if (isDone(g) && !st.claimed[g.id]) { const b = make('button', 'gl-ok', 'Valider'); b.disabled = true; setTimeout(() => { b.disabled = false; }, 800); b.addEventListener('click', () => claim(g.id)); r.append(b); } // inerte un instant : pas d'appui involontaire
     else if (st.claimed[g.id]) r.append(make('span', '', '✓ validé'));
     it.append(r); list.append(it);
