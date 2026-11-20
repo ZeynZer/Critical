@@ -188,3 +188,9 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   assert.ok(a.inset >= F.SHARED.inset - 1e-6 && a.ht === F.SHARED.ht, 'cuve réduite'); const r = F.replay(a.seed, a.log, a.n, { shared: true }); assert.equal(r.score, a.score, 'rejeu identique');
   console.log('cuve partagée OK (perdant ' + a.shared.loser + ' après ' + a.drops + ' lâchers)');
 }
+{ // partie sauvegardée avant l'ajout de G.ht (sol) : rien ne doit traverser le sol à la reprise
+  const g = JSON.parse(JSON.stringify(F.newGame(8))); delete g.ht; delete g.shared; delete g.blitz; delete g.powers;
+  for (let i = 0; i < 12; i++) { for (let k = 0; k < 150; k++) F.step(g); F.drop(g, 2 + i * 0.6); }
+  for (let k = 0; k < 400; k++) F.step(g); assert.ok(g.bodies.length > 0 && g.bodies.every((b) => b.y <= F.HT - b.r + 1e-6), 'une ancienne sauvegarde garde son sol');
+  console.log('reprise d\'ancienne sauvegarde OK');
+}

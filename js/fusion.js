@@ -42,6 +42,7 @@ export const BLITZ = { max: 10, inset: 1.2, ht: 11, start: 8, fast: 0.9, gainFas
 // Cuve partagée (duel 1v1 à tour de rôle) : le temps n'avance que pendant `steps` pas après chaque lâcher, puis la partie attend le lâcher de l'autre ;
 // celui dont l'astre reste au-dessus de la ligne a perdu. Pas de secteurs ni de réserve ; hypot remplacé par sqrt (exact) pour que deux navigateurs calculent les mêmes bits.
 export const SHARED = { inset: 1.0, ht: 11.5, steps: 240, turn: 8 };
+const hh = (G) => G.ht || HT; // parties sauvegardées avant l'ajout de G.ht : sol d'origine
 const hyp = (G, x, y) => (G.shared ? Math.sqrt(x * x + y * y) : Math.hypot(x, y));
 const modOf = (G, d) => { const m = mod(d); if (G.blitz && m.inset < BLITZ.inset) m.inset = BLITZ.inset; if (G.shared && m.inset < SHARED.inset) m.inset = SHARED.inset; return m; };
 export const radiusOf = (b) => (b.k === 'c' ? RAD[b.tier] : R_SPECIAL);
@@ -136,7 +137,7 @@ function fuse(G, a, b) {
   }
   const n = add(G, 'c', tier + 1, x, y, (a.vx + b.vx) / 2, (a.vy + b.vy) / 2);
   if (G.shared) n.o = a.fresh && a.o != null ? a.o : b.fresh && b.o != null ? b.o : G.shared.last; // le nouvel astre appartient à celui qui a lancé la fusion
-  n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(G.ht - n.r, n.y); n.hit = true; n.age = 0.5;
+  n.x = Math.max(n.r, Math.min(W - n.r, n.x)); n.y = Math.min(hh(G) - n.r, n.y); n.hit = true; n.age = 0.5;
   if (G.sandbox) { /* aucun tirage : une variante rare ne se débloque pas ici */ }
   else if (tier + 1 === MAX_TIER) { let x0 = rnd(G), v = 0; while (v < GALAXY.length - 1 && (x0 -= GALAXY[v]) >= 0) v++; n.v = v; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v, p: GALAXY[v] }); }
   else {
@@ -227,9 +228,9 @@ function walls(G, b) {
   const L = G.inset + b.r, R = W - G.inset - b.r;
   if (b.x < L) { b.x = L; if (b.vx < 0) b.vx *= -REST; }
   else if (b.x > R) { b.x = R; if (b.vx > 0) b.vx *= -REST; }
-  if (b.y > G.ht - b.r) {
-    b.y = G.ht - b.r; b.touch = true;
-    if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: G.ht, v: b.vy }); if (b.k === 'b') b.fuse = true; }
+  if (b.y > hh(G) - b.r) {
+    b.y = hh(G) - b.r; b.touch = true;
+    if (!b.hit) { b.hit = true; if (b.vy > 3) G.ev.push({ t: 'land', x: b.x, y: hh(G), v: b.vy }); if (b.k === 'b') b.fuse = true; }
     if (b.vy > 0) b.vy *= -REST;
   }
 }
@@ -241,7 +242,7 @@ export function trace(G, x0) {
   const it = G.cur, r = itemR(it), x = clampX(it, x0, G.inset), pts = []; let y = DROP_Y, v = 0;
   for (let i = 0; i < 150; i++) {
     v += fall(G) / 60; y += v / 60; if (i % 2 === 0) pts.push(x, y);
-    if (y > G.ht - r) break;
+    if (y > hh(G) - r) break;
     let hit = false; for (const b of G.bodies) if (hyp(G, b.x - x, b.y - y) < b.r + r) { hit = true; break; }
     if (hit) break;
   }
@@ -279,7 +280,7 @@ function sub(G) {
   }
   // frottement de repos : un astre en contact et presque immobile s'arrête, au lieu de glisser lentement sous la pression
   // résistance de roulement au sol, UNE fois par pas (elle était appliquée à chaque passe de résolution, donc multipliée par 3 puis 6)
-  for (const b of G.bodies) if (b.y >= G.ht - b.r - 1e-6) { b.vx *= 0.995; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; }
+  for (const b of G.bodies) if (b.y >= hh(G) - b.r - 1e-6) { b.vx *= 0.995; b.av = b.av * 0.9 + (b.vx / b.r) * 0.1; }
   // … et gel des micro-mouvements (< 0,008 unité/s) d'un astre en contact, sinon les piles rampent ; assez bas pour ne jamais retenir un astre qui veut rouler
   for (const b of G.bodies) if (b.touch) {
     b.av *= 0.96;
