@@ -303,23 +303,31 @@ export function init(o = {}) {
   }
   const launch = () => { const m = MODES[sel]; if (opts.sfx) opts.sfx(); if (m.btn) m.btn.click(); };
   cta.addEventListener('click', launch);
-  // — geste : on décide de l'axe dès les premiers pixels, en favorisant le vertical (un glissé même en diagonale vers le haut/bas change d'astre) ; horizontal franc = changement de page,
-  // piloté ici (touch-action: none) pour que le navigateur ne confonde jamais les deux. L'axe reste verrouillé jusqu'à la fin du geste.
-  let drag = null; const STEP = () => (slot.clientHeight || 300) * 0.42;
-  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: pos, s0: pager.scrollLeft, axis: null, moved: false, y: e.clientY, x: e.clientX, tm: performance.now(), v: 0 }; try { slot.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } if (!anim) anim = requestAnimationFrame(step); });
+  // — geste : l'axe est décidé dès les premiers pixels (vertical favorisé) et verrouillé jusqu'à la fin du geste.
+  // Vertical = astres ; horizontal = pages, pilotées ici par un ressort interrompable : on peut commencer un geste vertical pendant qu'une page finit de se poser,
+  // ou reprendre la page en plein mouvement. Le défilement natif (doigt hors de l'astre) reprend la main sans à-coup.
+  let drag = null, pgRaf = 0; const STEP = () => (slot.clientHeight || 300) * 0.42;
+  const pgStop = () => { if (pgRaf) { cancelAnimationFrame(pgRaf); pgRaf = 0; } };
+  const pgGo = (to) => { // ressort vers la page `to` (sans défilement fluide natif ni aimantation CSS, qui se battaient avec le doigt)
+    pgStop(); pager.style.scrollSnapType = 'none'; pager.style.scrollBehavior = 'auto'; const w = pager.clientWidth || 1, tx = to * w; let last = performance.now();
+    const f = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; const x = pager.scrollLeft, k = reduce ? 1 : 1 - Math.pow(0.0006, dt); if (Math.abs(tx - x) < 0.6) { pager.scrollLeft = tx; pgRaf = 0; pager.style.scrollSnapType = ''; return; } pager.scrollLeft = x + (tx - x) * k; pgRaf = requestAnimationFrame(f); };
+    pgRaf = requestAnimationFrame(f);
+  };
+  pager.addEventListener('pointerdown', (e) => { if (pgRaf && !slot.contains(e.target)) { pgStop(); pager.style.scrollSnapType = ''; } }, true); // un doigt posé ailleurs reprend le défilement natif
+  slot.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: pos, s0: 0, axis: null, moved: false, y: e.clientY, x: e.clientX, tm: performance.now(), v: 0 }; try { slot.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } if (!anim) anim = requestAnimationFrame(step); });
   slot.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
-    if (!drag.axis) { if (Math.max(Math.abs(dx), Math.abs(dy)) < 10) return; drag.axis = Math.abs(dy) > Math.abs(dx) * 0.75 ? 'v' : 'h'; drag.moved = true; if (drag.axis === 'h') pager.style.scrollSnapType = 'none'; }
-    const now = performance.now();
-    if (drag.axis === 'h') { drag.v = (e.clientX - drag.x) / Math.max(1, now - drag.tm); drag.x = e.clientX; drag.tm = now; pager.scrollLeft = drag.s0 - dx; return; } // la page suit le doigt
-    drag.v = (e.clientY - drag.y) / Math.max(1, now - drag.tm); drag.y = e.clientY; drag.tm = now;
+    if (!drag.axis) { if (Math.max(Math.abs(dx), Math.abs(dy)) < 10) return; drag.axis = Math.abs(dy) > Math.abs(dx) * 0.75 ? 'v' : 'h'; drag.moved = true; if (drag.axis === 'h') { pgStop(); pager.style.scrollSnapType = 'none'; pager.style.scrollBehavior = 'auto'; drag.s0 = pager.scrollLeft + dx; drag.p0pg = Math.round(pager.scrollLeft / (pager.clientWidth || 1)); } }
+    const now = performance.now(), dt = Math.max(1, now - drag.tm);
+    if (drag.axis === 'h') { drag.v = 0.6 * ((e.clientX - drag.x) / dt) + 0.4 * drag.v; drag.x = e.clientX; drag.tm = now; pager.scrollLeft = drag.s0 - dx; return; } // la page suit le doigt, d'où qu'elle parte
+    drag.v = 0.6 * ((e.clientY - drag.y) / dt) + 0.4 * drag.v; drag.y = e.clientY; drag.tm = now;
     pos = Math.max(-0.25, Math.min(N - 0.75, drag.p0 - dy / STEP())); const ns = Math.max(0, Math.min(N - 1, Math.round(pos))); if (ns !== sel) { sel = ns; texts(); if (opts.sfx) opts.sfx(); }
   });
   const end = (e) => {
     if (!drag || e.pointerId !== drag.id) return; const d = drag; drag = null; const w = pager.clientWidth || 1;
-    if (d.axis === 'h') { // page voisine si on a assez tiré ou lancé le geste, sinon retour
-      const p = d.s0 / w, mv = (d.s0 - pager.scrollLeft) / w, fast = Math.abs(d.v) > 0.45; let to = Math.round(p - (Math.abs(mv) > 0.2 || fast ? Math.sign(mv || -d.v) * 1 : 0)); to = Math.max(0, Math.min(Math.round(pager.scrollWidth / w) - 1, to));
-      if (e.type === 'pointercancel') to = Math.round(p); pager.scrollTo({ left: to * w, behavior: 'smooth' }); setTimeout(() => { pager.style.scrollSnapType = ''; }, 500); select(sel, true); return;
+    if (d.axis === 'h') { // page visée : là où la page va avec son élan, au plus une page plus loin ; plus de 20 % tirés suffisent
+      const cur = pager.scrollLeft / w, p0 = d.p0pg, last = Math.max(0, Math.round(pager.scrollWidth / w) - 1); let to = Math.round(cur - (d.v * 170) / w); if (Math.abs(cur - p0) > 0.2 && to === p0) to = p0 + Math.sign(cur - p0); to = Math.max(0, Math.min(last, Math.max(p0 - 1, Math.min(p0 + 1, to))));
+      if (e.type === 'pointercancel') to = Math.max(0, Math.min(last, Math.round(cur))); pgGo(to); return;
     }
     if (e.type === 'pointercancel') { select(sel); return; }
     if (!d.moved) { // simple toucher : l'astre central se lance, un voisin devient l'astre central
@@ -335,7 +343,7 @@ export function init(o = {}) {
 
   // barre d'onglets : l'indicateur suit le doigt (variable --p = position de la page, 0 à 2)
   const tabs = make('nav', 'gl hm-tabs hm-in', '<i class="hm-ind"></i>'); tabs.setAttribute('aria-label', 'Navigation');
-  PAGES.forEach(([n, ic], i) => { const b = make('button', 'hm-tab', ico(ic) + `<span>${n}</span>`); b.addEventListener('click', () => pager.scrollTo({ left: i * pager.clientWidth, behavior: 'smooth' })); tabs.append(b); });
+  PAGES.forEach(([n, ic], i) => { const b = make('button', 'hm-tab', ico(ic) + `<span>${n}</span>`); b.addEventListener('click', () => pgGo(i)); tabs.append(b); });
   scr.append(tabs);
   const hole = $('.hm-hole', scr), ind = $('.hm-ind', tabs), tb = [...tabs.querySelectorAll('.hm-tab')]; let cur = 1, tick = 0, IW = 0; tb[1].classList.add('on');
   const go = () => { // une seule mise à jour par image, uniquement sur le trou noir et l'indicateur (pas de variables CSS : elles recalculaient tout l'écran)
