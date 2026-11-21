@@ -236,6 +236,7 @@ async function answer(ok) {
   catch (e) { H.toast(ERR[e.message] || ERR.network); }
 }
 export const isAdmin = () => !!st.admin;
+export const secretKey = () => secret(); // identité de l'appareil : sert aussi de code de récupération de la sauvegarde cloud (cloud.js)
 export const call = (fn, args = {}) => rpc(fn, { p_secret: secret(), ...args }).catch((e) => { throw new Error(ERR[e.message] || e.message); }); // appel authentifié pour les modules (événement…)
 export const openEditorNow = () => { if (!st.name) return askName(); openEditor(); };
 export async function eventClaim() { // récompenses de la Grande Cuve : les cadeaux sont encaissés tout de suite

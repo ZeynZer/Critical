@@ -863,3 +863,43 @@ end $$;
 
 revoke all on function public.tele(text, integer, json, json, json, text), public.admin_analytics(text, integer) from public, anon, authenticated;
 grant execute on function public.tele(text, integer, json, json, json, text), public.admin_analytics(text, integer) to anon, authenticated;
+
+-- ============================== Sauvegarde dans le cloud ==============================
+-- La progression (Voidium, cartes, niveau, défis, réglages…) est copiée ici, rangée sous l'empreinte du secret de l'appareil :
+-- aucun pseudo n'est nécessaire, et seul le détenteur du secret (l'appareil, ou son code de récupération) peut la lire.
+-- rev : numéro de version ; xp : expérience totale (ne fait que monter), sert à départager deux appareils qui ont joué chacun de leur côté.
+create table if not exists public.saves (hash text primary key, data jsonb not null, xp bigint not null default 0, rev integer not null default 0, at timestamptz not null default now());
+alter table public.saves enable row level security;
+revoke all on public.saves from anon, authenticated;
+
+-- Envoie la sauvegarde. p_base : dernière version connue de l'appareil. Si un autre appareil a envoyé entre-temps une progression plus avancée
+-- (plus d'expérience), rien n'est écrit et la sauvegarde du serveur est renvoyée (conflict) : jamais un appareil en retard n'écrase l'autre.
+create or replace function public.save_push(p_secret text, p_data jsonb, p_xp bigint, p_base integer) returns json
+language plpgsql security definer set search_path = public as $$
+declare v_h text; v_rev integer; v_xp bigint; v_at timestamptz; v_data jsonb;
+begin
+  if p_secret is null or length(p_secret) < 24 or length(p_secret) > 128 then raise exception 'invalid_secret'; end if;
+  if p_data is null or jsonb_typeof(p_data) <> 'object' or octet_length(p_data::text) > 300000 then raise exception 'invalid_save'; end if;
+  if p_xp is null or p_xp < 0 or p_xp > 1000000000 or p_base is null or p_base < 0 then raise exception 'invalid_save'; end if;
+  v_h := critical_hash(p_secret);
+  insert into saves (hash, data, xp, rev) values (v_h, p_data, p_xp, 1) on conflict (hash) do nothing;
+  if found then return json_build_object('rev', 1); end if;
+  select s.rev, s.xp, s.at, s.data into v_rev, v_xp, v_at, v_data from saves s where s.hash = v_h for update;
+  if v_rev > p_base and v_xp > p_xp then return json_build_object('conflict', true, 'rev', v_rev, 'xp', v_xp, 'data', v_data); end if;
+  if v_at > now() - interval '8 seconds' then raise exception 'too_fast'; end if;
+  update saves s set data = p_data, xp = p_xp, rev = v_rev + 1, at = now() where s.hash = v_h;
+  return json_build_object('rev', v_rev + 1);
+end $$;
+
+-- Lit la sauvegarde (null s'il n'y en a pas).
+create or replace function public.save_pull(p_secret text) returns json
+language plpgsql security definer set search_path = public as $$
+declare r json;
+begin
+  if p_secret is null or length(p_secret) < 24 or length(p_secret) > 128 then raise exception 'invalid_secret'; end if;
+  select json_build_object('rev', s.rev, 'xp', s.xp, 'at', s.at, 'data', s.data) into r from saves s where s.hash = critical_hash(p_secret);
+  return r;
+end $$;
+
+revoke all on function public.save_push(text, jsonb, bigint, integer), public.save_pull(text) from public, anon, authenticated;
+grant execute on function public.save_push(text, jsonb, bigint, integer), public.save_pull(text) to anon, authenticated;
