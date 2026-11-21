@@ -17,6 +17,7 @@ const CSS = `
 .co-c{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 3px 7px;border-radius:18px;color:#fff;background:radial-gradient(120% 80% at 50% 0,color-mix(in srgb,var(--c) 22%,transparent),rgba(255,255,255,.03));border:1.5px solid color-mix(in srgb,var(--c) 70%,transparent);transition:transform .15s}.co-c:active{transform:scale(.95)}
 .co-c.lock{opacity:.4;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}.co-c b{font-size:10.5px;line-height:1.15;text-align:center}.co-c small{font:700 8.5px var(--disp);letter-spacing:.06em;color:var(--c)}.co-c canvas{display:block}.co-c .q{width:46px;height:46px;display:grid;place-items:center;font:900 20px var(--disp);color:rgba(255,255,255,.35)}
 .co-c .bd{position:absolute;top:5px;right:6px;font:900 9px var(--disp);color:#5dffc0}.co-c .cp{position:absolute;top:5px;left:7px;font:800 9px var(--disp);color:rgba(255,255,255,.6)}.co-c .ab{position:absolute;bottom:4px;right:6px;font-size:9px;color:#ffc247}
+.co-c.craft{opacity:.62;border-style:dashed}.co-c.craft small{color:var(--c)}.co-fr b{color:#c79bff}.co-cr{align-items:center;text-align:center;gap:6px}.co-cr canvas{width:96px;height:96px}.co-crn{font-size:16px}.co-cr .btns button:disabled{opacity:.45}
 .co-empty{padding:30px 10px;text-align:center;color:rgba(255,255,255,.55);font-size:13px}
 .co-h{margin:6px 0 0;font:800 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.6)}.co-p{margin:0;font-size:12px;line-height:1.45;color:rgba(255,255,255,.6)}
 .dk-pre{display:flex;gap:6px}.dk-pre button{flex:1;height:34px;border-radius:17px;font:800 11px var(--disp);color:rgba(255,255,255,.65);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.dk-pre button.on{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
@@ -39,7 +40,19 @@ export function mount(page, api) {
     if (e.ok && e.tier >= 0) { const cv = document.createElement('canvas'); api.paint(cv, e.key, 46, false); b.append(cv); } else b.append(make('div', 'q', e.ok ? '★' : '?'));
     b.append(make('b', '', e.ok ? esc(e.name) : '???'), make('small', '', e.ok ? RN[e.rar].toUpperCase() : ''));
     if (e.ok && e.copies > 1) b.append(make('span', 'cp', '×' + e.copies)); if (e.inDeck) b.append(make('span', 'bd', 'DECK')); else if (e.skinOn) b.append(make('span', 'bd', 'ÉQUIPÉ')); if (e.ok && e.ability && !e.inDeck) b.append(make('span', 'ab', '✦'));
-    if (e.ok && e.tier >= 0) b.addEventListener('click', () => open(e)); return b; };
+    if (e.ok && e.tier >= 0) b.addEventListener('click', () => open(e));
+    else if (api.frag && api.frag.info(e.key)) { const ci = api.frag.info(e.key); b.style.setProperty('--c', RC[ci.rar]); b.querySelector('small').textContent = '✦ ' + fmt(ci.cost); b.classList.add('craft'); b.addEventListener('click', () => craftDlg(e.key)); }
+    return b; };
+  function craftDlg(key) { // fabriquer une carte jamais obtenue avec des fragments stellaires (gagnés grâce aux doublons)
+    const ci = api.frag.info(key); if (!ci) return; const ok = ci.have >= ci.cost;
+    const m = make('div', 'modal on', `<div class="card glass co-cr"><h2>Fabriquer</h2><canvas></canvas><b class="co-crn" style="color:${RC[ci.rar]}">${esc(ci.name)}</b><small style="color:${RC[ci.rar]}">${RN[ci.rar].toUpperCase()}</small>`
+      + `<p class="co-p">Coût : <b>✦ ${fmt(ci.cost)}</b> fragments stellaires · tu en as <b>${fmt(ci.have)}</b>.${ok ? '' : `<br>Il t'en manque ${fmt(ci.cost - ci.have)} : chaque doublon (pack ou partie) en rapporte.`}</p>`
+      + `<div class="btns"><button class="big glass" data-x>Fermer</button><button class="big primary" data-go${ok ? '' : ' disabled'}>Fabriquer</button></div></div>`);
+    api.paint(m.querySelector('canvas'), key, 96, false);
+    m.addEventListener('click', (ev) => { if (ev.target === m || ev.target.hasAttribute('data-x')) m.remove(); });
+    m.querySelector('[data-go]').addEventListener('click', () => { const r = api.frag.craft(key); m.remove(); if (r === 'ok') { api.vib && api.vib([14, 40, 14]); api.toast('Carte fabriquée : ' + ci.name); render(); const e = api.entries().find((x) => x.key === key); if (e) open(e); } else if (r === 'poor') api.toast('Pas assez de fragments'); });
+    document.body.append(m);
+  }
   function actionsOf(e) { // boutons de la carte immersive
     if (e.kind === 'capacite') return [{ label: () => (api.deck.info().cards.some((c) => c.tier === e.tier) ? 'Retirer du deck' : 'Mettre dans le deck'), primary: () => api.deck.info().cards.some((c) => c.tier === e.tier), run: () => { const on = api.deck.info().cards.some((c) => c.tier === e.tier); if (on) api.deck.remove(e.tier); else if (api.deck.add(e.tier) === 'full') api.toast('Deck plein : retire une capacité ou débloque un emplacement'); render(); } }];
     if (api.skin.equipable(e.tier, e.v) && e.v >= 2) return [{ label: () => (api.skin.of(e.tier) === e.v ? 'Retirer l\'apparence' : 'Équiper l\'apparence'), primary: () => api.skin.of(e.tier) === e.v, run: () => { api.skin.equip(e.tier, api.skin.of(e.tier) === e.v ? 0 : e.v); render(); } }];
@@ -49,6 +62,7 @@ export function mount(page, api) {
   /* ---------- cartes ---------- */
   function cards() {
     const all = api.entries(), found = all.filter((e) => e.ok).length; body.append(make('div', 'co-sum', `<span>${found} / ${all.length} découvertes</span><i><b style="width:${Math.round(found / all.length * 100)}%"></b></i><span>${Math.round(found / all.length * 100)} %</span>`));
+    if (api.frag) body.append(make('p', 'co-p co-fr', `<b>✦ ${fmt(api.frag.have())}</b> fragments stellaires · les doublons en rapportent ; touche une carte verrouillée pour la fabriquer.`));
     const ctl = make('div', 'co-ctl'), sel = make('select'), q = make('input'); sel.innerHTML = SORTS.map(([k, n]) => `<option value="${k}"${S.sort === k ? ' selected' : ''}>${n}</option>`).join(''); sel.addEventListener('change', () => { S.sort = sel.value; save(); fill(); }); q.placeholder = 'Chercher'; q.value = S.q; q.addEventListener('input', () => { S.q = q.value; fill(); }); ctl.append(sel, q); body.append(ctl);
     const rc = make('div', 'co-chips'), kc = make('div', 'co-chips');
     const chip = (box, txt, on, col, f) => { const b = make('button', on ? 'on' : '', txt); if (col) b.style.setProperty('--c', col); b.addEventListener('click', () => { f(); save(); render(); }); box.append(b); };

@@ -3,7 +3,7 @@
 // Habillage : le verre liquide du reste du jeu, sur fond d'espace profond.
 import * as A from './audio.js';
 import * as F from './fusion.js';
-import { CAT, RAR, equipable } from './catalog.js';
+import { CAT, RAR, POOL, equipable } from './catalog.js';
 import { PACKS, draw as drawPack } from './packs.js';
 import * as IM from './immersive.js';
 import { channel } from './realtime.js';
@@ -124,7 +124,7 @@ function onEvents() {
     else if (e.t === 'rare') { // variante rare ou galaxie : grande révélation la 1re fois seulement, ensuite un simple éclat
       const r = Math.max(0, catR(e.tier, e.v)), key = e.tier + ':' + e.v;
       if (G.nop) continue;
-      sv.inv[key] = (sv.inv[key] | 0) + 1; save(); H.goal('rare', { tier: e.tier, v: e.v }); // un exemplaire de plus pour la fusion de collection
+      sv.inv[key] = (sv.inv[key] | 0) + 1; syncFrags(); save(); H.goal('rare', { tier: e.tier, v: e.v }); // un exemplaire de plus pour la fusion de collection
       if (sv.cx[key]) { say(nameOf(e.tier, e.v).toUpperCase(), e.v === 1 || e.tier === F.MAX_TIER ? 'RARE · ×3 POINTS' : 'VARIANTE DE STYLE', RCOL[r]); ring(x, y, B.u * 3, B.u * 0.6, 0.55, RCOL[r], 3); burst(x, y, 14, RCOL[r], B.u * 6, 0.7, 2.4); A.rare(Math.min(r, 1)); H.vib(18); }
       else {
         sv.cx[key] = 1; save(); G.bonus += 15 + r * 15; addXp(40);
@@ -773,9 +773,26 @@ export function packOpen(id, preview = false, force = null) {
   if (!preview) {
     sv.pity[id] = res.pity; sv.pkN++;
     for (const c of res.cards) { sv.inv[c.key] = (sv.inv[c.key] | 0) + 1; sv.cx[c.key] = 1; }
+    res.frag = syncFrags(); // doublons → fragments (annoncés après l'animation, pour ne rien dévoiler)
     addXp(8 + 6 * res.cards.filter((c) => c.isNew).length, true); save(); H.refresh(); H.goal('pack', { best: res.tell.best });
   }
   return res;
+}
+/* ---- fragments stellaires : chaque doublon (pack ou partie) en donne selon sa rareté ; on fabrique ensuite la carte de son choix ---- */
+// Les exemplaires ne sont jamais retirés : sv.fd[clé] retient combien de doublons ont déjà été convertis (rétroactif pour les anciens joueurs).
+export const FRAG = { get: [2, 5, 15, 40, 100, 250], cost: [40, 100, 300, 800, 2000, 5000] };
+const POOL_R = new Map(POOL.map((c) => [c.key, c.r]));
+function syncFrags() {
+  sv.fd = sv.fd || {}; let add = 0;
+  for (const [k, r] of POOL_R) { const dup = Math.max(0, (sv.inv[k] | 0) - 1), was = sv.fd[k] | 0; if (dup > was) { add += (dup - was) * FRAG.get[r]; sv.fd[k] = dup; } }
+  if (add) { sv.fr = (sv.fr | 0) + add; save(); }
+  return add;
+}
+export const fragments = () => sv.fr | 0;
+export const craftInfo = (key) => { const r = POOL_R.get(key); return r == null || sv.cx[key] ? null : { key, rar: r, cost: FRAG.cost[r], have: sv.fr | 0, name: astreInfo(key).name }; };
+export function craft(key) { // fabrique une carte jamais obtenue ; renvoie 'ok', 'poor' ou null
+  const c = craftInfo(key); if (!c) return null; if (c.have < c.cost) return 'poor';
+  sv.fr -= c.cost; sv.inv[key] = Math.max(1, sv.inv[key] | 0); sv.cx[key] = 1; addXp(8, true); save(); H.refresh(); return 'ok';
 }
 export const adminLocal = { // outils de l'administrateur, sur cet appareil seulement
   eclats: (n) => grant(n, 'Admin'), xp: (n) => addXp(n || 1000, true),
@@ -1137,6 +1154,7 @@ export function open(fresh) { // fresh : on va lancer autre chose qu'une partie 
 function close() { if (duel) duelClose(); H.back(); save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
   Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
+  { const retro = syncFrags(); if (retro && !sv.frTold) { sv.frTold = 1; save(); setTimeout(() => H.toast(`Tes doublons valent maintenant +${fmt(retro)} fragments stellaires`), 4500); } else if (!sv.frTold) { sv.frTold = 1; save(); } } // conversion unique des anciens doublons
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const d = document.createElement('div'); d.innerHTML = HTML + HTML2; document.body.append(...d.children);
   cv = $('#mn-cv'); ctx = cv.getContext('2d', { alpha: false });

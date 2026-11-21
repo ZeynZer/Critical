@@ -30,13 +30,13 @@ export function mount(page, api) {
   const lowFx = (navigator.hardwareConcurrency || 4) <= 4;
   const run = (res, id, preview) => FX.play({
     result: res, names: { pack: PACKS[id].n, rar: RAR }, paintCard: api.paintCard, onView: api.view, buildCard: api.buildCard, sfx: api.sfx, vib: api.vib, quick: api.quick && api.quick(), lowFx,
-    canAgain: () => { if (preview) return { ok: false, label: 'Aperçu administrateur' }; const i = api.info(), n = i.stock[id]; return n > 0 ? { ok: true, label: `Ouvrir un autre (${n})` } : i.dust >= PACKS[id].cost ? { ok: true, label: `Ouvrir un autre · ${fmt(PACKS[id].cost)}` } : { ok: false, label: 'Plus assez d\'Voidium' }; },
-    onDone: (act) => { sig = ''; api.refresh(); if (act === 'again') start(id); },
+    canAgain: () => { if (preview) return { ok: false, label: 'Aperçu administrateur' }; const i = api.info(), n = i.stock[id]; return n > 0 ? { ok: true, label: `Ouvrir un autre (${n})` } : i.dust >= PACKS[id].cost ? { ok: true, label: `Ouvrir un autre · ${fmt(PACKS[id].cost)}` } : { ok: false, label: 'Plus assez de Voidium' }; },
+    onDone: (act) => { sig = ''; api.refresh(); if (res.frag && !preview) api.toast(`Doublons : +${fmt(res.frag)} fragments stellaires`); if (act === 'again') start(id); },
   });
   function start(id) { const res = api.open(id); if (!res) return api.toast(`Il te faut ${fmt(PACKS[id].cost)} Voidium`); sig = ''; run(res, id, false); }
   function odds() {
     const m = make('div', 'modal on', '<div class="card glass"><h2>Probabilités</h2><table><tr><th></th>' + Object.values(PACKS).map((p) => `<th>${p.n.replace('Pack ', '')}</th>`).join('') + '</tr>' + RAR.map((r, i) => `<tr><td style="color:${RC[i]}">${r}</td>` + Object.values(PACKS).map((p) => `<td>${p.odds[i].toLocaleString('fr-FR')} %</td>`).join('') + '</tr>').join('') + '</table>'
-      + '<p>Probabilités par astre (5 astres par pack). Garanties : ' + Object.values(PACKS).map((p) => `<b>${p.n}</b> : ${RAR[p.min]} minimum${p.min ? '' : ' (aucun minimum)'} · un épique au moins tous les ${p.pity[0]} packs · un légendaire au moins tous les ${p.pity[1]} packs`).join(' ; ') + '.</p><p>Les doublons ne sont jamais perdus : chaque exemplaire compte pour la Fusion. Le tirage est décidé avant l\'animation, qui ne fait que le raconter : ses indices sont toujours vrais.</p><div class="btns"><button class="big primary">Fermer</button></div></div>'); m.id = 'pk-od';
+      + '<p>Probabilités par astre (5 astres par pack). Garanties : ' + Object.values(PACKS).map((p) => `<b>${p.n}</b> : ${RAR[p.min]} minimum${p.min ? '' : ' (aucun minimum)'} · un épique au moins tous les ${p.pity[0]} packs · un légendaire au moins tous les ${p.pity[1]} packs`).join(' ; ') + '.</p><p>Les doublons ne sont jamais perdus : chacun rapporte des fragments stellaires (selon sa rareté), qui servent à fabriquer la carte de ton choix dans Collection › Cartes. Le tirage est décidé avant l\'animation, qui ne fait que le raconter : ses indices sont toujours vrais.</p><div class="btns"><button class="big primary">Fermer</button></div></div>'); m.id = 'pk-od';
     m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
   }
   const refresh = () => {
