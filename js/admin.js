@@ -2,6 +2,7 @@
 // chaque action est de toute façon refusée par la base si le compte n'est pas admin (voir supabase/schema.sql).
 // api : { call(fn, args), toast(txt), vib(n), paint(canvas, clé, px, live), local: { p, e, x, u, test(rareté) } }
 import { mount as mountIdeas } from './ideas.js';
+import { build as buildAnalytics } from './analytics.js';
 import { avatar, titleName } from './style.js';
 const make = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -32,8 +33,8 @@ const CSS = `
 export function mount(api) {
   const st = make('style'); st.textContent = CSS; document.head.appendChild(st);
   const m = make('div', 'modal ad-m', `<div class="ad-in"><div class="ad-hd"><h2>Administration<small>Console du créateur</small></h2><button class="ad-x" id="ad-x2" aria-label="Fermer">✕</button></div>
-<div class="ad-tabs"><button data-t="dash" class="on">Tableau</button><button data-t="players">Joueurs</button><button data-t="send">Cadeaux et annonces</button><button data-t="event">Événement</button><button data-t="ideas">Idées</button><button data-t="tools">Outils</button></div><div class="ad-body" id="ad-body"></div></div>`); m.id = 'ad-m'; document.body.append(m);
-  const body = m.querySelector('#ad-body'); let tab = 'dash', sel = null, armed = null, ideasUi = null; const panes = {};
+<div class="ad-tabs"><button data-t="dash" class="on">Tableau</button><button data-t="analyse">Analyse</button><button data-t="players">Joueurs</button><button data-t="send">Cadeaux et annonces</button><button data-t="event">Événement</button><button data-t="ideas">Idées</button><button data-t="tools">Outils</button></div><div class="ad-body" id="ad-body"></div></div>`); m.id = 'ad-m'; document.body.append(m);
+  const body = m.querySelector('#ad-body'); let tab = 'dash', sel = null, armed = null, ideasUi = null, anUi = null; const panes = {};
   const run = async (fn, args, ok) => { try { const r = await api.call(fn, args); if (ok) api.toast(ok); return r === undefined || r === null ? true : r; } catch (e) { api.toast('Refusé : ' + e.message); return null; } };
   const confirmed = (key) => { if (armed === key) { armed = null; return true; } armed = key; api.toast('Touche encore pour confirmer'); setTimeout(() => { if (armed === key) armed = null; }, 3000); return false; }; // actions destructrices ou massives : deux appuis
   const sec = (title, ...kids) => { const s = make('div', 'ad-sec'); if (title) s.append(make('h3', '', title)); s.append(...kids); return s; };
@@ -108,8 +109,8 @@ export function mount(api) {
     [['Commune', 0], ['Peu commune', 1], ['Rare', 2], ['Épique', 3], ['Légendaire', 4], ['Cosmique', 5]].forEach(([n, r]) => rr.append(btn(n, '', () => { m.classList.remove('on'); api.local.test(r); })));
     p.append(sec('Sur cet appareil', make('p', '', 'Ces actions ne touchent que ta sauvegarde locale.'), a), sec('Tester l\'ouverture de pack', make('p', '', 'Aperçu gratuit de l\'animation complète avec une rareté forcée (voir : galaxie, supernova, trou noir, convergence).'), rr));
   }
-  function setTab(t) { tab = t; m.querySelectorAll('.ad-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t)); for (const [k, el] of Object.entries(panes)) el.hidden = k !== t; body.scrollTop = 0; if (t === 'dash') dash(); else if (t === 'players') { if (!panes.players.querySelector('#ad-list').children.length) search(); } else if (t === 'send') panes.send.load && panes.send.load(); else if (t === 'event') panes.event.show && panes.event.show(); else if (t === 'ideas') { if (!ideasUi) ideasUi = mountIdeas(panes.ideas, { call: (fn, args) => api.call(fn, args), name: () => 'admin', askName() {}, isAdmin: () => true, toast: api.toast, vib: api.vib || (() => {}) }); ideasUi.refresh(); } }
-  for (const k of ['dash', 'players', 'send', 'event', 'ideas', 'tools']) { const el = make('div'); el.style.cssText = 'display:flex;flex-direction:column;gap:10px'; el.hidden = true; panes[k] = el; body.append(el); }
+  function setTab(t) { tab = t; m.querySelectorAll('.ad-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t)); for (const [k, el] of Object.entries(panes)) el.hidden = k !== t; body.scrollTop = 0; if (t === 'dash') dash(); else if (t === 'analyse') { if (!anUi) anUi = buildAnalytics(panes.analyse, { load: (d) => run('admin_analytics', { p_days: d }), tierName: api.tierName, toast: api.toast }); anUi.show(); } else if (t === 'players') { if (!panes.players.querySelector('#ad-list').children.length) search(); } else if (t === 'send') panes.send.load && panes.send.load(); else if (t === 'event') panes.event.show && panes.event.show(); else if (t === 'ideas') { if (!ideasUi) ideasUi = mountIdeas(panes.ideas, { call: (fn, args) => api.call(fn, args), name: () => 'admin', askName() {}, isAdmin: () => true, toast: api.toast, vib: api.vib || (() => {}) }); ideasUi.refresh(); } }
+  for (const k of ['dash', 'analyse', 'players', 'send', 'event', 'ideas', 'tools']) { const el = make('div'); el.style.cssText = 'display:flex;flex-direction:column;gap:10px'; el.hidden = true; panes[k] = el; body.append(el); }
   buildPlayers(); buildSend(); buildEvent(); buildTools();
   m.querySelector('.ad-tabs').addEventListener('click', (e) => { const t = e.target.dataset.t; if (t) setTab(t); });
   m.querySelector('#ad-x2').addEventListener('click', () => m.classList.remove('on'));

@@ -733,3 +733,133 @@ begin perform admin_id(p_secret); update events set ends_at = now() where ends_a
 
 revoke all on function public.event_current(text), public.event_drop(text, integer[]), public.event_claim(text), public.admin_event_start(text, text, integer, integer), public.admin_event_end(text) from public, anon, authenticated;
 grant execute on function public.event_current(text), public.event_drop(text, integer[]), public.event_claim(text), public.admin_event_start(text, text, integer, integer), public.admin_event_end(text) to anon, authenticated;
+
+-- ============================================================================================================
+-- Analyse : télémétrie ANONYME (aucun pseudo, aucun texte libre, juste un identifiant d'appareil aléatoire) + rapport de la console admin.
+-- Chaque appareil envoie toutes les ~30 s le temps réellement joué, ses fins de partie et quelques compteurs d'usage (ouverture d'écrans, packs, erreurs).
+-- Le joueur peut tout couper (réglages › Statistiques anonymes). Tables fermées : seule la fonction tele() écrit, seule admin_analytics() lit (admin).
+-- ============================================================================================================
+create table if not exists public.tele_devices (
+  did text primary key, first_at timestamptz not null default now(), last_at timestamptz not null default now(),
+  platform text not null default '', standalone boolean not null default false, lang text not null default '', scr text not null default '', ver text not null default '',
+  sessions integer not null default 0, secs bigint not null default 0, player_id uuid references public.players (id) on delete set null);
+create table if not exists public.tele_hours (hour timestamptz not null, did text not null, secs integer not null default 0, primary key (hour, did));
+create index if not exists tele_hours_did on public.tele_hours (did);
+create table if not exists public.tele_runs (
+  id bigserial primary key, at timestamptz not null default now(), did text not null, mode text not null, score integer not null, tier smallint not null, sector smallint not null,
+  secs integer not null, drops integer not null default 0, over boolean not null default false, fps smallint);
+create index if not exists tele_runs_at on public.tele_runs (at);
+create table if not exists public.tele_events (id bigserial primary key, at timestamptz not null default now(), did text not null, name text not null, val integer not null default 0, info text not null default '');
+create index if not exists tele_events_at on public.tele_events (at, name);
+alter table public.tele_devices enable row level security; alter table public.tele_hours enable row level security; alter table public.tele_runs enable row level security; alter table public.tele_events enable row level security;
+revoke all on public.tele_devices, public.tele_hours, public.tele_runs, public.tele_events from anon, authenticated;
+revoke all on sequence public.tele_runs_id_seq, public.tele_events_id_seq from anon, authenticated;
+
+-- p_secs : secondes réellement jouées depuis le dernier envoi (borné) ; p_info : { pf plateforme, sa installée, lg langue, sc écran, v version, ns nouvelle session } ;
+-- p_runs : [{ m mode, s score, t rang, x secteur, d durée, n lâchers, o effondrement, f fps }] ; p_events : [{ n nom, v valeur, i texte court (erreurs seulement) }]
+create or replace function public.tele(p_did text, p_secs integer default 0, p_info json default null, p_runs json default null, p_events json default null, p_secret text default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_pl uuid; v_secs integer; e json; n integer := 0; v_name text;
+begin
+  if p_did is null or p_did !~ '^[A-Za-z0-9-]{8,64}$' then raise exception 'invalid_device'; end if;
+  v_secs := least(greatest(coalesce(p_secs, 0), 0), 120);
+  if p_secret is not null then select id into v_pl from players where secret_hash = critical_hash(p_secret); end if;
+  if (select count(*) from tele_events where did = p_did and at > now() - interval '1 hour') > 1500 then raise exception 'too_fast'; end if;
+  insert into tele_devices (did, platform, standalone, lang, scr, ver, sessions, secs, player_id)
+    values (p_did, coalesce(left(p_info->>'pf', 16), ''), coalesce((p_info->>'sa')::boolean, false), coalesce(left(p_info->>'lg', 8), ''), coalesce(left(p_info->>'sc', 12), ''), coalesce(left(p_info->>'v', 12), ''), case when coalesce((p_info->>'ns')::boolean, false) then 1 else 0 end, v_secs, v_pl)
+    on conflict (did) do update set last_at = now(), secs = tele_devices.secs + v_secs, sessions = tele_devices.sessions + excluded.sessions,
+      platform = case when p_info is null then tele_devices.platform else excluded.platform end, standalone = case when p_info is null then tele_devices.standalone else excluded.standalone end,
+      lang = case when p_info is null then tele_devices.lang else excluded.lang end, scr = case when p_info is null then tele_devices.scr else excluded.scr end, ver = case when p_info is null then tele_devices.ver else excluded.ver end,
+      player_id = coalesce(v_pl, tele_devices.player_id);
+  if v_secs > 0 then
+    insert into tele_hours (hour, did, secs) values (date_trunc('hour', now()), p_did, v_secs) on conflict (hour, did) do update set secs = least(3600, tele_hours.secs + excluded.secs);
+  end if;
+  if p_runs is not null and json_typeof(p_runs) = 'array' then
+    for e in select * from json_array_elements(p_runs) loop
+      n := n + 1; exit when n > 10;
+      if (e->>'m') in ('classic', 'blitz', 'daily', 'duel') then
+        insert into tele_runs (did, mode, score, tier, sector, secs, drops, over, fps)
+          values (p_did, e->>'m', least(greatest(coalesce((e->>'s')::integer, 0), 0), 100000000), least(greatest(coalesce((e->>'t')::integer, 0), 0), 12), least(greatest(coalesce((e->>'x')::integer, 1), 0), 99),
+                  least(greatest(coalesce((e->>'d')::integer, 0), 0), 86400), least(greatest(coalesce((e->>'n')::integer, 0), 0), 100000), coalesce((e->>'o')::boolean, false), nullif(least(greatest(coalesce((e->>'f')::integer, 0), 0), 240), 0));
+      end if;
+    end loop;
+  end if;
+  if p_events is not null and json_typeof(p_events) = 'array' then
+    n := 0;
+    for e in select * from json_array_elements(p_events) loop
+      n := n + 1; exit when n > 40; v_name := e->>'n';
+      if v_name ~ '^[a-z0-9_:.-]{1,40}$' then
+        insert into tele_events (did, name, val, info) values (p_did, v_name, least(greatest(coalesce((e->>'v')::integer, 0), -1000000000), 1000000000), case when v_name like 'js_error%' then left(coalesce(e->>'i', ''), 120) else '' end);
+      end if;
+    end loop;
+  end if;
+end $$;
+
+-- Rapport complet pour la console admin (une seule réponse JSON, tout est calculé ici). p_days : 1 à 365 (jours UTC).
+create or replace function public.admin_analytics(p_secret text, p_days integer default 30) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare d integer := least(greatest(coalesce(p_days, 30), 1), 365); t0 timestamptz := date_trunc('day', now()) - ((least(greatest(coalesce(p_days, 30), 1), 365) - 1) || ' days')::interval;
+begin
+  perform admin_id(p_secret);
+  return json_build_object(
+    'generated', now(), 'days', d,
+    'span', (select json_build_object('first', min(first_at), 'devices', count(*), 'installed', count(*) filter (where standalone), 'linked', count(player_id)) from tele_devices),
+    'now', json_build_object('devices', (select count(*) from tele_devices where last_at > now() - interval '90 seconds'), 'players', (select count(*) from players where seen_at > now() - interval '100 seconds'),
+      'peak24', (select coalesce(max(c), 0) from (select count(*) c from tele_hours where hour > now() - interval '24 hours' group by hour) x)),
+    'daily', (select json_agg(row_to_json(x) order by x.day) from (
+      select to_char(g, 'YYYY-MM-DD') as day,
+        (select count(distinct did) from tele_hours h where h.hour >= g and h.hour < g + interval '1 day') as dau,
+        (select count(*) from tele_devices v where v.first_at >= g and v.first_at < g + interval '1 day') as new_devices,
+        (select coalesce(sum(secs), 0) from tele_hours h where h.hour >= g and h.hour < g + interval '1 day') as secs,
+        (select count(*) from tele_runs r where r.at >= g and r.at < g + interval '1 day') as runs,
+        (select coalesce(round(avg(secs)), 0) from tele_runs r where r.at >= g and r.at < g + interval '1 day') as run_secs,
+        (select coalesce(round(avg(score)), 0) from tele_runs r where r.at >= g and r.at < g + interval '1 day') as avg_score,
+        (select count(*) from players p where p.created_at >= g and p.created_at < g + interval '1 day') as new_players,
+        (select count(*) from challenge_log c where c.at >= g and c.at < g + interval '1 day') as duels,
+        (select count(*) from tele_events t where t.name like 'js_error%' and t.at >= g and t.at < g + interval '1 day') as errors
+      from generate_series(t0, date_trunc('day', now()), interval '1 day') g) x),
+    'mau', (select count(distinct did) from tele_hours where hour > now() - interval '30 days'), 'wau', (select count(distinct did) from tele_hours where hour > now() - interval '7 days'),
+    'hod', (select json_agg(json_build_object('h', h, 'avg', coalesce(a, 0)) order by h) from generate_series(0, 23) h left join (
+        select extract(hour from hour)::int hh, round(avg(c), 1) a from (select hour, count(*) c from tele_hours where hour >= t0 group by hour) q group by 1) z on z.hh = h),
+    'heat', (select coalesce(json_agg(json_build_array(dw, hh, s)), '[]'::json) from (select extract(dow from hour)::int dw, extract(hour from hour)::int hh, sum(secs) s from tele_hours where hour >= t0 group by 1, 2) q),
+    'retention', (select json_agg(json_build_object('d', n, 'base', base, 'kept', kept) order by n) from (
+        select n, (select count(*) from tele_devices where first_at::date <= current_date - n) base,
+               (select count(*) from tele_devices v where v.first_at::date <= current_date - n and exists (select 1 from tele_hours h where h.did = v.did and h.hour::date = v.first_at::date + n)) kept
+        from unnest(array[1, 2, 3, 5, 7, 14, 30]) n) q),
+    'devices', json_build_object(
+      'sessions', (select coalesce(round(avg(sessions), 2), 0) from tele_devices), 'secs_per_session', (select coalesce(round(sum(secs)::numeric / nullif(sum(sessions), 0)), 0) from tele_devices),
+      'secs_total', (select coalesce(sum(secs), 0) from tele_devices), 'secs_median', (select coalesce(percentile_cont(0.5) within group (order by secs), 0) from tele_devices),
+      'secs_hist', (select json_agg(json_build_object('k', k, 'n', n) order by o) from (select o, k, count(*) n from (select case when secs < 60 then 1 when secs < 300 then 2 when secs < 900 then 3 when secs < 1800 then 4 when secs < 3600 then 5 when secs < 7200 then 6 else 7 end o,
+            case when secs < 60 then '< 1 min' when secs < 300 then '1-5 min' when secs < 900 then '5-15 min' when secs < 1800 then '15-30 min' when secs < 3600 then '30-60 min' when secs < 7200 then '1-2 h' else '> 2 h' end k from tele_devices) a group by o, k) b),
+      'platform', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by n desc), '[]'::json) from (select coalesce(nullif(platform, ''), '?') k, count(*) n from tele_devices group by 1) a),
+      'lang', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by n desc), '[]'::json) from (select coalesce(nullif(lang, ''), '?') k, count(*) n from tele_devices group by 1 order by 2 desc limit 8) a),
+      'screen', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by n desc), '[]'::json) from (select coalesce(nullif(scr, ''), '?') k, count(*) n from tele_devices group by 1 order by 2 desc limit 8) a),
+      'ver', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by n desc), '[]'::json) from (select coalesce(nullif(ver, ''), '?') k, count(*) n from tele_devices group by 1 order by 2 desc limit 8) a)),
+    'runs', json_build_object(
+      'total', (select count(*) from tele_runs where at >= t0),
+      'modes', (select coalesce(json_agg(json_build_object('k', mode, 'n', n, 'avg_score', s, 'avg_secs', c, 'over', o, 'avg_drops', dr, 'fps', f) order by n desc), '[]'::json) from (
+          select mode, count(*) n, round(avg(score)) s, round(avg(secs)) c, round(100.0 * count(*) filter (where over) / count(*), 1) o, round(avg(drops)) dr, round(avg(fps)) f from tele_runs where at >= t0 group by mode) a),
+      'secs_hist', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by o), '[]'::json) from (select o, k, count(*) n from (select case when secs < 30 then 1 when secs < 60 then 2 when secs < 120 then 3 when secs < 300 then 4 when secs < 600 then 5 when secs < 1200 then 6 else 7 end o,
+            case when secs < 30 then '< 30 s' when secs < 60 then '30-60 s' when secs < 120 then '1-2 min' when secs < 300 then '2-5 min' when secs < 600 then '5-10 min' when secs < 1200 then '10-20 min' else '> 20 min' end k from tele_runs where at >= t0) a group by o, k) b),
+      'score_hist', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by o), '[]'::json) from (select o, k, count(*) n from (select case when score < 1000 then 1 when score < 5000 then 2 when score < 20000 then 3 when score < 50000 then 4 when score < 100000 then 5 else 6 end o,
+            case when score < 1000 then '< 1 k' when score < 5000 then '1-5 k' when score < 20000 then '5-20 k' when score < 50000 then '20-50 k' when score < 100000 then '50-100 k' else '> 100 k' end k from tele_runs where at >= t0) a group by o, k) b),
+      'tier_reach', (select coalesce(json_agg(json_build_object('t', t, 'n', (select count(*) from tele_runs r where r.at >= t0 and r.tier >= t)) order by t), '[]'::json) from generate_series(1, 12) t),
+      'sector', (select coalesce(json_agg(json_build_object('k', x, 'n', n) order by x), '[]'::json) from (select least(sector, 10) x, count(*) n from tele_runs where at >= t0 group by 1) a),
+      'per_device', (select coalesce(round(avg(c), 2), 0) from (select count(*) c from tele_runs where at >= t0 group by did) a)),
+    'events', (select coalesce(json_agg(json_build_object('k', name, 'n', n, 'devs', dv, 'sum', sm) order by n desc), '[]'::json) from (
+        select name, count(*) n, count(distinct did) dv, sum(val) sm from tele_events where at >= t0 and name not like 'js_error%' group by name order by count(*) desc limit 40) a),
+    'errors', (select coalesce(json_agg(json_build_object('k', info, 'n', n, 'last', l) order by n desc), '[]'::json) from (
+        select info, count(*) n, max(at) l from tele_events where at >= t0 and name like 'js_error%' group by info order by count(*) desc limit 12) a),
+    'players', json_build_object(
+      'total', (select count(*) from players), 'banned', (select count(*) from players where banned), 'avg_level', (select coalesce(round(avg(level), 1), 0) from players),
+      'playtime_avg', (select coalesce(round(avg(playtime)), 0) from players where playtime > 0), 'playtime_median', (select coalesce(percentile_cont(0.5) within group (order by playtime), 0) from players where playtime > 0),
+      'levels', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by o), '[]'::json) from (select o, k, count(*) n from (select case when level < 5 then 1 when level < 10 then 2 when level < 20 then 3 when level < 30 then 4 when level < 50 then 5 else 6 end o,
+            case when level < 5 then '1-4' when level < 10 then '5-9' when level < 20 then '10-19' when level < 30 then '20-29' when level < 50 then '30-49' else '50+' end k from players) a group by o, k) b),
+      'playtime_hist', (select coalesce(json_agg(json_build_object('k', k, 'n', n) order by o), '[]'::json) from (select o, k, count(*) n from (select case when playtime < 600 then 1 when playtime < 1800 then 2 when playtime < 3600 then 3 when playtime < 18000 then 4 when playtime < 36000 then 5 else 6 end o,
+            case when playtime < 600 then '< 10 min' when playtime < 1800 then '10-30 min' when playtime < 3600 then '30-60 min' when playtime < 18000 then '1-5 h' when playtime < 36000 then '5-10 h' else '> 10 h' end k from players) a group by o, k) b),
+      'elo_avg', (select coalesce(round(avg(elo)), 1000) from players where elo_games > 0), 'duelists', (select count(*) from players where elo_games > 0),
+      'event_players', (select count(*) from event_players), 'ideas', (select count(*) from ideas), 'likes', (select count(*) from likes)));
+end $$;
+
+revoke all on function public.tele(text, integer, json, json, json, text), public.admin_analytics(text, integer) from public, anon, authenticated;
+grant execute on function public.tele(text, integer, json, json, json, text), public.admin_analytics(text, integer) to anon, authenticated;

@@ -19,7 +19,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
-const H = { vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', goal: () => {}, back: () => {}, challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
+const H = { tele: () => {}, vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', goal: () => {}, back: () => {}, challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
 const BANG = 0.42; // part du saut passée en implosion, avant le bang
@@ -50,6 +50,7 @@ let tutShown = -1;
 const sectorName = (d) => (d < F.STRATA.length ? F.STRATA[d] : `Origine +${d - F.STRATA.length + 1}`);
 
 /* ============================== état ============================== */
+let fpsN = 0, fpsT = 0; // images comptées pendant la partie (fps moyen envoyé aux statistiques anonymes)
 let G = null, isOpen = false, raf = 0, T = 0, last = 0, cv, ctx, W = 0, Hh = 0, DPR = 1, SAT = 0, SAB = 0, lowFx = false, paused = false;
 let B = { x: 0, y: 0, w: 0, h: 0, u: 30 }, holdR = null, aimX = F.W / 2, aimT = F.W / 2, want = false, reveal = null, aiming = false, ended = false;
 let parts = [], rings = [], labels = [], pops = new Map(), shake = 0, flash = 0, flashC = [255, 255, 255], hitstop = 0;
@@ -578,7 +579,7 @@ function update(dt) {
   if (callout && (callout.l += dt) > 1.2) callout = null;
   if (reveal && (reveal.l += dt) > reveal.d) reveal = null;
   if (ghosts.length) ghosts = ghosts.filter((g) => T - g.t0 < 0.65);
-  if (!G.nop && !ended && !paused && !document.hidden) { sv.time += dt; tAcc += dt; if (tAcc >= 10) { tAcc = 0; save(); H.time(sv.time); } } // temps de jeu : seulement quand on joue vraiment (ni pause, ni écran de fin, ni arrière-plan)
+  if (!G.nop && !ended && !paused && !document.hidden) { fpsN++; fpsT += dt; sv.time += dt; tAcc += dt; if (tAcc >= 10) { tAcc = 0; save(); H.time(sv.time); } } // temps de jeu : seulement quand on joue vraiment (ni pause, ni écran de fin, ni arrière-plan)
   if (tut >= 0) tutorial();
   if (G.chal && !ended) { // défi du jour : objectif atteint avant la fin du chrono ?
     const c = G.chal, val = c[0] === 'tier' ? G.maxTier : c[0] === 'chain' ? G.maxChain : c[0] === 'depth' ? G.depth : G.score;
@@ -888,11 +889,13 @@ function tutorial() {
 function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && !G.blitz && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
 const dropRun = () => { try { localStorage.removeItem(RUN); } catch (e) { /* ignore */ } };
 function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `${G && G.blitz ? 'Classement Blitz' : 'Classement mondial'} : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
+const teleRun = (m, x) => H.tele({ m, s: G.score | 0, t: G.maxTier | 0, x: G.depth + 1, d: Math.round(G.t), n: G.drops | 0, o: !!G.over, f: fpsT > 1 ? Math.round(fpsN / fpsT) : 0, ...x }); // statistiques anonymes
 function endRun() {
   if (ended || !G) return; ended = true; const c = G.chal;
   if (!c && !G.blitz) dropRun(); // un défi ou un Blitz ne touche pas à la partie normale en attente
   if (c) return endChal(c);
   if (G.blitz) return endBlitz();
+  teleRun('classic');
   rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
@@ -909,6 +912,7 @@ function endRun() {
   refreshTitle();
 }
 function endBlitz() { // fin d'un Blitz : record propre au mode, classement Blitz, récompenses proportionnelles
+  teleRun('blitz');
   const B2 = G.blitz, rec = G.score > (sv.blitz | 0), lv0 = levelOf(sv.xp).level; sv.blitzRuns = (sv.blitzRuns | 0) + 1; if (rec) sv.blitz = G.score; save();
   rankLine(null); H.submit({ blitz: true, score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
   H.track('runs', 1); addXp(Math.min(200, Math.round(G.score / 300))); const gain = Math.min(500, Math.round(G.score / 150)); if (G.over) A.fail();
@@ -924,6 +928,7 @@ function overPanel(rec) {
   $('#mn-q').innerHTML = H.quests(); $('#mn-m-over').classList.add('on');
 }
 function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à temps) ou manqué
+  teleRun('daily', { o: !G.won });
   const won = !!G.won, left = Math.max(0, Math.round((c[2] - G.t) * 10) / 10), first = won && !(sv.daily.day === G.day && sv.daily.done);
   if (won) { sv.daily = { day: G.day, done: true, best: sv.daily.day === G.day ? Math.max(sv.daily.best, left) : left }; save(); A.win(); } else A.fail();
   rankLine(null); if (won) H.submit({ daily: G.day, score: Math.round(left * 100), sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n });
@@ -936,7 +941,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   }, 900);
 }
 function newRun(seed, keep, opt) {
-  if (!keep) dropRun(); G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
   if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && deckTiers().length) { const pw = deckPowers(); G.powers = pw; G.log.push(0, -1e6 - F.maskOf(pw)); } // l'en-tête consigne les pouvoirs du deck
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
@@ -1064,7 +1069,7 @@ function sharedTick(dt) {
 }
 function sharedFinish() { const d = duel; if (!d || d.phase === 'done') return; dsend({ e: 'end', loser: G.shared.loser }); sharedResult(G.shared.loser === d.my ? 'lose' : 'win'); }
 function sharedResult(r) {
-  const d = duel; if (!d || d.phase === 'done') return; d.phase = 'done'; ended = true; const won = r === 'win' || r === 'forfait'; if (won) H.goal('duelwin');
+  const d = duel; if (!d || d.phase === 'done') return; d.phase = 'done'; ended = true; const won = r === 'win' || r === 'forfait'; if (won) H.goal('duelwin'); teleRun('duel', { o: !won });
   setTimeout(() => {
     if (duel !== d) return; (won ? A.win : A.fail)();
     dview('end', r === 'win' ? 'Victoire !' : r === 'forfait' ? 'Victoire par forfait' : 'Défaite', r === 'lose' ? 'Ton astre a fait déborder la cuve.' : r === 'win' ? `${d.oppName} a fait déborder la cuve.` : `${d.oppName} a quitté la partie.`);
