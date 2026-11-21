@@ -638,3 +638,98 @@ $$;
 
 revoke all on function public.duel_report(text, text, boolean, text), public.elo_sync(text), public.elo_board(integer, integer) from public, anon, authenticated;
 grant execute on function public.duel_report(text, text, boolean, text), public.elo_sync(text), public.elo_board(integer, integer) to anon, authenticated;
+
+-- ============================== Événement collaboratif : la Grande Cuve ==============================
+-- Tous les joueurs posent des astres dans une cuve géante. Un astre de rang r a une masse 2^r ; 4 096 de masse = une galaxie. Le serveur ne garde que des compteurs (masse, astres posés)
+-- par événement et par joueur : pas de physique partagée, donc des centaines de joueurs sans conflit. Objectif = un nombre de galaxies, avec des paliers qui récompensent tout le monde.
+create table if not exists public.events (
+  id bigserial primary key, name text not null, starts_at timestamptz not null default now(), ends_at timestamptz not null,
+  goal integer not null default 50, mass bigint not null default 0, astres bigint not null default 0, created_at timestamptz not null default now()
+);
+create table if not exists public.event_players (
+  event_id bigint not null references public.events (id) on delete cascade, player_id uuid not null references public.players (id) on delete cascade,
+  astres bigint not null default 0, mass bigint not null default 0, last_at timestamptz, tok numeric not null default 60, primary key (event_id, player_id)
+);
+create index if not exists event_players_board on public.event_players (event_id, astres desc);
+create index if not exists event_players_recent on public.event_players (event_id, last_at desc);
+create table if not exists public.event_claims (
+  event_id bigint not null references public.events (id) on delete cascade, player_id uuid not null references public.players (id) on delete cascade, kind text not null, at timestamptz not null default now(),
+  primary key (event_id, player_id, kind)
+);
+alter table public.events enable row level security; alter table public.event_players enable row level security; alter table public.event_claims enable row level security;
+revoke all on public.events, public.event_players, public.event_claims from anon, authenticated;
+revoke all on sequence public.events_id_seq from anon, authenticated;
+
+-- État courant (dernier événement commencé, en cours ou terminé) : compteurs, classement, joueurs actifs ces dernières secondes (pour voir les astres se poser en direct) et ma part.
+create or replace function public.event_current(p_secret text default null) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare e events; v_me uuid; v_board json; v_act json; v_mine json;
+begin
+  select * into e from events where starts_at <= now() order by id desc limit 1; if e.id is null then return null; end if;
+  select id into v_me from players where secret_hash = critical_hash(p_secret);
+  select coalesce(json_agg(x order by x.a desc), '[]') into v_board from (select p.name as n, ep.astres as a, p.accent as c from event_players ep join players p on p.id = ep.player_id where ep.event_id = e.id and not p.banned order by ep.astres desc limit 10) x;
+  select coalesce(json_agg(x), '[]') into v_act from (select p.name as n, ep.astres as a, p.accent as c from event_players ep join players p on p.id = ep.player_id where ep.event_id = e.id and ep.last_at > now() - interval '20 seconds' and not p.banned order by ep.last_at desc limit 30) x;
+  select json_build_object('astres', ep.astres, 'mass', ep.mass, 'rank', (select count(*) + 1 from event_players o where o.event_id = e.id and o.astres > ep.astres), 'claimed', coalesce((select json_agg(c.kind) from event_claims c where c.event_id = e.id and c.player_id = v_me), '[]'))
+    into v_mine from event_players ep where ep.event_id = e.id and ep.player_id = v_me;
+  return json_build_object('id', e.id, 'name', e.name, 'starts', e.starts_at, 'ends', e.ends_at, 'now', now(), 'active', e.ends_at > now(), 'goal', e.goal, 'mass', e.mass, 'astres', e.astres, 'galaxies', e.mass / 4096,
+    'players', (select count(*) from event_players where event_id = e.id), 'board', v_board, 'act', v_act, 'me', v_mine);
+end $$;
+
+-- Pose d'un lot d'astres : p_counts = nombre posé pour chacun des rangs 0 à 3 (au plus 40 au total). Cadence limitée par un seau de 60 jetons qui se remplit de 5 par seconde (donc 5 astres par seconde en continu).
+create or replace function public.event_drop(p_secret text, p_counts integer[]) returns json
+language plpgsql security definer set search_path = public as $$
+declare e events; v_me uuid; v_last timestamptz; v_tk numeric; v_ok integer; v_tot integer := 0; v_m bigint := 0; v_n integer[] := array[0, 0, 0, 0]; i integer; take integer; v_pa bigint;
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret) and not banned; if v_me is null then raise exception 'unknown_player'; end if;
+  if p_counts is null or array_length(p_counts, 1) <> 4 or exists (select 1 from unnest(p_counts) c where c is null or c < 0 or c > 40) then raise exception 'invalid_counts'; end if;
+  select * into e from events where starts_at <= now() and ends_at > now() order by id desc limit 1 for update; if e.id is null then raise exception 'no_event'; end if;
+  select last_at, tok into v_last, v_tk from event_players where event_id = e.id and player_id = v_me;
+  v_tk := least(60, coalesce(v_tk, 60) + coalesce(extract(epoch from now() - v_last), 0) * 5); v_ok := floor(v_tk)::integer;
+  for i in reverse 4..1 loop take := least(p_counts[i], v_ok - v_tot); if take > 0 then v_n[i] := take; v_tot := v_tot + take; v_m := v_m + take * (1 << (i - 1)); end if; end loop; -- on garde d'abord les plus gros astres
+  if v_tot = 0 then raise exception 'too_fast'; end if;
+  update events set mass = mass + v_m, astres = astres + v_tot where id = e.id returning mass, astres into e.mass, e.astres;
+  insert into event_players (event_id, player_id, astres, mass, last_at, tok) values (e.id, v_me, v_tot, v_m, now(), 60 - v_tot)
+    on conflict (event_id, player_id) do update set astres = event_players.astres + v_tot, mass = event_players.mass + v_m, last_at = now(), tok = v_tk - v_tot returning astres into v_pa;
+  return json_build_object('accepted', v_tot, 'mass', e.mass, 'astres', e.astres, 'galaxies', e.mass / 4096, 'me', v_pa);
+end $$;
+
+-- Récompenses : paliers collectifs (dès 50 astres posés) pendant l'événement ; participation, podium et bonus d'objectif une fois terminé. Chaque récompense n'est donnée qu'une fois ; elle arrive sous forme de cadeaux.
+create or replace function public.event_claim(p_secret text) returns json
+language plpgsql security definer set search_path = public as $$
+declare e events; v_me uuid; v_a bigint; v_pct numeric; v_rank bigint; v_gifts json[] := '{}'; v_v integer; v_pk text; k record; v_id bigint; v_kind text; v_done boolean; v_titles text[] := '{}';
+begin
+  select id into v_me from players where secret_hash = critical_hash(p_secret) and not banned; if v_me is null then raise exception 'unknown_player'; end if;
+  select * into e from events where starts_at <= now() order by id desc limit 1; if e.id is null then raise exception 'no_event'; end if;
+  select astres into v_a from event_players where event_id = e.id and player_id = v_me; if coalesce(v_a, 0) < 50 then raise exception 'not_enough'; end if;
+  v_pct := (e.mass / 4096.0) * 100 / greatest(e.goal, 1); v_done := e.ends_at <= now();
+  for k in select * from (values (25, 500, null::text), (50, 1000, 'etoile'), (75, 2000, null), (100, 5000, 'nebuleuse'), (150, 4000, null), (200, 8000, 'galaxie')) as t(pct, vo, pk) loop
+    if v_pct >= k.pct then v_kind := 'm' || k.pct; insert into event_claims (event_id, player_id, kind) values (e.id, v_me, v_kind) on conflict do nothing;
+      if found then insert into gifts (to_id, eclats, xp, note, pack, pack_n) values (v_me, k.vo, 0, 'Grande Cuve · palier ' || k.pct || ' %', k.pk, case when k.pk is null then 0 else 1 end) returning id into v_id; v_gifts := v_gifts || json_build_object('id', v_id)::json; end if; end if;
+  end loop;
+  if v_done then
+    for k in select * from (values (5000, 15000, 'galaxie', 'tier3'), (1000, 6000, 'nebuleuse', 'tier2'), (100, 2000, 'etoile', 'tier1')) as t(n, vo, pk, kd) loop
+      if v_a >= k.n then insert into event_claims (event_id, player_id, kind) values (e.id, v_me, k.kd) on conflict do nothing;
+        if found then insert into gifts (to_id, eclats, xp, note, pack, pack_n) values (v_me, k.vo, 200, 'Grande Cuve · ' || v_a || ' astres posés', k.pk, 1) returning id into v_id; v_gifts := v_gifts || json_build_object('id', v_id)::json; v_titles := v_titles || 'batisseur'::text; end if;
+        exit; end if;
+    end loop;
+    select count(*) + 1 into v_rank from event_players o where o.event_id = e.id and o.astres > v_a;
+    if v_rank <= 3 then v_v := (array[30000, 20000, 12000])[v_rank]; insert into event_claims (event_id, player_id, kind) values (e.id, v_me, 'top' || v_rank) on conflict do nothing;
+      if found then insert into gifts (to_id, eclats, xp, note) values (v_me, v_v, 500, 'Grande Cuve · n° ' || v_rank) returning id into v_id; v_gifts := v_gifts || json_build_object('id', v_id)::json; v_titles := v_titles || 'architecte'::text; end if; end if;
+    if v_pct >= 100 then insert into event_claims (event_id, player_id, kind) values (e.id, v_me, 'goal') on conflict do nothing;
+      if found then insert into gifts (to_id, eclats, xp, note, pack, pack_n) values (v_me, 3000, 300, 'Grande Cuve · objectif atteint', 'etoile', 2) returning id into v_id; v_gifts := v_gifts || json_build_object('id', v_id)::json; v_titles := v_titles || 'colosse'::text; end if; end if;
+  end if;
+  return json_build_object('gifts', to_json(v_gifts), 'titles', to_json(v_titles), 'done', v_done);
+end $$;
+
+-- Administration : lancer / arrêter un événement.
+create or replace function public.admin_event_start(p_secret text, p_name text, p_hours integer default 60, p_goal integer default 50) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare v bigint; n text := left(btrim(regexp_replace(coalesce(p_name, ''), '[[:cntrl:]<>]', '', 'g')), 40);
+begin perform admin_id(p_secret); if length(n) < 3 then n := 'La Grande Cuve'; end if; if p_hours not between 1 and 240 or p_goal not between 1 and 100000 then raise exception 'invalid_amount'; end if;
+  update events set ends_at = now() where ends_at > now(); insert into events (name, ends_at, goal) values (n, now() + make_interval(hours => p_hours), p_goal) returning id into v; return v; end $$;
+create or replace function public.admin_event_end(p_secret text) returns void
+language plpgsql security definer set search_path = public as $$
+begin perform admin_id(p_secret); update events set ends_at = now() where ends_at > now(); end $$;
+
+revoke all on function public.event_current(text), public.event_drop(text, integer[]), public.event_claim(text), public.admin_event_start(text, text, integer, integer), public.admin_event_end(text) from public, anon, authenticated;
+grant execute on function public.event_current(text), public.event_drop(text, integer[]), public.event_claim(text), public.admin_event_start(text, text, integer, integer), public.admin_event_end(text) to anon, authenticated;

@@ -24,6 +24,9 @@ export const TITLES = [
   { k: 'veteran', n: 'Vétéran', ok: (s) => s.level >= 25, hint: 'Niveau 25' },
   { k: 'legende', n: 'Légende vivante', ok: (s) => s.level >= 50, hint: 'Niveau 50' },
   { k: 'marathon', n: 'Marathonien', ok: (s) => s.playtime >= 36000, hint: '10 h de jeu' },
+  { k: 'batisseur', n: 'Bâtisseur du Colosse', ok: (s) => (s.ev || []).includes('batisseur'), hint: 'Événement : la Grande Cuve' },
+  { k: 'architecte', n: 'Architecte du Colosse', ok: (s) => (s.ev || []).includes('architecte'), hint: 'Podium de la Grande Cuve' },
+  { k: 'colosse', n: 'Colosse atteint', ok: (s) => (s.ev || []).includes('colosse'), hint: 'Objectif de la Grande Cuve atteint' },
   { k: 'createur', n: 'Créateur du jeu', ok: (s) => !!s.admin, hint: 'Réservé', hidden: true },
 ];
 export const titleName = (k) => { const t = TITLES.find((x) => x.k === k); return t && k ? t.n : ''; };

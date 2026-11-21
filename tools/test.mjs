@@ -195,3 +195,8 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   for (let k = 0; k < 400; k++) F.step(g); assert.ok(g.bodies.length > 0 && g.bodies.every((b) => b.y <= F.HT - b.r + 1e-6), 'une ancienne sauvegarde garde son sol');
   console.log('reprise d\'ancienne sauvegarde OK');
 }
+{ // Grande Cuve : chiffres de l'événement
+  const C = await import('../js/cuve.js'); assert.equal(C.galaxies(4096 * 3 + 5), 3, 'galaxie = 4 096 de masse'); assert.equal(C.astresPerGalaxy, 1429, '≈ 1 429 astres posés par galaxie');
+  assert.ok(Math.abs(C.MEAN_MASS - 43 / 15) < 1e-9, 'masse moyenne par astre'); assert.ok(C.pick(0) === 0 && C.pick(0.999) === 3 && [...Array(1000)].every((_, i) => C.TIERS.includes(C.pick(i / 1000))), 'tirage dans les rangs 0 à 3');
+  console.log('Grande Cuve OK (' + C.astresPerGalaxy + ' astres par galaxie)');
+}
