@@ -12,7 +12,7 @@ const H = { view: () => {}, receive: () => {}, level: () => 1, track: () => {}, 
 const st = { secret: '', name: '', pending: [], prof: { featured: [], motto: '', accent: 0, frame: 0, title: '' }, dirty: false }; // pending : scores pas encore envoyés (pas de pseudo, ou hors connexion)
 try { Object.assign(st, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* ignore */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
-const ERR = { name_taken: 'Ce pseudo est déjà pris.', invalid_name: '3 à 16 caractères : lettres, chiffres, espace, point, tiret.', too_fast: 'Deux envois trop rapprochés, réessaie dans un instant.', implausible: 'Score refusé par le serveur.', network: 'Connexion impossible. Réessaie plus tard.', invalid_motto: 'La devise ne peut pas contenir de < ou >.', invalid_style: 'Couleur ou cadre invalide.', invalid_title: 'Titre invalide.', invalid_idea: 'Une idée fait entre 10 et 280 caractères.', too_many: 'Tu as déjà proposé 3 idées aujourd\'hui, reviens demain !', duplicate: 'Cette idée existe déjà : soutiens-la plutôt !', own_idea: 'Ton idée compte déjà pour toi.', not_found: 'Introuvable.', unknown_player: 'Choisis d\'abord un pseudo.', forbidden: 'Action refusée.', invalid_featured: 'Vitrine invalide.', no_profile: 'Choisis d\'abord un pseudo.', not_found: 'Joueur introuvable.', self: 'Impossible sur ton propre profil.', offline: 'Ce joueur n\'est plus en ligne.', no_duel: 'Ce joueur ne reçoit pas d\'invitations.', busy: 'Ce joueur a déjà une invitation en attente.', declined_recently: 'Ce joueur a refusé il y a peu : réessaie plus tard.', too_many: 'Trop d\'invitations pour le moment.', expired: 'L\'invitation a expiré.', not_claimable: 'Ce pseudo n\'est pas ouvert à la reprise (ou le délai est dépassé). Contacte l\'administrateur.' };
+const ERR = { name_taken: 'Ce pseudo est déjà pris.', invalid_name: '3 à 16 caractères : lettres, chiffres, espace, point, tiret.', too_fast: 'Deux envois trop rapprochés, réessaie dans un instant.', implausible: 'Score refusé par le serveur.', network: 'Connexion impossible. Réessaie plus tard.', invalid_motto: 'La devise ne peut pas contenir de < ou >.', invalid_style: 'Couleur ou cadre invalide.', invalid_title: 'Titre invalide.', invalid_idea: 'Une idée fait entre 10 et 280 caractères.', too_many: 'Tu as déjà proposé 3 idées aujourd\'hui, reviens demain !', duplicate: 'Cette idée existe déjà : soutiens-la plutôt !', own_idea: 'Ton idée compte déjà pour toi.', not_found: 'Introuvable.', unknown_player: 'Choisis d\'abord un pseudo.', forbidden: 'Action refusée.', no_event: 'Aucun événement en cours.', not_enough: 'Pose au moins 50 astres pour récupérer des récompenses.', invalid_counts: 'Lot invalide.', invalid_featured: 'Vitrine invalide.', no_profile: 'Choisis d\'abord un pseudo.', not_found: 'Joueur introuvable.', self: 'Impossible sur ton propre profil.', offline: 'Ce joueur n\'est plus en ligne.', no_duel: 'Ce joueur ne reçoit pas d\'invitations.', busy: 'Ce joueur a déjà une invitation en attente.', declined_recently: 'Ce joueur a refusé il y a peu : réessaie plus tard.', too_many: 'Trop d\'invitations pour le moment.', expired: 'L\'invitation a expiré.', not_claimable: 'Ce pseudo n\'est pas ouvert à la reprise (ou le délai est dépassé). Contacte l\'administrateur.' };
 export const ready = () => !!(SUPABASE_URL && SUPABASE_KEY);
 export const name = () => st.name;
 
@@ -236,6 +236,13 @@ async function answer(ok) {
   catch (e) { H.toast(ERR[e.message] || ERR.network); }
 }
 export const isAdmin = () => !!st.admin;
+export const call = (fn, args = {}) => rpc(fn, { p_secret: secret(), ...args }).catch((e) => { throw new Error(ERR[e.message] || e.message); }); // appel authentifié pour les modules (événement…)
+export const openEditorNow = () => { if (!st.name) return askName(); openEditor(); };
+export async function eventClaim() { // récompenses de la Grande Cuve : les cadeaux sont encaissés tout de suite
+  const r = await call('event_claim'); let n = 0; for (const g of r.gifts || []) { try { const x = await call('claim_gift', { p_id: g.id }); H.receive(x.eclats, x.xp, x.note, x.pack, x.packs); n++; } catch (e) { /* déjà pris */ } }
+  if ((r.titles || []).length) { try { const K = 'critical.ev.v1', cur = JSON.parse(localStorage.getItem(K) || '{}'); cur.titles = [...new Set([...(cur.titles || []), ...r.titles])]; localStorage.setItem(K, JSON.stringify(cur)); } catch (e) { /* ignore */ } }
+  return n ? `${n} récompense${n > 1 ? 's' : ''} encaissée${n > 1 ? 's' : ''} !` : 'Rien de nouveau à récupérer pour l\'instant';
+}
 export const admin = (fn, args = {}) => rpc(fn, { p_secret: secret(), ...args }).catch((e) => { throw new Error(ERR[e.message] || e.message); });
 export const noDuel = () => !!st.noDuel;
 export function setNoDuel(v) { st.noDuel = !!v; save(); if (st.name && ready()) rpc('set_no_duel', { p_secret: secret(), p_value: !!v }).catch(() => {}); }
@@ -271,7 +278,8 @@ let pfTimer = 0, pfName = '', onProf = () => {}, openAfterName = false;
 export const avatarKey = () => (st.prof.featured || [])[0] || '';
 export const whenProfile = (f) => { onProf = f; };
 const closeProfile = () => { clearInterval(pfTimer); $('#rk-prof').classList.remove('on'); pfName = ''; };
-const myStats = () => { const l = H.local() || {}; return { level: H.level() || 1, codex: H.codexN() || 0, sector: l.sector || 0, tier: l.tier == null ? -1 : l.tier, score: l.score || 0, playtime: l.playtime || 0, admin: !!st.admin }; };
+const evTitles = () => { try { return JSON.parse(localStorage.getItem('critical.ev.v1') || '{}').titles || []; } catch (e) { return []; } };
+const myStats = () => { const l = H.local() || {}; return { ev: evTitles(), level: H.level() || 1, codex: H.codexN() || 0, sector: l.sector || 0, tier: l.tier == null ? -1 : l.tier, score: l.score || 0, playtime: l.playtime || 0, admin: !!st.admin }; };
 function renderProfile(p, me, offline) {
   const keys = (p.featured || []).filter((k) => H.astreInfo(k)), card = $('#rk-prof .card'); card.style.setProperty('--a', rgbOf(p.accent));
   $('#pf-lvl').textContent = (p.level ? 'NIVEAU ' + p.level : '') + (p.elo_games > 0 ? ' · ELO ' + p.elo : ''); $('#pf-name').textContent = p.name; $('#pf-title').textContent = titleName(p.title); $('#pf-motto').textContent = p.motto ? '« ' + p.motto + ' »' : '';

@@ -11,7 +11,9 @@ import * as INSTALL from './install.js';
 import * as COLL from './collection.js';
 import * as CHP from './challenges.js';
 import * as VOID from './voidium.js';
+import * as EVENT from './event.js';
 import { equipable } from './catalog.js';
+import { ACCENTS } from './style.js';
 import * as PACKUI from './packui.js';
 
 const $ = (s) => document.querySelector(s);
@@ -55,9 +57,11 @@ GOALS.init({ pack: MINE.packAdd, grant: MINE.grant, xp: MINE.giveXp, level: () =
 let packs = null;
 const adm = ADMIN.mount({ call: RANK.admin, toast, vib, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
 tap('#o-admin', () => { $('#m-settings').classList.remove('on'); adm.open(); });
+const evColors = Array.from({ length: 13 }, (_, i) => (MINE.BODIES[i] || [0, [200, 200, 255]])[1]);
+const ev = EVENT.mount({ call: RANK.call, name: RANK.name, askName: RANK.askName, claim: RANK.eventClaim, colors: evColors, accent: (i) => ACCENTS[Math.max(0, Math.min(11, i | 0))].c.join(','), toast, vib, sfx: A.ui });
 const packMount = (box) => (packs = PACKUI.mount(box, { info: MINE.packInfo, open: (id) => MINE.packOpen(id), preview: (r, id) => MINE.packOpen(id, true, r), free: MINE.packFree, paintCard: MINE.paintCard, view: MINE.viewCard, buildCard: MINE.buildCard, sfx: { charge: A.packCharge, place: A.packPlace, rise: A.packRise, link: A.packLink, swallow: A.packSwallow, boom: A.packBoom, hit: A.packHit }, vib, toast, quick: () => S.quick, refresh }));
 const vdIcon = VOID.icon('vd-ic');
-HOME.init({ paint: MINE.paintAstre, sfx: A.ui, levelInfo: MINE.levelInfo, openProfile: () => (RANK.name() ? RANK.openMyProfile() : RANK.askName()), economy: () => VOID.modal(MINE.dust(), MINE.ledger()),
+HOME.init({ paint: MINE.paintAstre, sfx: A.ui, levelInfo: MINE.levelInfo, openProfile: RANK.openEditorNow, event: ev, economy: () => VOID.modal(MINE.dust(), MINE.ledger()),
   collection: (el) => COLL.mount(el, { entries: MINE.collectionEntries, paint: MINE.paintAstre, view: MINE.viewCard, deck: { info: MINE.deckInfo, add: MINE.deckAdd, remove: MINE.deckRemove, preset: MINE.deckPreset, buySlot: MINE.buySlot }, skin: { equipable, equip: MINE.equip, of: MINE.skinOf }, themes: { list: MINE.themeList, use: MINE.themeUse, preview: MINE.themePreview }, mountPacks: packMount, toast, vib, sfx: A.ui, icon: vdIcon }),
   challenges: (el) => CHP.mount(el, { goals: { list: GOALS.list, claimGoal: GOALS.claimGoal, claimAll: GOALS.claimAll }, quests: { data: QS.data, claimReward: QS.claimReward, claimAll: QS.claimAll }, daily: { info: MINE.daily, play: MINE.openDaily }, toast, vib, sfx: A.ui, icon: vdIcon }) });
 // l'icône du bouton Profil devient l'astre de profil choisi

@@ -71,6 +71,7 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.hm-blob,.hm-gem,.hm-hero,.hm-hero::before,.hm-orb *,#s-title.hm .logo{animation:none!important}}
 
 /* sélecteur de modes : un astre par mode, en profondeur ; on glisse (ou on touche un voisin) pour changer, toucher l'astre central lance le mode */
+.hm-pg>.hm-ev{position:relative;flex:none;width:auto;max-width:92%;display:flex;align-items:center;gap:10px;height:44px;padding:0 18px 0 12px;border-radius:22px;margin:0;animation:hm-bn 1.5s cubic-bezier(.3,0,.3,1) infinite;color:#fff;background:linear-gradient(135deg,rgba(110,80,255,.5),rgba(255,79,216,.4));border:1px solid rgba(255,255,255,.3)}.hm-ev[hidden]{display:none}.hm-ev::after{content:'';position:absolute;inset:-3px;border-radius:25px;border:2px solid rgba(190,120,255,.8);animation:hm-ring 1.5s ease-out infinite;pointer-events:none}.hm-evi{font-size:20px;filter:drop-shadow(0 0 8px #ffd86b);color:#ffd86b}.hm-evt{display:flex;flex-direction:column;text-align:left;line-height:1.15}.hm-evt b{font:900 12.5px var(--disp);letter-spacing:.08em}.hm-evt small{font:600 11px var(--font);color:rgba(255,255,255,.8)}@keyframes hm-bn{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(-10px) scale(1.05)}50%{transform:translateY(0) scale(.97,1.04)}65%{transform:translateY(-3px) scale(1.01)}}@keyframes hm-ring{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(1.14,1.5)}}@media (prefers-reduced-motion:reduce){.hm-pg>.hm-ev,.hm-ev::after{animation:none}}
 .hm-deck{position:relative;flex:none;width:min(86vw,400px,44vh);height:min(86vw,400px,44vh);margin:2px 0 0;perspective:900px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .hm-dg{position:absolute;left:50%;top:50%;width:92%;height:92%;margin:-46% 0 0 -46%;border-radius:50%;pointer-events:none;will-change:opacity}
 .hm-it{position:absolute;left:50%;top:50%;width:70%;height:70%;margin:-35% 0 0 -35%;display:grid;place-items:center;cursor:pointer;will-change:transform,opacity}
@@ -339,7 +340,11 @@ export function init(o = {}) {
   slot.addEventListener('pointerup', end); slot.addEventListener('pointercancel', end);
   slot.addEventListener('pointerdown', () => { const hl = document.querySelector('.hm-hole'); if (hl) hl.classList.add('press'); }); ['pointerup', 'pointercancel'].forEach((ev) => slot.addEventListener(ev, () => { const hl = document.querySelector('.hm-hole'); if (hl) hl.classList.remove('press'); }));
   texts(); requestAnimationFrame(() => { layout(); anim = requestAnimationFrame(step); });
-  pg[1].append(...[logo, tag, slot, info].filter(Boolean));
+  // — événement en cours : pastille qui rebondit en continu au-dessus du sélecteur de modes
+  const evb = make('button', 'gl hm-ev hm-in', '<span class="hm-evi">✦</span><span class="hm-evt"><b></b><small></small></span>'); evb.hidden = true; evb.setAttribute('aria-label', 'Événement en cours'); evb.addEventListener('click', () => { opts.sfx && opts.sfx(); opts.event && opts.event.open(); });
+  evUpdate = () => { const i = opts.event && opts.event.info(); if (!i || !i.active) { evb.hidden = true; return; } evb.hidden = false; $('b', evb).textContent = i.name.toUpperCase(); const l = i.left, d = Math.floor(l / 86400000), hh = Math.floor(l % 86400000 / 3600000); $('small', evb).textContent = `${Math.floor(i.pct)} % · ${d ? d + ' j ' + hh + ' h' : hh + ' h ' + String(Math.floor(l % 3600000 / 60000)).padStart(2, '0')}`; };
+  if (opts.event) { const chk = () => opts.event.check().then(evUpdate).catch(() => {}); chk(); setInterval(chk, 60000); }
+  pg[1].append(...[logo, tag, evb, slot, info].filter(Boolean));
   wrap.remove(); menu.remove(); scr.append(pager);
 
   // barre d'onglets : l'indicateur suit le doigt (variable --p = position de la page, 0 à 2)
@@ -372,9 +377,9 @@ function levelModal() {
   const L = opts.levelInfo(), col = `rgb(${L.col.join(',')})`, m = make('div', 'modal on', `<div class="card glass"><h2>Niveau ${L.level}</h2><div class="hm-lvb"><i style="width:${Math.round(L.pct * 100)}%;background:${col}"></i></div><p>${L.cur.toLocaleString('fr-FR')} / ${L.need.toLocaleString('fr-FR')} XP pour le niveau ${L.level + 1}</p><p class="hm-lvn">Chaque niveau offre des Voidium. La fissure du débris change de couleur tous les 5 niveaux${L.next ? ` : prochaine au niveau <b>${L.next}</b>` : ''}.</p><p class="hm-lvn">Gagne de l'XP en fusionnant, en découvrant de nouveaux astres, en finissant tes parties et en réussissant le défi du jour.</p><div class="btns"><button class="big primary">Fermer</button></div></div>`);
   m.addEventListener('click', (e) => { if (e.target === m || e.target.tagName === 'BUTTON') m.remove(); }); document.body.append(m);
 }
-let deckTexts = () => {};
+let deckTexts = () => {}, evUpdate = () => {};
 export function profile(name, key) { // pastille « profil » du haut de l'écran : astre de profil et pseudo
-  const b = $('.hm-pf'); if (!b) return; const a = $('.hm-pfa', b), t = $('b', b); t.textContent = name || 'Profil'; a.textContent = '';
+  const b = $('.hm-pf'); if (!b) return; const a = $('.hm-pfa', b), t = $('b', b); t.textContent = name || 'Profil'; b.title = name || ''; a.textContent = '';
   if (key && opts.paint) { const c = document.createElement('canvas'); a.append(c); opts.paint(c, key, 30, false); } else a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4.2 4.2-6 8-6s6.8 1.8 8 6"/></svg>';
 }
 export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null, goals = null } = {}) {
@@ -391,5 +396,5 @@ export function update({ dust = 0, daily = null, codex = 0, themes = null, level
       const step = (t) => { const k = Math.min(1, (t - t0) / 900); shownDust = Math.round(from + (n - from) * (1 - (1 - k) ** 3)); el.textContent = shownDust.toLocaleString('fr-FR'); if (k < 1) dustRaf = requestAnimationFrame(step); }; dustRaf = requestAnimationFrame(step); }
   }
   const d = $('#b-daily small'); if (d && daily) { d.textContent = daily.done ? 'Réussi aujourd\'hui' : 'Nouveau défi'; if (live) live.style.display = daily.done ? 'none' : ''; }
-  deckTexts();
+  deckTexts(); evUpdate();
 }
