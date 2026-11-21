@@ -70,7 +70,8 @@ export function mount(api) {
     // — dessin
     let last = performance.now(), t0 = last; const spawnQ = [], spr = [];
     // les sprites des petits astres ne remplissent pas leur toile : on mesure le rayon plein (opacité > 200) pour que l'astre dessiné ait la taille de son vrai rayon de collision
-    const info = (t) => { t = Math.min(12, t); if (spr[t]) return spr[t]; const c = api.sprite(t), x = c.getContext('2d'), w = c.width, d = x.getImageData(0, 0, w, w).data; let m = 1; for (let R = 2; R < w / 2; R++) { let hit = 0, n = 0; for (let a = 0; a < 6.283; a += 0.05) { n++; const X = Math.round(w / 2 + R * Math.cos(a)), Y = Math.round(w / 2 + R * Math.sin(a)); if (d[(Y * w + X) * 4 + 3] > 150) hit++; } if (hit / n > 0.8) m = R; } return (spr[t] = { c, k: t === 0 ? 3 : w / m }); }; // rang 0 : petite poussière d'étoile (point + éclats), dessinée petite comme en partie // k : largeur de dessin / rayon du disque (anneaux et halo exclus) → le disque a exactement le rayon de collision
+    // sprite sans plafond de taille : dessiné à 2,78 × le rayon (2,6 + marge), exactement comme en partie → les astres ont la taille du jeu de base
+    const info = (t) => { t = Math.min(12, t); return spr[t] || (spr[t] = { c: api.sprite(t), k: 2.78 }); };
     const sprite = (t) => info(t).c;
     const back = (k) => { const c = 1.70158; k -= 1; return 1 + (c + 1) * k * k * k + c * k * k; };
     function frame(now) {

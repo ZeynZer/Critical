@@ -712,11 +712,11 @@ export function astreInfo(key) { // nom, rareté (-1 = courant) et couleur d'un 
   return { name: k.tier === F.MAX_TIER ? GAL[k.v].n : nameOf(k.tier, k.v), rar, col: rar >= 0 ? RCOL[rar] : [160, 185, 225], sub: p ? odds(p) : k.v === 9 ? 'Fusion' : k.v ? 'Pack · ' + RAR[Math.max(0, rar)] : '' };
 }
 // Dessine un astre dans une vignette carrée de px pixels (profil, classement). live : astre animé, à repeindre régulièrement.
-export function paintAstre(c, key, px, live) {
+export function paintAstre(c, key, px, live, free) { // free : pas de plafond à la taille de la cuve de jeu (le sprite remplit sa toile : l'appelant le redimensionne)
   const k = parseKey(key); if (!k) return;
   const d = Math.min(window.devicePixelRatio || 1, 2); c.width = c.height = Math.round(px * d); c.style.width = c.style.height = px + 'px';
   const keep = ctx, t0 = T; ctx = c.getContext('2d'); ctx.scale(d, d); if (live) { T = performance.now() / 1000; FN += 2; }
-  drawItem({ k: 'c', tier: k.tier, v: k.v, ns: true }, px / 2, px / 2, 1, 0, Math.min(B.u, px * 0.36 / F.TIERS[k.tier].r)); // jamais plus grand que le sprite : pas de flou
+  drawItem({ k: 'c', tier: k.tier, v: k.v, ns: true }, px / 2, px / 2, 1, 0, free ? px * 0.36 / F.TIERS[k.tier].r : Math.min(B.u, px * 0.36 / F.TIERS[k.tier].r)); // jamais plus grand que le sprite : pas de flou
   ctx = keep; T = t0;
 }
 function showCodex() {
