@@ -46,7 +46,7 @@ const theme = () => THEMES.find((t) => t.id === sv.theme) || THEMES[0];
 const CHAL = [['tier', 7, 75, 'Crée un Soleil en moins de 1 min 15'], ['tier', 8, 120, 'Crée une Géante rouge en moins de 2 min'], ['tier', 9, 180, 'Crée une Étoile à neutrons en moins de 3 min'],
   ['chain', 5, 90, 'Déclenche une chaîne ×5 en moins de 1 min 30'], ['depth', 2, 60, 'Atteins le secteur 3 en moins de 1 min'], ['score', 6000, 60, 'Marque 6 000 points en moins de 1 min']];
 const TUT = ['Pose ton doigt dans la cuve, glisse pour viser, puis relâche.', 'Lâche un astre identique contre le premier : ils fusionnent !', 'Bravo ! Chaque fusion remplit la jauge du bas. Encore deux fusions.', 'Touche RÉSERVE pour garder un astre de côté et le ressortir plus tard.', 'Voici le classement mondial. Choisis un pseudo pour y participer.'];
-let tutShown = -1;
+let tutShown = -1, tutXp = 0;
 const sectorName = (d) => (d < F.STRATA.length ? F.STRATA[d] : `Origine +${d - F.STRATA.length + 1}`);
 
 /* ============================== état ============================== */
@@ -752,8 +752,10 @@ const lvCol = () => LV_COL[colIdx()];
 function lvStyle() { return colIdx(); }
 export const levelInfo = () => { const L = levelOf(sv.xp); return { ...L, pct: L.cur / L.need, col: LV_COL[colIdx()], next: colIdx() < LV_COL.length - 1 ? (colIdx() + 1) * 5 + 1 : 0 }; };
 function addXp(n, force) { // aucune expérience dans le bac à sable, les rediffusions ni les duels (sauf récompense de défi : force)
-  if (!(n > 0) || (G && G.nop && !force)) return; const before = levelOf(sv.xp).level; sv.xp += Math.round(n); if (G) G.xpGain = (G.xpGain || 0) + Math.round(n);
-  const now = levelOf(sv.xp).level; for (let l = before + 1; l <= now; l++) { grant(100 + 50 * l, 'Niveau ' + l); if (l % 5 === 0) { sv.pk.nebuleuse = (sv.pk.nebuleuse | 0) + 1; H.toast(`Niveau ${l} : un Pack Nébuleuse offert !`); } if (isOpen && G && !ended) { say('NIVEAU ' + l, '+' + fmt(100 + 50 * l) + ' ÉCLATS', LV_COL[colIdx()]); A.win(); H.vib([20, 40, 20]); } }
+  if (!(n > 0) || (G && G.nop && !force)) return;
+  if (tut >= 0 && !force) { tutXp += n; return; } // partie guidée : l'annonce de niveau attend la fin (elle recouvrait la carte d'aide)
+  const before = levelOf(sv.xp).level; sv.xp += Math.round(n); if (G) G.xpGain = (G.xpGain || 0) + Math.round(n);
+  const now = levelOf(sv.xp).level; for (let l = before + 1; l <= now; l++) { grant(100 + 50 * l, 'Niveau ' + l); if (l % 5 === 0) { sv.pk.nebuleuse = (sv.pk.nebuleuse | 0) + 1; H.toast(`Niveau ${l} : un Pack Nébuleuse offert !`); } if (isOpen && G && !ended) { say('NIVEAU ' + l, '+' + fmt(100 + 50 * l) + ' VOIDIUM', LV_COL[colIdx()]); A.win(); H.vib([20, 40, 20]); } }
   save(); H.refresh(); H.goal('xp');
 }
 export const giveXp = (n) => addXp(n, true);
@@ -868,7 +870,8 @@ export function openThemes() {
 // Première partie guidée : chaque étape attend que le joueur fasse le geste demandé.
 function tutEnd(win) {
   tut = -1; tutShown = -1; sv.tut = 1; save(); $('#mn').classList.remove('tut');
-  if (win) { grant(500, 'Cadeau de bienvenue'); say('BIEN JOUÉ !', '+500 ÉCLATS OFFERTS', AM); A.win(); H.vib([20, 40, 20]); } else H.toast('Tu peux jouer librement');
+  const xp = tutXp; tutXp = 0; if (xp) setTimeout(() => addXp(xp), win ? 1800 : 0); // l'expérience gagnée pendant la partie guidée, annoncée après « Bien joué »
+  if (win) { grant(500, 'Cadeau de bienvenue'); say('BIEN JOUÉ !', '+500 VOIDIUM OFFERTS', AM); A.win(); H.vib([20, 40, 20]); } else H.toast('Tu peux jouer librement');
 }
 function tutorial() {
   const orb = () => ({ k: 'c', tier: 1 });
