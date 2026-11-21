@@ -917,6 +917,7 @@ function endRun() {
   if (G.blitz) return endBlitz();
   teleRun('classic');
   rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
+  const prevBest = sv.best, prevRuns = sv.runs;
   const rec = { s: G.score > sv.best, d: G.depth + 1 > sv.depth, c: G.maxChain > sv.chain };
   sv.runs++; if (rec.s) sv.best = G.score; if (rec.d) sv.depth = G.depth + 1; if (rec.c) sv.chain = G.maxChain; sv.tier = Math.max(sv.tier, G.maxTier + 1); save();
   H.track('score', G.score, true); H.track('runs', 1); H.goal('run', { score: G.score, sector: G.depth + 1, over: G.over, drops: G.drops, chain: G.maxChain, tier: G.maxTier });
@@ -924,7 +925,9 @@ function endRun() {
   if (G.over) A.fail();
   const rvTxt = rvDone ? `Tu as dépassé ${rv.name} !` : rv ? `À ${fmt(rv.score - G.score)} points de ${rv.name}.` : '';
   setTimeout(() => {
-    grant(gain); const L = levelInfo(), gx = G.xpGain | 0; $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(gx)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
+    // bonus de performance (toujours en plus, jamais en moins) : battre son record, ou s'en approcher, rapporte davantage
+    const perf = rec.s && prevRuns > 0 && prevBest > 0 ? 300 : prevBest > 0 && G.score >= prevBest * 0.9 ? 100 : 0;
+    grant(gain + perf, perf === 300 ? 'dont 300 : record battu' : perf ? 'dont 100 : tout près du record' : ''); const L = levelInfo(), gx = G.xpGain | 0; $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(gx)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
     $('#mn-ot').textContent = rec.s && sv.runs > 1 ? 'Nouveau record !' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer';
     $('#mn-os').textContent = rvTxt || rec.s ? rvTxt || 'Ton plus bel univers jusqu\'ici.' : G.score > sv.best * 0.8 ? `À ${fmt(sv.best - G.score)} points de ton record.` : `Record : ${fmt(sv.best)} · secteur ${sv.depth}`;
     overPanel(rec);
@@ -935,9 +938,9 @@ function endBlitz() { // fin d'un Blitz : record propre au mode, classement Blit
   teleRun('blitz');
   const B2 = G.blitz, rec = G.score > (sv.blitz | 0), lv0 = levelOf(sv.xp).level; sv.blitzRuns = (sv.blitzRuns | 0) + 1; if (rec) sv.blitz = G.score; save();
   rankLine(null); H.submit({ blitz: true, score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
-  H.track('runs', 1); addXp(Math.min(200, Math.round(G.score / 300))); const gain = Math.min(500, Math.round(G.score / 150)); if (G.over) A.fail();
+  H.track('runs', 1); addXp(Math.min(200, Math.round(G.score / 300))); const gain = Math.min(500, Math.round(G.score / 150)) + (rec && sv.blitzRuns > 1 ? 200 : 0); if (G.over) A.fail(); // +200 : record Blitz battu
   setTimeout(() => {
-    grant(gain); const L = levelInfo(); $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(G.xpGain | 0)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
+    grant(gain, rec && sv.blitzRuns > 1 ? 'dont 200 : record Blitz' : ''); const L = levelInfo(); $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(G.xpGain | 0)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
     $('#mn-ot').textContent = rec && sv.blitzRuns > 1 ? 'Nouveau record Blitz !' : G.timeout ? 'Temps écoulé' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer le Blitz';
     $('#mn-os').textContent = `Tempo max ×${B2.maxMult} · record Blitz ${fmt(sv.blitz | 0)}`; overPanel({ s: rec }); refreshTitle();
   }, G.over ? 900 : 0);
