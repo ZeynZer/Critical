@@ -26,17 +26,17 @@ const CSS = `
 .co-c .fx{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
 .co-c .fx::before{content:'';position:absolute;top:0;bottom:0;left:-70%;width:60%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.26),transparent);transform:translateX(0)}
 .co-c.on .fx::before{animation:co-sh 3.6s ease-in-out infinite;will-change:transform}
-.co-c.r5{border-color:transparent;background:#0a0628;overflow:hidden;isolation:isolate;box-shadow:0 0 12px -3px rgba(190,120,255,.85)}
-.co-c.r5 .rb{position:absolute;left:50%;top:50%;width:220%;aspect-ratio:1;margin:-110% 0 0 -110%;z-index:-2;pointer-events:none;background:conic-gradient(#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff,#ff4fd8)}
+.co-c.r5{border-color:rgba(255,255,255,.75);background:#2a1460;overflow:hidden;isolation:isolate;box-shadow:0 0 12px -3px rgba(190,120,255,.85)}
+.co-c.r5 .rb{position:absolute;left:50%;top:50%;width:220%;aspect-ratio:1;margin:-110% 0 0 -110%;z-index:-2;pointer-events:none;background:conic-gradient(#ff5fd8,#ff9a6b,#ffd75a,#6dffb0,#4df3ff,#6f8bff,#b46bff,#ff5fd8)}
 .co-c.r5.on .rb{animation:co-rot 4.5s linear infinite;will-change:transform}
-.co-c.r5 .sp{position:absolute;inset:2px;border-radius:16px;z-index:-1;pointer-events:none;background:
+.co-c.r5 .sp{position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;background:
  radial-gradient(1.2px 1.2px at 18% 28%,#fff 60%,transparent),radial-gradient(1px 1px at 72% 14%,#fff 60%,transparent),radial-gradient(1.6px 1.6px at 86% 58%,#fff 60%,transparent),
- radial-gradient(1px 1px at 32% 82%,#fff 60%,transparent),radial-gradient(1px 1px at 58% 40%,rgba(255,255,255,.8) 60%,transparent),radial-gradient(1.3px 1.3px at 10% 64%,#cfe8ff 60%,transparent),
- radial-gradient(38% 30% at 50% 30%,rgba(255,255,255,.22),transparent 70%),
- radial-gradient(90% 60% at 25% 15%,rgba(255,79,216,.5),transparent 70%),radial-gradient(80% 60% at 85% 90%,rgba(77,243,255,.45),transparent 70%),radial-gradient(60% 45% at 60% 55%,rgba(138,107,255,.35),transparent 70%),
- linear-gradient(160deg,#22104d,#0a0628 55%,#03142a)}
-.co-c.r5 b{text-shadow:0 0 10px rgba(200,170,255,.9)}
-.co-c.r5 small{background:linear-gradient(90deg,#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:.14em}
+ radial-gradient(1px 1px at 32% 82%,#fff 60%,transparent),radial-gradient(1.3px 1.3px at 10% 64%,#fff 60%,transparent),
+ radial-gradient(45% 34% at 50% 30%,rgba(255,255,255,.4),transparent 70%),
+ linear-gradient(125deg,rgba(255,255,255,.22),transparent 40%,rgba(255,255,255,.12) 60%,transparent),
+ linear-gradient(180deg,rgba(25,10,60,.18),rgba(15,6,40,.42) 62%,rgba(10,4,30,.62))}
+.co-c.r5 b{text-shadow:0 1px 3px rgba(0,0,30,.9),0 0 10px rgba(40,10,90,.8)}
+.co-c.r5 small{color:#fff;letter-spacing:.16em;text-shadow:0 1px 3px rgba(0,0,30,.9),0 0 8px rgba(255,255,255,.7)}
 @keyframes co-rot{to{transform:rotate(1turn)}}
 @keyframes co-sh{0%{transform:translateX(0)}55%,100%{transform:translateX(330%)}}
 @media (prefers-reduced-motion:reduce){.co-c.on .fx::before,.co-c.r5.on .rb{animation:none}}
