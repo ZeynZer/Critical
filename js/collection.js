@@ -18,6 +18,28 @@ const CSS = `
 .co-c.lock{opacity:.4;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}.co-c b{font-size:10.5px;line-height:1.15;text-align:center}.co-c small{font:700 8.5px var(--disp);letter-spacing:.06em;color:var(--c)}.co-c canvas{display:block}.co-c .q{width:46px;height:46px;display:grid;place-items:center;font:900 20px var(--disp);color:rgba(255,255,255,.35)}
 .co-c .bd{position:absolute;top:5px;right:6px;font:900 9px var(--disp);color:#5dffc0}.co-c .cp{position:absolute;top:5px;left:7px;font:800 9px var(--disp);color:rgba(255,255,255,.6)}.co-c .ab{position:absolute;bottom:4px;right:6px;font-size:9px;color:#ffc247}
 .co-c.craft{opacity:.62;border-style:dashed}.co-c.craft small{color:var(--c)}.co-fr b{color:#c79bff}.co-cr{align-items:center;text-align:center;gap:6px}.co-cr canvas{width:96px;height:96px}.co-crn{font-size:16px}.co-cr .btns button:disabled{opacity:.45}
+@property --co-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+.co-c.r2{box-shadow:0 0 12px -6px var(--c)}
+.co-c.r3{box-shadow:0 0 16px -5px var(--c),inset 0 0 16px -9px var(--c)}
+.co-c.r4{border-width:2px;box-shadow:0 0 20px -4px var(--c),inset 0 0 22px -8px var(--c);background:radial-gradient(120% 80% at 50% 0,color-mix(in srgb,var(--c) 38%,transparent),rgba(40,10,0,.35));overflow:hidden}
+.co-c.r4::after,.co-c.r5::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.42) 50%,transparent 62%);background-size:260% 100%;mix-blend-mode:overlay;animation:co-sh 3.4s ease-in-out infinite}
+.co-c.r4 small{text-shadow:0 0 8px var(--c)}
+.co-c.r5{border:2px solid transparent;overflow:hidden;isolation:isolate;animation:co-spin 4s linear infinite,co-glow 3s ease-in-out infinite;background:
+ radial-gradient(1.2px 1.2px at 18% 28%,#fff 60%,transparent) padding-box,radial-gradient(1px 1px at 72% 14%,#fff 60%,transparent) padding-box,radial-gradient(1.6px 1.6px at 86% 58%,#fff 60%,transparent) padding-box,
+ radial-gradient(1px 1px at 32% 82%,#fff 60%,transparent) padding-box,radial-gradient(1px 1px at 58% 40%,rgba(255,255,255,.8) 60%,transparent) padding-box,radial-gradient(1.3px 1.3px at 10% 64%,#cfe8ff 60%,transparent) padding-box,
+ radial-gradient(90% 60% at 25% 15%,rgba(255,79,216,.5),transparent 70%) padding-box,radial-gradient(80% 60% at 85% 90%,rgba(77,243,255,.45),transparent 70%) padding-box,radial-gradient(60% 45% at 60% 55%,rgba(138,107,255,.35),transparent 70%) padding-box,
+ linear-gradient(160deg,#22104d,#0a0628 55%,#03142a) padding-box,
+ conic-gradient(from var(--co-a),#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff,#ff4fd8) border-box}
+.co-c.r5::before{content:'';position:absolute;inset:-40%;z-index:-1;pointer-events:none;background:conic-gradient(from var(--co-a),rgba(255,79,216,.0),rgba(255,79,216,.22),rgba(77,243,255,.22),rgba(93,255,192,.18),rgba(255,79,216,0));filter:blur(10px);mix-blend-mode:screen}
+.co-c.r5 canvas{filter:drop-shadow(0 0 7px rgba(255,255,255,.6)) drop-shadow(0 0 14px rgba(150,110,255,.5))}
+.co-c.r5 b{text-shadow:0 0 10px rgba(200,170,255,.9)}
+.co-c.r5 small{background:linear-gradient(90deg,#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff,#ff4fd8);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:co-tx 3s linear infinite;letter-spacing:.14em}
+.co-c.r5 .cp,.co-c.r5 .bd{z-index:1}
+@keyframes co-spin{to{--co-a:360deg}}
+@keyframes co-glow{0%,100%{box-shadow:0 0 10px -3px rgba(255,79,216,.8)}50%{box-shadow:0 0 12px -3px rgba(77,243,255,.9)}}
+@keyframes co-sh{0%{background-position:130% 0}55%,100%{background-position:-30% 0}}
+@keyframes co-tx{to{background-position:200% 0}}
+@media (prefers-reduced-motion:reduce){.co-c.r4::after,.co-c.r5::after,.co-c.r5,.co-c.r5 small{animation:none}}
 .co-empty{padding:30px 10px;text-align:center;color:rgba(255,255,255,.55);font-size:13px}
 .co-h{margin:6px 0 0;font:800 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.6)}.co-p{margin:0;font-size:12px;line-height:1.45;color:rgba(255,255,255,.6)}
 .dk-pre{display:flex;gap:6px}.dk-pre button{flex:1;height:34px;border-radius:17px;font:800 11px var(--disp);color:rgba(255,255,255,.65);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.dk-pre button.on{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
@@ -36,7 +58,7 @@ export function mount(page, api) {
   const root = make('div', 'co'), tabs = make('div', 'co-tabs'), body = make('div', 'co-body'); root.append(tabs, body); page.append(root);
   const TABS = [['cards', 'Cartes'], ['deck', 'Deck'], ['packs', 'Packs'], ['decors', 'Décors']]; let packsBox = null;
   const paintTabs = () => { tabs.textContent = ''; for (const [k, n] of TABS) { const b = make('button', S.tab === k ? 'on' : '', n); b.addEventListener('click', () => { S.tab = k; save(); api.sfx && api.sfx(); render(); }); tabs.append(b); } };
-  const cell = (e) => { const c = RC[e.rar], b = make('button', 'co-c' + (e.ok ? '' : ' lock')); b.style.setProperty('--c', c);
+  const cell = (e) => { const c = RC[e.rar], b = make('button', 'co-c' + (e.ok ? ' r' + e.rar : ' lock')); b.style.setProperty('--c', c);
     if (e.ok && e.tier >= 0) { const cv = document.createElement('canvas'); api.paint(cv, e.key, 46, false); b.append(cv); } else b.append(make('div', 'q', e.ok ? '★' : '?'));
     b.append(make('b', '', e.ok ? esc(e.name) : '???'), make('small', '', e.ok ? RN[e.rar].toUpperCase() : ''));
     if (e.ok && e.copies > 1) b.append(make('span', 'cp', '×' + e.copies)); if (e.inDeck) b.append(make('span', 'bd', 'DECK')); else if (e.skinOn) b.append(make('span', 'bd', 'ÉQUIPÉ')); if (e.ok && e.ability && !e.inDeck) b.append(make('span', 'ab', '✦'));

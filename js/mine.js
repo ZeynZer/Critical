@@ -235,7 +235,18 @@ function skinFx(A, tier, r, col, fx) {
   const clip = () => { x.save(); disc(); x.clip(core ? 'evenodd' : 'nonzero'); };
   if (fx === 'frost') { clip(); soft(x, s - r * 0.3, s - r * 0.3, r * 0.9, [255, 255, 255], 0.35); for (let i = 0; i < 46; i++) { const a = rnd(i * 2.1) * TAU, d = Math.sqrt(rnd(i * 3.7)) * r; x.fillStyle = `rgba(235,250,255,${0.25 + rnd(i * 5.3) * 0.6})`; x.save(); x.translate(s + Math.cos(a) * d, s + Math.sin(a) * d); x.rotate(rnd(i) * 3); x.fillRect(-r * 0.015, -r * 0.07, r * 0.03, r * 0.14); x.restore(); } x.restore(); x.strokeStyle = 'rgba(220,245,255,.85)'; x.lineWidth = Math.max(1.5, r * 0.05); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
   else if (fx === 'neon') { clip(); x.fillStyle = 'rgba(0,0,20,.32)'; x.fill(); x.restore(); x.save(); x.shadowColor = L; x.shadowBlur = r * 0.35; x.strokeStyle = rgba(lite, 1); x.lineWidth = Math.max(1.5, r * 0.07); x.beginPath(); x.arc(s, s, r * 0.96, 0, TAU); x.stroke(); x.lineWidth = Math.max(1, r * 0.035); x.globalAlpha = 0.6; x.beginPath(); x.arc(s, s, r * 0.78, 0, TAU); x.stroke(); x.restore(); }
-  else if (fx === 'rings') { x.save(); x.translate(s, s); x.rotate(-0.38); for (const [k, w, al] of [[1.26, 0.07, 0.9], [1.14, 0.04, 0.55]]) { x.strokeStyle = rgba(lite, al); x.lineWidth = r * w; x.beginPath(); x.ellipse(0, 0, r * k, r * k * 0.28, 0, 0, TAU); x.stroke(); } x.restore(); }
+  else if (fx === 'rings') { // anneau incliné : la moitié lointaine passe DERRIÈRE l'astre (calque under), seule la moitié proche passe devant
+    const [u, ux] = mk(s * 2, s * 2); A.under = u;
+    const band = (c, a0, a1) => { c.save(); c.translate(s, s); c.rotate(-0.38); for (const [k, w, al] of [[1.26, 0.07, 0.9], [1.14, 0.04, 0.55]]) { c.strokeStyle = rgba(lite, al); c.lineWidth = r * w; c.beginPath(); c.ellipse(0, 0, r * k, r * k * 0.28, 0, a0, a1); c.stroke(); } c.restore(); };
+    band(ux, Math.PI, TAU); band(x, 0, Math.PI);
+    if (tier === 10) { // trou noir : la lumière de l'arrière du disque est courbée par la gravité et forme un arc au-dessus (et un reflet fin dessous) de l'ombre
+      x.save(); x.translate(s, s); x.rotate(-0.38); x.globalCompositeOperation = 'lighter'; x.shadowColor = L; x.shadowBlur = r * 0.18; x.lineCap = 'round';
+      x.strokeStyle = rgba(lite, 0.9); x.lineWidth = r * 0.06; x.beginPath(); x.ellipse(0, r * 0.02, r * 0.68, r * 0.66, 0, Math.PI * 1.04, Math.PI * 1.96); x.stroke();
+      x.shadowBlur = 0; x.strokeStyle = 'rgba(255,255,255,.95)'; x.lineWidth = r * 0.022; x.beginPath(); x.ellipse(0, r * 0.02, r * 0.66, r * 0.64, 0, Math.PI * 1.08, Math.PI * 1.92); x.stroke();
+      x.strokeStyle = rgba(lite, 0.55); x.lineWidth = r * 0.03; x.beginPath(); x.ellipse(0, -r * 0.02, r * 0.66, r * 0.64, 0, Math.PI * 0.18, Math.PI * 0.82); x.stroke();
+      x.restore();
+    }
+  }
   else if (fx === 'lava') { clip(); const P = [[-0.7, -0.5], [-0.3, -0.15], [0.05, -0.3], [0.35, 0.1], [0.7, 0.3]].map(([px, py], i) => [s + px * r + (rnd(i * 3.1) - 0.5) * r * 0.2, s + py * r + (rnd(i * 5.9) - 0.5) * r * 0.2]); const path = (ox = 0) => { x.beginPath(); P.forEach((p, i) => (i ? x.lineTo(p[0] + ox, p[1] + ox * 1.5) : x.moveTo(p[0] + ox, p[1] + ox * 1.5))); }; x.lineJoin = x.lineCap = 'round'; x.globalCompositeOperation = 'lighter'; for (const ox of [0, r * 0.35]) { path(ox); x.strokeStyle = rgba(col, 0.5); x.lineWidth = r * 0.16; x.stroke(); path(ox); x.strokeStyle = rgba(lite, 0.95); x.lineWidth = r * 0.06; x.stroke(); } soft(x, s, s, r, col, 0.25); x.restore(); }
   else if (fx === 'crystal') { clip(); const N = 9, ctr = [s - r * 0.1, s - r * 0.12], P = []; for (let i = 0; i < N; i++) { const a = (i / N) * TAU + 0.2; P.push([s + Math.cos(a) * r * 1.05, s + Math.sin(a) * r * 1.05]); } for (let i = 0; i < N; i++) { const a = P[i], b = P[(i + 1) % N], l = Math.cos((i / N) * TAU + 2.2); x.fillStyle = l > 0 ? `rgba(255,255,255,${l * 0.3})` : `rgba(0,0,30,${-l * 0.28})`; x.beginPath(); x.moveTo(ctr[0], ctr[1]); x.lineTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.closePath(); x.fill(); x.strokeStyle = 'rgba(255,255,255,.4)'; x.lineWidth = Math.max(1, r * 0.02); x.beginPath(); x.moveTo(ctr[0], ctr[1]); x.lineTo(a[0], a[1]); x.stroke(); } x.restore(); x.strokeStyle = rgba(lite, 0.9); x.lineWidth = Math.max(1.5, r * 0.05); x.beginPath(); x.arc(s, s, r - 0.5, 0, TAU); x.stroke(); }
   else if (fx === 'const') { clip(); const P = Array.from({ length: 9 }, (_, i) => [s + (rnd(i * 4.3 + 1) - 0.5) * r * 1.7, s + (rnd(i * 6.1 + 2) - 0.5) * r * 1.7]); x.fillStyle = 'rgba(0,0,25,.3)'; x.fillRect(0, 0, s * 2, s * 2); x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = Math.max(1, r * 0.025); x.beginPath(); P.forEach((p, i) => (i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]))); x.stroke(); for (const p of P) { soft(x, p[0], p[1], r * 0.16, lite, 0.8); x.fillStyle = '#fff'; x.beginPath(); x.arc(p[0], p[1], Math.max(1, r * 0.04), 0, TAU); x.fill(); } x.restore(); }
@@ -310,7 +321,7 @@ function build(tier, r, v) {
   } else if (kind === 'hole') { // le disque tourne autour d'un horizon immobile ; variante rare : trou blanc, cœur de lumière
     const [o, ox] = mk(s * 2, s * 2); ox.fillStyle = v === 1 ? '#fff' : '#000'; ox.beginPath(); ox.arc(s, s, r * 0.6, 0, TAU); ox.fill(); if (v === 1) soft(ox, s, s, r * 0.9, [255, 255, 255], 0.9);
     ox.strokeStyle = 'rgba(255,255,255,.95)'; ox.lineWidth = Math.max(1.5, r * 0.03); ox.beginPath(); ox.arc(s, s, r * 0.61, 0, TAU); ox.stroke();
-    ox.strokeStyle = 'rgba(255,210,140,.9)'; ox.lineWidth = r * 0.06; ox.beginPath(); ox.ellipse(s, s, r * 1.14, r * 0.16, -0.3, 0, Math.PI); ox.stroke();
+    if (!(v && VAR[tier] && VAR[tier][v] && VAR[tier][v][2] === 'rings')) { ox.strokeStyle = 'rgba(255,210,140,.9)'; ox.lineWidth = r * 0.06; ox.beginPath(); ox.ellipse(s, s, r * 1.14, r * 0.16, -0.3, 0, Math.PI); ox.stroke(); } // (le skin à anneaux apporte le sien)
     A = { over: o, back: halo(r, [170, 90, 255], 0.8), pulse: 0.06, disc: accretion(r, 0.55), spinD: 0.9 };
   } else { // quasar : un trou noir si vorace que son disque éblouit et crache deux jets
     const [b, bx] = mk(s * 2, s * 2), g = bx.createLinearGradient(s, 0, s, s * 2); g.addColorStop(0, 'rgba(255,230,170,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,230,170,0)');
@@ -336,6 +347,7 @@ function compose(s, tier, body) { // body : seulement la surface (le halo et la 
   const h = s.h, x = s.cx, img = (c) => x.drawImage(c, -h, -h, h * 2, h * 2);
   x.setTransform(DPR, 0, 0, DPR, 0, 0); x.clearRect(0, 0, h * 2, h * 2); x.translate(h, h);
   if (s.back && !body) { const p = 1 + (s.pulse || 0) * Math.sin(T * 2.3 + tier); x.save(); if (s.spinB) x.rotate(T * s.spinB); if (!s.still) x.scale(p, p); img(s.back); x.restore(); }
+  if (s.under) img(s.under); // moitié lointaine d'un anneau : derrière le disque et la surface
   if (s.disc) { x.save(); x.rotate(T * s.spinD); img(s.disc); x.restore(); }
   if (s.disc2) { x.save(); x.rotate(-T * s.spinD * 0.7); img(s.disc2); x.restore(); }
   if (s.strip) {
