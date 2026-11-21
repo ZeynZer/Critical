@@ -58,7 +58,7 @@ let packs = null;
 const adm = ADMIN.mount({ call: RANK.admin, toast, vib, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
 tap('#o-admin', () => { $('#m-settings').classList.remove('on'); adm.open(); });
 const evColors = Array.from({ length: 13 }, (_, i) => (MINE.BODIES[i] || [0, [200, 200, 255]])[1]);
-const ev = EVENT.mount({ call: RANK.call, name: RANK.name, askName: RANK.askName, claim: RANK.eventClaim, colors: evColors, accent: (i) => ACCENTS[Math.max(0, Math.min(11, i | 0))].c.join(','), toast, vib, sfx: A.ui });
+const ev = EVENT.mount({ call: RANK.call, name: RANK.name, askName: RANK.askName, claim: RANK.eventClaim, colors: evColors, sprite: (t) => { const c = document.createElement('canvas'); MINE.paintAstre(c, t >= 12 ? '12:2' : String(t), 96, false); return c; }, accent: (i) => ACCENTS[Math.max(0, Math.min(11, i | 0))].c.join(','), toast, vib, sfx: A.ui });
 const packMount = (box) => (packs = PACKUI.mount(box, { info: MINE.packInfo, open: (id) => MINE.packOpen(id), preview: (r, id) => MINE.packOpen(id, true, r), free: MINE.packFree, paintCard: MINE.paintCard, view: MINE.viewCard, buildCard: MINE.buildCard, sfx: { charge: A.packCharge, place: A.packPlace, rise: A.packRise, link: A.packLink, swallow: A.packSwallow, boom: A.packBoom, hit: A.packHit }, vib, toast, quick: () => S.quick, refresh }));
 const vdIcon = VOID.icon('vd-ic');
 HOME.init({ paint: MINE.paintAstre, sfx: A.ui, levelInfo: MINE.levelInfo, openProfile: RANK.openEditorNow, event: ev, economy: () => VOID.modal(MINE.dust(), MINE.ledger()),
