@@ -9,6 +9,7 @@ Jeu mobile de fusion d'astres (PWA hors-ligne, servi sur zeynzer.com via GitHub 
 - Chaque changement de code servi aux joueurs : incrémenter `VERSION`/le nom de cache dans `sw.js` (`critical-vNN`) et ajouter les nouveaux fichiers JS à la liste `CORE` de `sw.js`.
 
 ## Architecture
+- `index.html` charge `js/boot.js` (applique une sauvegarde cloud en attente, puis importe `js/app.js`). `js/cloud.js` : sauvegarde cloud de tout le stockage `critical.*` sauf télémétrie/installation/partie en cours ; toute nouvelle clé de stockage de progression doit être ajoutée à `SYNC`.
 - `js/fusion.js` : moteur déterministe (pas fixe 1/120 s, RNG à graine, journal des lâchers rejouable). `F.W = 10` unités de largeur ; rayons `RAD`, 13 rangs (0–12). Mode bac à sable `{sandbox:true}` (jamais de défaite). Tout changement de physique casse les rediffusions/scores : `node tools/test.mjs` doit rester vert.
 - `js/mine.js` : jeu (rendu canvas, modes Univers/Blitz/Défi du jour/Duel 1v1, collection, packs, sprites `paintAstre`). `js/app.js` câble les modules ; `js/home.js` accueil (pages + carrousel de modes) ; `js/rank.js` classement/profil/appels Supabase (`rpc`) ; `js/admin.js` + `js/analytics.js` console admin ; `js/event.js` + `js/cuve.js` Grande Cuve ; `js/telemetry.js` statistiques anonymes ; `js/collection.js`, `js/challenges.js`, `js/voidium.js`, `js/packs*.js`, etc.
 - `supabase/schema.sql` : **un seul fichier**, rejouable à l'identique (create if not exists / or replace). Toute fonction publique : `security definer`, validation des entrées, `revoke ... from public, anon, authenticated` puis `grant execute` ciblé. Les fonctions admin appellent `admin_id(secret)`.
@@ -17,9 +18,10 @@ Jeu mobile de fusion d'astres (PWA hors-ligne, servi sur zeynzer.com via GitHub 
 ## Tests
 ```
 node tools/test.mjs                      # moteur : déterminisme, physique, reprise, rejeu, cuve partagée, event
+node tools/balance.mjs                   # banc d'équilibrage (robots hasard / viseur) : le talent doit payer
 python3 -m http.server 8000              # serveur local pour les tests navigateur (il tombe parfois : le relancer)
 ```
-Tests SQL (PostgreSQL 16 local) : démarrer `pg_ctlcluster 16 main start`, créer une base vierge, `create role anon nologin; create role authenticated nologin;`, charger `supabase/schema.sql` puis `supabase/tests/{community,elo,blitz,event,analytics}.sql` **chacun sur une base neuve** (les pseudos de test se heurtent sinon : `name_taken`).
+Tests SQL (PostgreSQL 16 local) : démarrer `pg_ctlcluster 16 main start`, créer une base vierge, `create role anon nologin; create role authenticated nologin;`, charger `supabase/schema.sql` puis `supabase/tests/{community,elo,blitz,event,analytics,save}.sql` **chacun sur une base neuve** (les pseudos de test se heurtent sinon : `name_taken`).
 Tests navigateur : Playwright est préinstallé (`require('/opt/node22/lib/node_modules/')('playwright')`) ; mocker Supabase avec `page.route('**/rest/v1/rpc/*')`. Les clics souris/JS `.click()` cachent les bugs de superposition : pour le toucher, utiliser CDP `Input.dispatchTouchEvent`. Hook de debug : `window.__mine.G` (partie en cours).
 
 ## Pièges déjà rencontrés
@@ -28,3 +30,5 @@ Tests navigateur : Playwright est préinstallé (`require('/opt/node22/lib/node_
 - Grande Cuve : le serveur ne garde que des compteurs (masse, astres par joueur) ; l'affichage est une simulation locale (moteur en bac à sable, sol fixe, absorption des rangs ≥ 7 par le « cœur »). Pas de physique partagée entre joueurs, c'est voulu.
 - `T[] || unknown` / noms ambigus en plpgsql : caster en `::text`, qualifier les colonnes dans les `assert`.
 - Vidéo/capture : `recordVideo` de Playwright → `ffmpeg` ; la bande-annonce a été produite ainsi (non versionnée).
+- Les mêmes tests tournent sur GitHub (`.github/workflows/tests.yml`).
+- Économie mesurée (robots, nov. 2026) : jouer au hasard rapporte presque autant que viser (×1,2), parties ≈ 8 min. Changer la difficulté casse les rediffusions/scores : ne le faire qu'avec une version de moteur stockée avec chaque score.

@@ -1,0 +1,30 @@
+# Tests automatiques à chaque envoi : moteur du jeu (déterminisme, physique, rejeu…) et base de données (chaque série sur une base neuve).
+name: Tests
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env: { PGHOST: localhost, PGUSER: postgres, PGPASSWORD: postgres }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Moteur
+        run: node tools/test.mjs
+      - name: Base de données
+        run: |
+          psql -q -c "create role anon nologin" -c "create role authenticated nologin"
+          for t in supabase/tests/*.sql; do
+            n=$(basename "$t" .sql)
+            psql -q -c "create database t_$n"
+            psql -q -v ON_ERROR_STOP=1 -d "t_$n" -f supabase/schema.sql > /dev/null
+            psql -q -v ON_ERROR_STOP=1 -d "t_$n" -f supabase/schema.sql > /dev/null   # rejouable à l'identique
+            psql -q -v ON_ERROR_STOP=1 -d "t_$n" -f "$t"
+            echo "$n OK"
+          done
