@@ -40,7 +40,7 @@ export function mount(api) {
     // si le tas monte trop haut, le fond se vide doucement : la cuve ne bloque jamais. Les lâchers des autres sont étalés dans le temps (pas de lot d'un coup) et visent les creux.
     const SINK = 7, cv = root.querySelector('canvas'), box = root.querySelector('#ev-cv'), ctx = cv.getContext('2d'), G = F.newGame(20261121, { sandbox: true });
     let W = 0, H = 0, D = 1, U = 30, floor = 0, coreH = 56, aim = 0.5, aimS = 0.5, holding = false, lastShot = 0, handAt = 0, sent = 0, corePulse = 0, lastDrain = 0, ntShown = -1, lastProg = 0;
-    const fit = () => { D = Math.min(window.devicePixelRatio || 1, 2); W = box.clientWidth; H = box.clientHeight; cv.width = Math.ceil(W * D); cv.height = Math.ceil(H * D); U = W / F.W; coreH = Math.max(46, Math.min(70, H * 0.1)); floor = H - coreH; G.ht = floor / U; for (const b of G.bodies) b.y = Math.min(b.y, G.ht - b.r); }; fit(); const onResize = () => fit(); window.addEventListener('resize', onResize);
+    const fit = () => { D = Math.min(window.devicePixelRatio || 1, 2); W = box.clientWidth; H = box.clientHeight; cv.width = Math.ceil(W * D); cv.height = Math.ceil(H * D); U = W / F.W; coreH = Math.max(46, Math.min(70, H * 0.1)); floor = H - coreH; G.ht = floor / U; for (const b of G.bodies) b.y = Math.min(b.y, G.ht - b.r); }; fit(); const onResize = () => fit(); window.addEventListener('resize', onResize); const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (box.clientWidth !== W || box.clientHeight !== H) fit(); }) : null; if (ro) ro.observe(box); // la toile suit toujours la taille réelle de la cuve (sinon les astres s'étirent)
     const hash = (i) => { let x = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); return (x ^ (x >>> 16)) >>> 0; };
     const fx = [], ghosts = []; // fx : anneaux { x, y (unités), r, rgb, t } ; ghosts : astres absorbés qui glissent vers le cœur
     function put(ax, tier, own, name, rgb) { // un astre entre dans la cuve à la position ax (0 à 1)
@@ -70,7 +70,7 @@ export function mount(api) {
     // — dessin
     let last = performance.now(), t0 = last; const spawnQ = [], spr = [];
     // les sprites des petits astres ne remplissent pas leur toile : on mesure le rayon plein (opacité > 200) pour que l'astre dessiné ait la taille de son vrai rayon de collision
-    const info = (t) => { t = Math.min(12, t); if (spr[t]) return spr[t]; const c = api.sprite(t), x = c.getContext('2d'), w = c.width, d = x.getImageData(0, 0, w, w).data; let m = 0; for (let y = 0; y < w; y++) for (let X = 0; X < w; X++) if (d[(y * w + X) * 4 + 3] > 200) m = Math.max(m, Math.hypot(X - w / 2 + 0.5, y - w / 2 + 0.5)); return (spr[t] = { c, k: 1.94 / Math.max(0.1, m / (w / 2)) }); };
+    const info = (t) => { t = Math.min(12, t); if (spr[t]) return spr[t]; const c = api.sprite(t), x = c.getContext('2d'), w = c.width, d = x.getImageData(0, 0, w, w).data; let m = 1; for (let R = 2; R < w / 2; R++) { let hit = 0, n = 0; for (let a = 0; a < 6.283; a += 0.05) { n++; const X = Math.round(w / 2 + R * Math.cos(a)), Y = Math.round(w / 2 + R * Math.sin(a)); if (d[(Y * w + X) * 4 + 3] > 150) hit++; } if (hit / n > 0.8) m = R; } return (spr[t] = { c, k: w / m }); }; // k : largeur de dessin / rayon du disque (anneaux et halo exclus) → le disque a exactement le rayon de collision
     const sprite = (t) => info(t).c;
     const back = (k) => { const c = 1.70158; k -= 1; return 1 + (c + 1) * k * k * k + c * k * k; };
     function frame(now) {
@@ -111,7 +111,7 @@ export function mount(api) {
       me.astres = Math.max(me.astres, ev.me ? ev.me.astres : 0); } render(); };
     poll = setInterval(onPoll, 2000); flushT = setInterval(flush, 2500); raf = requestAnimationFrame(frame);
     (async () => { await load(); if (ev) { shownMass = ev.mass * 0.985; for (const a of ev.act || []) prev.set(a.n, a.a); me.astres = ev.me ? ev.me.astres : 0; } render(); })();
-    root._cleanup = () => { window.removeEventListener('resize', onResize); };
+    root._cleanup = () => { window.removeEventListener('resize', onResize); if (ro) ro.disconnect(); };
   }
   function close() { if (!root) return; flush(); clearInterval(poll); clearInterval(flushT); cancelAnimationFrame(raf); if (root._cleanup) root._cleanup(); root.remove(); root = null; }
   return { open, close, async check() { const e = await load(); info = e ? { id: e.id, name: e.name, active: e.active, pct: pct(), left: left() } : null; return info; }, info: () => info };
