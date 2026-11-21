@@ -644,7 +644,7 @@ grant execute on function public.duel_report(text, text, boolean, text), public.
 -- par événement et par joueur : pas de physique partagée, donc des centaines de joueurs sans conflit. Objectif = un nombre de galaxies, avec des paliers qui récompensent tout le monde.
 create table if not exists public.events (
   id bigserial primary key, name text not null, starts_at timestamptz not null default now(), ends_at timestamptz not null,
-  goal integer not null default 300, mass bigint not null default 0, astres bigint not null default 0, created_at timestamptz not null default now()
+  goal integer not null default 50, mass bigint not null default 0, astres bigint not null default 0, created_at timestamptz not null default now()
 );
 create table if not exists public.event_players (
   event_id bigint not null references public.events (id) on delete cascade, player_id uuid not null references public.players (id) on delete cascade,
@@ -722,7 +722,7 @@ begin
 end $$;
 
 -- Administration : lancer / arrêter un événement.
-create or replace function public.admin_event_start(p_secret text, p_name text, p_hours integer default 60, p_goal integer default 300) returns bigint
+create or replace function public.admin_event_start(p_secret text, p_name text, p_hours integer default 60, p_goal integer default 50) returns bigint
 language plpgsql security definer set search_path = public as $$
 declare v bigint; n text := left(btrim(regexp_replace(coalesce(p_name, ''), '[[:cntrl:]<>]', '', 'g')), 40);
 begin perform admin_id(p_secret); if length(n) < 3 then n := 'La Grande Cuve'; end if; if p_hours not between 1 and 240 or p_goal not between 1 and 100000 then raise exception 'invalid_amount'; end if;
