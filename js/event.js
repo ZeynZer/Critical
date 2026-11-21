@@ -69,13 +69,15 @@ export function mount(api) {
     }
     // — dessin
     let last = performance.now(), t0 = last; const spawnQ = [], spr = [];
-    const sprite = (t) => spr[t] || (spr[t] = api.sprite(Math.min(12, t)));
+    // les sprites des petits astres ne remplissent pas leur toile : on mesure le rayon plein (opacité > 200) pour que l'astre dessiné ait la taille de son vrai rayon de collision
+    const info = (t) => { t = Math.min(12, t); if (spr[t]) return spr[t]; const c = api.sprite(t), x = c.getContext('2d'), w = c.width, d = x.getImageData(0, 0, w, w).data; let m = 0; for (let y = 0; y < w; y++) for (let X = 0; X < w; X++) if (d[(y * w + X) * 4 + 3] > 200) m = Math.max(m, Math.hypot(X - w / 2 + 0.5, y - w / 2 + 0.5)); return (spr[t] = { c, k: 1.94 / Math.max(0.1, m / (w / 2)) }); };
+    const sprite = (t) => info(t).c;
     const back = (k) => { const c = 1.70158; k -= 1; return 1 + (c + 1) * k * k * k + c * k * k; };
     function frame(now) {
       raf = requestAnimationFrame(frame); if (!ev) return; if (document.hidden) { last = now; return; } const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = (now - t0) / 1000;
       shownMass += (ev.mass - shownMass) * Math.min(1, dt * 2.5); corePulse = Math.max(0, corePulse - dt * 2.2); aimS += (aim - aimS) * Math.min(1, dt * 22);
       if (now - lastProg > 120) { lastProg = now; prog(); }
-      if (ntShown !== nextT) { ntShown = nextT; const c = api.sprite(nextT); c.style.cssText = 'width:38px;height:38px;display:block'; root.querySelector('#ev-ni').replaceChildren(c); }
+      if (ntShown !== nextT) { ntShown = nextT; const c = document.createElement('canvas'); c.width = c.height = 76; c.style.cssText = 'width:38px;height:38px;display:block'; const S = info(nextT), z = (8 + nextT * 1.6) * 2 * S.k; c.getContext('2d').drawImage(S.c, 38 - z / 2, 38 - z / 2, z, z); root.querySelector('#ev-ni').replaceChildren(c); }
       if (holding && ev.active) drop();
       for (let i = spawnQ.length - 1; i >= 0; i--) if (now >= spawnQ[i].at) { const s = spawnQ[i]; spawnQ.splice(i, 1); put(hole(), s.t, false, s.name, s.rgb); }
       F.tick(G, dt);
@@ -95,13 +97,13 @@ export function mount(api) {
       const fl = ctx.createLinearGradient(0, 0, W, 0); fl.addColorStop(0, 'rgba(120,200,255,.0)'); fl.addColorStop(0.5, `rgba(190,170,255,${0.55 + corePulse * 0.4})`); fl.addColorStop(1, 'rgba(255,120,220,.0)'); ctx.fillStyle = fl; ctx.fillRect(0, FY - 1, W, 2);
       if (pct() >= 100) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,220,120,${0.06 + 0.035 * Math.sin(t * 3)})`; ctx.fillRect(0, 0, W, FY); ctx.globalCompositeOperation = 'source-over'; }
       if (ev.active) { const ax = F.clampX({ k: 'c', tier: nextT }, aimS * F.W) * U; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.moveTo(ax, F.DROP_Y * U); ctx.lineTo(ax, FY); ctx.stroke(); ctx.setLineDash([]); }
-      for (const b of G.bodies) { const r = b.r * U, s = sprite(b.tier), a = b.tag ? Math.min(1, (now - b.tag.t) / 160) : 1; ctx.save(); ctx.translate(b.x * U, b.y * U); ctx.rotate(b.ang || 0); const k = r * 2.78 * (0.75 + 0.25 * a); ctx.drawImage(s, -k / 2, -k / 2, k, k); ctx.restore();
+      for (const b of G.bodies) { const r = b.r * U, S = info(b.tier), s = S.c, a = b.tag ? Math.min(1, (now - b.tag.t) / 160) : 1; ctx.save(); ctx.translate(b.x * U, b.y * U); ctx.rotate(b.ang || 0); const k = r * S.k * (0.75 + 0.25 * a); ctx.drawImage(s, -k / 2, -k / 2, k, k); ctx.restore();
         if (b.tag && now - b.tag.t < 1500) { ctx.globalAlpha = 1 - (now - b.tag.t) / 1500; ctx.strokeStyle = `rgb(${b.tag.rgb.join(',')})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x * U, b.y * U, r * 1.12, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1; } }
       for (let i = ghosts.length - 1; i >= 0; i--) { const g = ghosts[i]; g.t += dt / 0.55; if (g.t >= 1) { ghosts.splice(i, 1); sent++; corePulse = Math.min(1, corePulse + (g.big ? 0.8 : 0.25)); fx.push({ x: g.x, y: (FY + coreH * 0.4) / U, r: 0.5, rgb: api.colors[Math.min(12, g.tier)], t: 0, big: g.big }); if (g.big && api.vib) api.vib(8); continue; }
-        const e = g.t * g.t, k = 1 - 0.85 * e; ctx.globalAlpha = 1 - 0.5 * e; const y = g.y * U + (FY + coreH * 0.4 - g.y * U) * e, kk = g.r * U * 2.78 * k; ctx.drawImage(sprite(g.tier), g.x * U - kk / 2, y - kk / 2, kk, kk); ctx.globalAlpha = 1; }
+        const e = g.t * g.t, k = 1 - 0.85 * e; ctx.globalAlpha = 1 - 0.5 * e; const y = g.y * U + (FY + coreH * 0.4 - g.y * U) * e, kk = g.r * U * info(g.tier).k * k; ctx.drawImage(sprite(g.tier), g.x * U - kk / 2, y - kk / 2, kk, kk); ctx.globalAlpha = 1; }
       for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.t += dt; if (f.t > 0.6) { fx.splice(i, 1); continue; } const k = f.t / 0.6; ctx.globalAlpha = (1 - k) * 0.9; ctx.strokeStyle = `rgb(${f.rgb.join(',')})`; ctx.lineWidth = f.big ? 4 : 2; ctx.beginPath(); ctx.arc(f.x * U, f.y * U, f.r * U * (1 + k * 1.5), 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1; }
       for (let i = labels.length - 1; i >= 0; i--) { const l = labels[i]; l.l += dt; if (l.l > 1.5) { labels.splice(i, 1); continue; } ctx.globalAlpha = Math.min(1, (1.5 - l.l) * 2); ctx.fillStyle = `rgb(${l.rgb.join(',')})`; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(l.txt, Math.max(26, Math.min(W - 26, l.x)), F.DROP_Y * U - 24 + l.l * 10); ctx.globalAlpha = 1; }
-      if (ev.active) { const R = F.TIERS[nextT].r, ax = F.clampX({ k: 'c', tier: nextT }, aimS * F.W) * U, k = Math.max(0.01, back(Math.min(1, (now - handAt) / 260))) * R * U * 2.78; ctx.save(); ctx.translate(ax, F.DROP_Y * U + Math.sin(t * 3) * 1.5); ctx.rotate(t * 0.4); ctx.globalAlpha = now - lastShot < 1000 / MAXRATE ? 0.7 : 1; ctx.drawImage(sprite(nextT), -k / 2, -k / 2, k, k); ctx.restore(); }
+      if (ev.active) { const R = F.TIERS[nextT].r, ax = F.clampX({ k: 'c', tier: nextT }, aimS * F.W) * U, k = Math.max(0.01, back(Math.min(1, (now - handAt) / 260))) * R * U * info(nextT).k; ctx.save(); ctx.translate(ax, F.DROP_Y * U + Math.sin(t * 3) * 1.5); ctx.rotate(t * 0.4); ctx.globalAlpha = now - lastShot < 1000 / MAXRATE ? 0.7 : 1; ctx.drawImage(sprite(nextT), -k / 2, -k / 2, k, k); ctx.restore(); }
     }
     const onPoll = async () => { const e = await load(); if (!e || !root) return; if (ev) { const arr = []; for (const a of ev.act || []) { const p0 = prev.get(a.n); if (p0 != null && a.n !== api.name() && a.a > p0) { const k = Math.min(24, a.a - p0), rgb = (api.accent(a.c) || '255,255,255').split(',').map(Number); for (let i = 0; i < k; i++) arr.push({ n: a.n, rgb, first: i === 0 }); } prev.set(a.n, a.a); }
       for (let i = arr.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [arr[i], arr[j]] = [arr[j], arr[i]]; } const show = arr.slice(0, 14), sp = 1900 / Math.max(1, show.length), now = performance.now(), named = new Set(); // l'affichage est un échantillon : les compteurs, eux, sont exacts
