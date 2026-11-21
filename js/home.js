@@ -26,7 +26,8 @@ const ICONS = {
 const GEM = VD.icon('hm-gem');
 const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
-const CSS = `
+const CSS = `.hm-pg.hm-off *,.hm-pg.hm-off *::before,.hm-pg.hm-off *::after,.hm-hole.hm-off,.hm-hole.hm-off *{animation-play-state:paused!important}
+
 #s-title.hm{padding:0;overflow:hidden}
 .hm-hw{position:absolute;transition:transform .35s cubic-bezier(.2,.9,.2,1)}.hm-hw::before{content:'';position:absolute;inset:-14%;border-radius:50%;background:radial-gradient(circle,rgba(190,90,255,.36),rgba(255,90,200,.12) 46%,rgba(0,0,0,0) 70%);animation:hm-gl 7s ease-in-out infinite}
 .hm-bh{position:relative;display:block;width:100%;height:100%;pointer-events:none;animation:hm-hb 7s ease-in-out infinite}
@@ -207,7 +208,7 @@ function space(cv, scr) {
   const glow = (px, py, r, col) => { const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); };
   const frame = (t) => {
     requestAnimationFrame(frame);
-    if (t - last < 28 || !scr.classList.contains('on') || document.hidden || document.documentElement.classList.contains('mn-open')) return; // ~30 images/s, à l'arrêt hors de l'accueil
+    if (t - last < (Math.abs(pagePos - 1) > 0.5 ? 62 : 28) || !scr.classList.contains('on') || document.hidden || document.documentElement.classList.contains('mn-open')) return; // ~30 images/s, à l'arrêt hors de l'accueil
     if (!W) fit(); if (!W) return;
     const gap = t - last, dt = Math.min(0.1, gap / 1000) || 0.033; last = t;
     if (++since > 20) { since = 0; place(); } // se recale sur le titre (qui bouge à l'ouverture et selon la taille de l'écran)
@@ -229,7 +230,7 @@ function space(cv, scr) {
 }
 const bgLayer = (scr) => { const d = make('div', 'hm-bg', '<canvas class="hm-space"></canvas>'); space(d.firstChild, scr); return d; };
 
-let live = null, pager = null, shownDust = null, dustRaf = 0;
+let pagePos = 1, live = null, pager = null, shownDust = null, dustRaf = 0;
 const PAGES = [['Social', ICONS.rank], ['Jouer', ICONS.hole], ['Collection', ICONS.coll], ['Défis', ICONS.goal]];
 let col = null, chp = null, opts = {};
 // Une ligne de verre : icône ronde, titre, sous-titre, valeur à droite
@@ -313,7 +314,7 @@ export function init(o = {}) {
   const pgStop = () => { if (pgRaf) { cancelAnimationFrame(pgRaf); pgRaf = 0; } };
   const pgGo = (to) => { // ressort vers la page `to` (sans défilement fluide natif ni aimantation CSS, qui se battaient avec le doigt)
     pgStop(); pager.style.scrollSnapType = 'none'; pager.style.scrollBehavior = 'auto'; const w = pager.clientWidth || 1, tx = to * w; let last = performance.now();
-    const f = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; const x = pager.scrollLeft, k = reduce ? 1 : 1 - Math.pow(0.0006, dt); if (Math.abs(tx - x) < 0.6) { pager.scrollLeft = tx; pgRaf = 0; pager.style.scrollSnapType = ''; return; } pager.scrollLeft = x + (tx - x) * k; pgRaf = requestAnimationFrame(f); };
+    const t0 = last, f = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; const x = pager.scrollLeft, k = reduce ? 1 : 1 - Math.pow(0.0006, dt); if (Math.abs(tx - x) < 0.6 || now - t0 > 1500) { /* au-delà de 1,5 s on pose la page : l'arrondi des pixels pouvait empêcher d'arriver pile, et le ressort tournait sans fin */ pager.scrollLeft = tx; pgRaf = 0; pager.style.scrollSnapType = ''; return; } pager.scrollLeft = x + (tx - x) * k; pgRaf = requestAnimationFrame(f); };
     pgRaf = requestAnimationFrame(f);
   };
   pager.addEventListener('pointerdown', (e) => { if (pgRaf && !slot.contains(e.target)) { pgStop(); pager.style.scrollSnapType = ''; } }, true); // un doigt posé ailleurs reprend le défilement natif
@@ -352,12 +353,14 @@ export function init(o = {}) {
   const tabs = make('nav', 'gl hm-tabs hm-in', '<i class="hm-ind"></i>'); tabs.setAttribute('aria-label', 'Navigation');
   PAGES.forEach(([n, ic], i) => { const b = make('button', 'hm-tab', ico(ic) + `<span>${n}</span>`); b.addEventListener('click', () => pgGo(i)); tabs.append(b); });
   scr.append(tabs);
-  const hole = $('.hm-hole', scr), ind = $('.hm-ind', tabs), tb = [...tabs.querySelectorAll('.hm-tab')]; let cur = 1, tick = 0, IW = 0; tb[1].classList.add('on');
+  const hole = $('.hm-hole', scr), ind = $('.hm-ind', tabs), tb = [...tabs.querySelectorAll('.hm-tab')]; let cur = 1, tick = 0, IW = 0, shown = ''; tb[1].classList.add('on');
   const go = () => { // une seule mise à jour par image, uniquement sur le trou noir et l'indicateur (pas de variables CSS : elles recalculaient tout l'écran)
-    tick = 0; const w = pager.clientWidth || 1, p = pager.scrollLeft / w, n = Math.round(p);
+    tick = 0; const w = pager.clientWidth || 1, p = pager.scrollLeft / w, n = Math.round(p); pagePos = p; // le fond étoilé ralentit à 15 images/s hors de la page Jouer (étoiles très lentes : invisible)
     hole.style.opacity = Math.max(0, 1 - Math.abs(p - 1) * 1.5).toFixed(3); hole.style.transform = `translate3d(${((1 - p) * 34).toFixed(1)}vw,0,0) rotate(${((1 - p) * 26).toFixed(1)}deg)`;
     ind.style.transform = `translate3d(${(p * (IW || ind.offsetWidth)).toFixed(1)}px,0,0)`;
     if (n !== cur) { cur = n; tb.forEach((b, i) => b.classList.toggle('on', i === n)); }
+    const vis = pg.map((_, i) => Math.abs(p - i) < 0.999 ? 1 : 0).join(''); // pages hors de l'écran : leurs animations se mettent en pause (elles coûtaient plus que tout le reste)
+    if (vis !== shown) { shown = vis; pg.forEach((el, i) => el.classList.toggle('hm-off', vis[i] === '0')); hole.classList.toggle('hm-off', vis[1] === '0'); }
   };
   pager.addEventListener('scroll', () => { if (!tick) tick = requestAnimationFrame(go); }, { passive: true });
   const park = () => { IW = ind.offsetWidth; pager.style.scrollBehavior = 'auto'; pager.scrollLeft = cur * pager.clientWidth; pager.style.scrollBehavior = ''; go(); }; // garde la page courante quand la taille change (barre d'adresse du navigateur, rotation)

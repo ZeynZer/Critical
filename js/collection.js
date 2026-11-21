@@ -18,28 +18,28 @@ const CSS = `
 .co-c.lock{opacity:.4;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}.co-c b{font-size:10.5px;line-height:1.15;text-align:center}.co-c small{font:700 8.5px var(--disp);letter-spacing:.06em;color:var(--c)}.co-c canvas{display:block}.co-c .q{width:46px;height:46px;display:grid;place-items:center;font:900 20px var(--disp);color:rgba(255,255,255,.35)}
 .co-c .bd{position:absolute;top:5px;right:6px;font:900 9px var(--disp);color:#5dffc0}.co-c .cp{position:absolute;top:5px;left:7px;font:800 9px var(--disp);color:rgba(255,255,255,.6)}.co-c .ab{position:absolute;bottom:4px;right:6px;font-size:9px;color:#ffc247}
 .co-c.craft{opacity:.62;border-style:dashed}.co-c.craft small{color:var(--c)}.co-fr b{color:#c79bff}.co-cr{align-items:center;text-align:center;gap:6px}.co-cr canvas{width:96px;height:96px}.co-crn{font-size:16px}.co-cr .btns button:disabled{opacity:.45}
-@property --co-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+.co-c{contain:layout style}
 .co-c.r2{box-shadow:0 0 12px -6px var(--c)}
 .co-c.r3{box-shadow:0 0 16px -5px var(--c),inset 0 0 16px -9px var(--c)}
-.co-c.r4{border-width:2px;box-shadow:0 0 20px -4px var(--c),inset 0 0 22px -8px var(--c);background:radial-gradient(120% 80% at 50% 0,color-mix(in srgb,var(--c) 38%,transparent),rgba(40,10,0,.35));overflow:hidden}
-.co-c.r4::after,.co-c.r5::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.42) 50%,transparent 62%);background-size:260% 100%;mix-blend-mode:overlay;animation:co-sh 3.4s ease-in-out infinite}
+.co-c.r4{border-width:2px;box-shadow:0 0 18px -5px var(--c),inset 0 0 22px -8px var(--c);background:radial-gradient(120% 80% at 50% 0,color-mix(in srgb,var(--c) 38%,transparent),rgba(40,10,0,.35));overflow:hidden}
 .co-c.r4 small{text-shadow:0 0 8px var(--c)}
-.co-c.r5{border:2px solid transparent;overflow:hidden;isolation:isolate;animation:co-spin 4s linear infinite,co-glow 3s ease-in-out infinite;background:
- radial-gradient(1.2px 1.2px at 18% 28%,#fff 60%,transparent) padding-box,radial-gradient(1px 1px at 72% 14%,#fff 60%,transparent) padding-box,radial-gradient(1.6px 1.6px at 86% 58%,#fff 60%,transparent) padding-box,
- radial-gradient(1px 1px at 32% 82%,#fff 60%,transparent) padding-box,radial-gradient(1px 1px at 58% 40%,rgba(255,255,255,.8) 60%,transparent) padding-box,radial-gradient(1.3px 1.3px at 10% 64%,#cfe8ff 60%,transparent) padding-box,
- radial-gradient(90% 60% at 25% 15%,rgba(255,79,216,.5),transparent 70%) padding-box,radial-gradient(80% 60% at 85% 90%,rgba(77,243,255,.45),transparent 70%) padding-box,radial-gradient(60% 45% at 60% 55%,rgba(138,107,255,.35),transparent 70%) padding-box,
- linear-gradient(160deg,#22104d,#0a0628 55%,#03142a) padding-box,
- conic-gradient(from var(--co-a),#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff,#ff4fd8) border-box}
-.co-c.r5::before{content:'';position:absolute;inset:-40%;z-index:-1;pointer-events:none;background:conic-gradient(from var(--co-a),rgba(255,79,216,.0),rgba(255,79,216,.22),rgba(77,243,255,.22),rgba(93,255,192,.18),rgba(255,79,216,0));filter:blur(10px);mix-blend-mode:screen}
-.co-c.r5 canvas{filter:drop-shadow(0 0 7px rgba(255,255,255,.6)) drop-shadow(0 0 14px rgba(150,110,255,.5))}
+.co-c .fx{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.co-c .fx::before{content:'';position:absolute;top:0;bottom:0;left:-70%;width:60%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.26),transparent);transform:translateX(0)}
+.co-c.on .fx::before{animation:co-sh 3.6s ease-in-out infinite;will-change:transform}
+.co-c.r5{border-color:transparent;background:#0a0628;overflow:hidden;isolation:isolate;box-shadow:0 0 12px -3px rgba(190,120,255,.85)}
+.co-c.r5 .rb{position:absolute;left:50%;top:50%;width:220%;aspect-ratio:1;margin:-110% 0 0 -110%;z-index:-2;pointer-events:none;background:conic-gradient(#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff,#ff4fd8)}
+.co-c.r5.on .rb{animation:co-rot 4.5s linear infinite;will-change:transform}
+.co-c.r5 .sp{position:absolute;inset:2px;border-radius:16px;z-index:-1;pointer-events:none;background:
+ radial-gradient(1.2px 1.2px at 18% 28%,#fff 60%,transparent),radial-gradient(1px 1px at 72% 14%,#fff 60%,transparent),radial-gradient(1.6px 1.6px at 86% 58%,#fff 60%,transparent),
+ radial-gradient(1px 1px at 32% 82%,#fff 60%,transparent),radial-gradient(1px 1px at 58% 40%,rgba(255,255,255,.8) 60%,transparent),radial-gradient(1.3px 1.3px at 10% 64%,#cfe8ff 60%,transparent),
+ radial-gradient(38% 30% at 50% 30%,rgba(255,255,255,.22),transparent 70%),
+ radial-gradient(90% 60% at 25% 15%,rgba(255,79,216,.5),transparent 70%),radial-gradient(80% 60% at 85% 90%,rgba(77,243,255,.45),transparent 70%),radial-gradient(60% 45% at 60% 55%,rgba(138,107,255,.35),transparent 70%),
+ linear-gradient(160deg,#22104d,#0a0628 55%,#03142a)}
 .co-c.r5 b{text-shadow:0 0 10px rgba(200,170,255,.9)}
-.co-c.r5 small{background:linear-gradient(90deg,#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff,#ff4fd8);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:co-tx 3s linear infinite;letter-spacing:.14em}
-.co-c.r5 .cp,.co-c.r5 .bd{z-index:1}
-@keyframes co-spin{to{--co-a:360deg}}
-@keyframes co-glow{0%,100%{box-shadow:0 0 10px -3px rgba(255,79,216,.8)}50%{box-shadow:0 0 12px -3px rgba(77,243,255,.9)}}
-@keyframes co-sh{0%{background-position:130% 0}55%,100%{background-position:-30% 0}}
-@keyframes co-tx{to{background-position:200% 0}}
-@media (prefers-reduced-motion:reduce){.co-c.r4::after,.co-c.r5::after,.co-c.r5,.co-c.r5 small{animation:none}}
+.co-c.r5 small{background:linear-gradient(90deg,#ff4fd8,#ffc247,#5dffc0,#4df3ff,#8a6bff);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:.14em}
+@keyframes co-rot{to{transform:rotate(1turn)}}
+@keyframes co-sh{0%{transform:translateX(0)}55%,100%{transform:translateX(330%)}}
+@media (prefers-reduced-motion:reduce){.co-c.on .fx::before,.co-c.r5.on .rb{animation:none}}
 .co-empty{padding:30px 10px;text-align:center;color:rgba(255,255,255,.55);font-size:13px}
 .co-h{margin:6px 0 0;font:800 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.6)}.co-p{margin:0;font-size:12px;line-height:1.45;color:rgba(255,255,255,.6)}
 .dk-pre{display:flex;gap:6px}.dk-pre button{flex:1;height:34px;border-radius:17px;font:800 11px var(--disp);color:rgba(255,255,255,.65);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.dk-pre button.on{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
@@ -58,10 +58,18 @@ export function mount(page, api) {
   const root = make('div', 'co'), tabs = make('div', 'co-tabs'), body = make('div', 'co-body'); root.append(tabs, body); page.append(root);
   const TABS = [['cards', 'Cartes'], ['deck', 'Deck'], ['packs', 'Packs'], ['decors', 'Décors']]; let packsBox = null;
   const paintTabs = () => { tabs.textContent = ''; for (const [k, n] of TABS) { const b = make('button', S.tab === k ? 'on' : '', n); b.addEventListener('click', () => { S.tab = k; save(); api.sfx && api.sfx(); render(); }); tabs.append(b); } };
+  const thumbs = new Map(); // vignettes déjà dessinées : un filtre ou un tri ne redessine plus aucun astre, il recopie l'image
+  const jobs = []; let jobRaf = 0; // dessins d'astres pas encore en cache : par petits paquets (6 ms par image au plus), dans l'ordre de la grille
+  const work = () => { jobRaf = 0; const t0 = performance.now(); while (jobs.length && performance.now() - t0 < 6) { const [cv, ck, key] = jobs.shift(); if (!cv.isConnected) continue; let src = thumbs.get(ck); if (!src) { src = document.createElement('canvas'); api.paint(src, key, 46, false); thumbs.set(ck, src); } cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0); } if (jobs.length) jobRaf = requestAnimationFrame(work); };
+  const thumb = (key, tier) => { const ck = key + '|' + (tier >= 0 && tier < 12 ? api.skin.of(tier) : 0), src = thumbs.get(ck), cv = document.createElement('canvas'); cv.style.width = cv.style.height = '46px';
+    if (src) { cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0); } else { jobs.push([cv, ck, key]); if (!jobRaf) jobRaf = requestAnimationFrame(work); } return cv; };
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const x of es) x.target.classList.toggle('on', x.isIntersecting); }) : null; // animations seulement pour les cartes visibles
   const cell = (e) => { const c = RC[e.rar], b = make('button', 'co-c' + (e.ok ? ' r' + e.rar : ' lock')); b.style.setProperty('--c', c);
-    if (e.ok && e.tier >= 0) { const cv = document.createElement('canvas'); api.paint(cv, e.key, 46, false); b.append(cv); } else b.append(make('div', 'q', e.ok ? '★' : '?'));
+    if (e.ok && e.rar === 5) b.append(make('i', 'rb'), make('i', 'sp'));
+    if (e.ok && e.tier >= 0) b.append(thumb(e.key, e.tier)); else b.append(make('div', 'q', e.ok ? '★' : '?'));
     b.append(make('b', '', e.ok ? esc(e.name) : '???'), make('small', '', e.ok ? RN[e.rar].toUpperCase() : ''));
     if (e.ok && e.copies > 1) b.append(make('span', 'cp', '×' + e.copies)); if (e.inDeck) b.append(make('span', 'bd', 'DECK')); else if (e.skinOn) b.append(make('span', 'bd', 'ÉQUIPÉ')); if (e.ok && e.ability && !e.inDeck) b.append(make('span', 'ab', '✦'));
+    if (e.ok && e.rar >= 4) { b.append(make('i', 'fx')); if (io) io.observe(b); else b.classList.add('on'); }
     if (e.ok && e.tier >= 0) b.addEventListener('click', () => open(e));
     else if (api.frag && api.frag.info(e.key)) { const ci = api.frag.info(e.key); b.style.setProperty('--c', RC[ci.rar]); b.querySelector('small').textContent = '✦ ' + fmt(ci.cost); b.classList.add('craft'); b.addEventListener('click', () => craftDlg(e.key)); }
     return b; };
@@ -91,7 +99,7 @@ export function mount(page, api) {
     chip(rc, 'Toutes raretés', S.rar < 0, '#fff', () => { S.rar = -1; }); RN.forEach((n, i) => chip(rc, n, S.rar === i, RC[i], () => { S.rar = i; })); KINDS.forEach(([k, n]) => chip(kc, n, S.kind === k, '#4df3ff', () => { S.kind = k; })); body.append(rc, kc);
     const grid = make('div', 'co-grid'); body.append(grid);
     function fill() {
-      grid.textContent = ''; const q2 = S.q.trim().toLowerCase();
+      if (io) io.disconnect(); grid.textContent = ''; const q2 = S.q.trim().toLowerCase();
       let L = all.filter((e) => (S.rar < 0 || e.rar === S.rar) && (S.kind === 'all' || (S.kind === 'skin' ? ['skin', 'style', 'prisme'].includes(e.kind) : e.kind === S.kind)) && (!q2 || (e.ok && e.name.toLowerCase().includes(q2))));
       const rk = (e) => (e.tier < 0 ? -1 : e.tier * 20 + e.v), cmp = { 'rar-desc': (a, b) => b.rar - a.rar || rk(b) - rk(a), 'rar-asc': (a, b) => a.rar - b.rar || rk(a) - rk(b), 'rank-asc': (a, b) => rk(a) - rk(b), 'rank-desc': (a, b) => rk(b) - rk(a), name: (a, b) => a.name.localeCompare(b.name, 'fr'), ability: (a, b) => (b.ability ? 1 : 0) - (a.ability ? 1 : 0) || b.rar - a.rar }[S.sort];
       L = L.sort((a, b) => (b.ok ? 1 : 0) - (a.ok ? 1 : 0) || cmp(a, b)); // les découvertes d'abord
