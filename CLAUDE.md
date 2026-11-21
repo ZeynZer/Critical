@@ -5,7 +5,7 @@ Jeu mobile de fusion d'astres (PWA hors-ligne, servi sur zeynzer.com via GitHub 
 ## Règles de travail du propriétaire
 - Il fait confiance : résultats ambitieux et soignés, mais **tests avant de dire « fini »**, README mis à jour à chaque fonctionnalité.
 - **Ne jamais affirmer qu'un test a eu lieu sur un vrai téléphone** : tout est vérifié dans Chromium (Playwright), pas sur appareil. Le dire honnêtement.
-- Réponses en français, courtes, sans jargon. Il peut demander « merge et pousse » : dans ce cas fusionner dans `main` et pousser soi-même (le reste du temps : branche de session + PR, jamais de PR sans demande).
+- Réponses en français, courtes, sans jargon. **Consigne permanente du propriétaire (nov. 2026) : une fois le travail testé, fusionner dans `main` et pousser soi-même, sans attendre qu'il le demande** (mise en ligne immédiate sur zeynzer.com). Jamais de PR sans demande. Si le SQL change, l'appliquer aussi dans Supabase (projet « Critical ») avant de pousser.
 - Chaque changement de code servi aux joueurs : incrémenter `VERSION`/le nom de cache dans `sw.js` (`critical-vNN`) et ajouter les nouveaux fichiers JS à la liste `CORE` de `sw.js`.
 
 ## Architecture
