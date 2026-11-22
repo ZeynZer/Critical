@@ -277,7 +277,7 @@ export function init(o = {}) {
   // — modes : un astre par mode (key = astre du jeu, peint en direct) ; ajouter un mode = ajouter une ligne ici
   const MODES = [
     { id: 'play', n: 'Univers', col: [190, 110, 255], btn: play, cta: 'Jouer', sub: () => (rec && rec.textContent) || 'Fusionne, monte de secteur, bats ton record', art: 'hole' },
-    { id: 'shaker', n: 'Shaker', col: [93, 255, 192], btn: $('#b-shaker'), cta: 'Secouer !', sub: () => 'Secoue ton téléphone : les astres valsent et fusionnent', key: '5:5', isNew: true },
+    { id: 'shaker', n: 'Shaker', col: [255, 120, 220], btn: $('#b-shaker'), cta: 'Secouer !', sub: () => 'Secoue ton téléphone : les astres valsent et fusionnent', key: '9:2', isNew: true },
     { id: 'blitz', n: 'Blitz', col: [77, 243, 255], btn: bz, cta: 'Lancer le Blitz', sub: () => 'Cuve étroite · chrono · tempo jusqu\'à ×5', key: '9' },
     { id: 'daily', n: 'Défi du jour', col: [255, 194, 71], btn: daily, cta: 'Relever le défi', sub: () => (daily && daily.querySelector('small') && daily.querySelector('small').textContent) || 'Une règle, tout le monde', key: '7', live: true },
     { id: 'duel', n: 'Duel 1v1', col: [255, 106, 138], btn: pager.querySelector('#b-duel') || $('#b-duel'), cta: 'Choisir un duel', sub: () => 'Duel de cuve classé Elo · duel classique', key: '11' },

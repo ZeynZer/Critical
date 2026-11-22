@@ -603,6 +603,7 @@ function update(dt) {
   if (G.cur !== lastCur) { lastCur = G.cur; if (G.cur && (G.cur.k === 'j' || G.cur.k === 'b') && !G.rep && !G.nop && tut < 0) { giftDur = G.cur.k === 'j' ? 1.3 : 0.8; giftLock = T + giftDur; H.vib([10, 30, 10]); } }
   if (want && T < giftLock) want = false; // touches de réflexe ignorées pendant le verrou
   const turnOk = !G.shared || (duel && duel.phase === 'play' && G.shared.turn === duel.my); // duel de cuve : seulement à mon tour (mais tout de suite après le lâcher de l'autre)
+  if (G.shaker) checkMotion();
   if (want && G.cool <= 0 && !ended && !paused) { want = false; if (!(G.duel && duel.phase !== 'play') && turnOk && F.drop(G, aimT)) { aimX = aimT; A.release(); H.vib(6); saveRun(); if (G.duel) dsendDrop(); } } if (G.duel && (duel.phase !== 'play' || !turnOk)) want = false; // un relâché pendant le temps de recharge est mémorisé
 }
 function driveReplay(dt) { // rejoue le journal pas à pas, à la vitesse choisie ; les lâchers tombent exactement au pas où ils ont eu lieu
@@ -663,7 +664,7 @@ function onMove(e) { if (!aiming) return; const p = pt(e); if (inZone(p)) aimT =
 function onUp() { if (!aiming) return; aiming = false; want = true; }
 
 /* ============================== écrans ============================== */
-const CSS = `#mn-shk{position:absolute;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 66px);display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;font:800 12px var(--disp,system-ui);letter-spacing:.06em;color:#fff;border:1.5px solid rgba(93,255,192,.7);box-shadow:0 0 16px rgba(93,255,192,.35)}#mn-shk:active{transform:scale(.93)}#mn-shk svg{width:16px;height:16px;fill:none;stroke:#5dffc0;stroke-width:2;stroke-linecap:round}#mn-shk[hidden]{display:none}
+const CSS = `
 
 #mn{position:fixed;inset:0;z-index:9;background:#05060f;display:none}#mn.on{display:block;animation:fade .3s}
 /* pendant une partie, l'accueil (flous, animations) et le canvas principal sont masqués et figés : ils coûtaient cher derrière l'écran de jeu */
@@ -699,11 +700,12 @@ const CSS = `#mn-shk{position:absolute;z-index:6;right:12px;top:calc(env(safe-ar
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><button class="glass" id="mn-shk" hidden aria-label="Secouer la cuve"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="2"/><path d="M4 8v8M20 8v8M1.5 10v4M22.5 10v4"/></svg>Secouer</button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p><div id="mn-xp"></div>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
 <div class="btns"><button class="big primary" id="mn-again">Rejouer</button><button class="big glass" id="mn-rkb">Classement mondial</button><button class="big glass" id="mn-share" hidden>Partager mon score</button><button class="big glass" id="mn-menu">Menu</button></div></div></div>
+<div class="modal" id="mn-m-shp"><div class="card glass"><h2>Secoue ton téléphone</h2><p class="sub" id="mn-shpt">Le Shaker a besoin des mouvements du téléphone.</p><div class="btns"><button class="big primary" id="mn-shpg">Autoriser les secousses</button><button class="big glass" id="mn-shpq">Retour au menu</button></div></div></div>
 <div class="modal" id="mn-m-help"><div class="card glass"><h2>Pause</h2><p class="sub" id="mn-ht">Deux astres identiques qui se touchent fusionnent.</p><div id="mn-lad"></div><div class="btns"><button class="big glass" id="mn-cxb">Codex des astres</button><button class="big glass danger" id="mn-quit">Abandonner la partie</button><button class="big primary" id="mn-hok">C'est parti</button></div></div></div>`;
 const HTML2 = `<div class="modal" id="mn-m-duel"><div class="card glass"><h2 id="dl-t">Duel 1v1</h2><p id="dl-s"></p><div id="dl-code"></div><input id="dl-in" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE"><div class="btns"><button class="big primary" id="dl-sh"><span>Duel de cuve</span><small>Une cuve, un astre chacun · classé Elo</small></button><button class="big primary" id="dl-new"><span>Duel classique</span><small>Même graine, 2 minutes, meilleur score</small></button><button class="big glass" id="dl-join">Rejoindre avec le code</button><button class="big glass" id="dl-x">Fermer</button></div></div></div>
 <div class="modal" id="mn-m-themes"><div class="card glass"><h2>Thèmes</h2><p id="mn-ths"></p><div id="mn-th"></div><div class="btns"><button class="big primary" id="mn-thok">Fermer</button></div></div></div><div class="modal" id="mn-m-codex"><div class="card glass"><h2>Codex</h2><p id="mn-cxs"></p><div id="mn-cx"></div><p id="mn-cxd"></p><button class="big glass" id="mn-cxe" hidden></button><div class="btns"><button class="big primary" id="mn-cxok">Fermer</button></div></div></div>`;
@@ -848,19 +850,32 @@ export function openBlitz() { // cuve resserrée, chrono, tempo : même moteur, 
   open(true); blitzMult = 1; newRun((Math.random() * 2 ** 32) >>> 0, true, { blitz: true }); say('BLITZ', 'LÂCHE VITE · LE TEMPS FILE', MG);
 }
 // Shaker : le mode normal, mais on secoue le téléphone (accéléromètre) pour bousculer les astres et provoquer des fusions. Bouton « Secouer » si pas de capteur.
-let motionOK = false, motionAsked = false, shkSide = 1;
+// Autorisation du capteur : demandée au lancement (iPhone). Refusée, ou aucun mouvement reçu : la partie se met en pause et un panneau permet de redemander.
+let motionAt = 0, motionWait = 0;
+const needPerm = () => typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
+function shpShow(txt) { if (!G || !G.shaker || ended) return; $('#mn-shpt').textContent = txt; $('#mn-m-shp').classList.add('on'); paused = true; }
+function shpHide() { $('#mn-m-shp').classList.remove('on'); if (!$('#mn-m-help').classList.contains('on')) paused = false; }
+function askMotion() { // doit partir d'un toucher (exigence d'iOS)
+  if (!needPerm()) { if (Date.now() - motionAt < 3000) shpHide(); else shpShow('Aucun mouvement reçu : cet appareil ne transmet pas ses secousses au navigateur. Essaie sur ton téléphone, dans l\'application installée.'); return; }
+  DeviceMotionEvent.requestPermission().then((r) => { if (r === 'granted') { shpHide(); motionWait = Date.now(); } else shpShow('Accès refusé. Touche « Autoriser les secousses » pour réessayer. Si rien ne s\'affiche : ferme puis rouvre Critical (ou Réglages › Safari › Mouvement et orientation).'); })
+    .catch(() => shpShow('Impossible de demander l\'accès. Ferme puis rouvre Critical et réessaie.'));
+}
 export function openShaker() {
-  if (!motionAsked && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { motionAsked = true; DeviceMotionEvent.requestPermission().then((r) => { motionOK = r === 'granted'; }).catch(() => {}); } // iPhone : autorisation demandée au toucher
-  open(true); newRun((Math.random() * 2 ** 32) >>> 0, true, { shake: true }); say('SHAKER', 'SECOUE TON TÉLÉPHONE !', [93, 255, 192]); sv.shakerSeen = 1; save(); H.refresh();
+  open(true); newRun((Math.random() * 2 ** 32) >>> 0, true, { shake: true }); say('SHAKER', 'SECOUE TON TÉLÉPHONE !', [255, 120, 220]); sv.shakerSeen = 1; save(); H.refresh();
+  motionWait = Date.now();
+  if (needPerm()) DeviceMotionEvent.requestPermission().then((r) => { if (r !== 'granted') shpShow('Tu as refusé l\'accès aux mouvements du téléphone : sans lui, pas de secousses. Touche le bouton pour réessayer.'); }).catch(() => shpShow('Le Shaker a besoin des mouvements du téléphone. Touche le bouton pour les autoriser.'));
+}
+function checkMotion() { // aucun mouvement 2,5 s après le lancement (ou l'autorisation) : on le dit, partie en pause
+  if (!G || !G.shaker || ended || paused || !motionWait) return;
+  if (motionAt > motionWait) { motionWait = 0; return; }
+  if (Date.now() - motionWait > 2500) { motionWait = 0; shpShow(needPerm() ? 'Aucun mouvement reçu. Touche le bouton pour autoriser les secousses.' : 'Aucun mouvement reçu : cet appareil ne transmet pas ses secousses. Le Shaker se joue sur téléphone.'); }
 }
 function onMotion(e) { // le téléphone accélère d'un côté : les astres partent de l'autre (inertie) ; plus la secousse est forte, plus ils volent
+  const a = e.acceleration && e.acceleration.x != null ? e.acceleration : null; if (!a) return; motionAt = Date.now();
   if (!G || !G.shaker || !isOpen || paused || ended || G.over) return;
-  const a = e.acceleration && e.acceleration.x != null ? e.acceleration : null; if (!a) return; motionOK = true;
   const ix = -(a.x || 0), iy = a.y || 0, m = Math.hypot(ix, iy); if (m < 7) return;
-  if (F.shake(G, ix * 0.85, iy * 0.85)) shkHint = 0;
+  F.shake(G, ix * 0.85, iy * 0.85);
 }
-let shkHint = 0;
-function shakeBtn() { if (!G || !G.shaker) return; shkSide = -shkSide; F.shake(G, shkSide * 9, -15); } // sans capteur : une bonne secousse vers le haut, alternée gauche / droite
 function endShaker() { // fin d'un Shaker : record propre au mode, récompenses comme une partie normale (pas de classement en ligne)
   teleRun('shaker'); const rec = G.score > (sv.shaker | 0), lv0 = levelOf(sv.xp).level; sv.shakerRuns = (sv.shakerRuns | 0) + 1; if (rec) sv.shaker = G.score; save();
   H.track('runs', 1); H.goal('run', { score: G.score, sector: G.depth + 1, over: G.over, drops: G.drops, chain: G.maxChain, tier: G.maxTier });
@@ -1033,7 +1048,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   }, 900);
 }
 function newRun(seed, keep, opt) {
-  if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); $('#mn-shk').hidden = !(opt && opt.shake); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
   if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && deckKeys().length) F.equip(G, deckLoad()); // l'en-tête du journal consigne le deck (cartes, étoiles) : rediffusion identique
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
@@ -1230,11 +1245,12 @@ export function init(opts) {
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const d = document.createElement('div'); d.innerHTML = HTML + HTML2; document.body.append(...d.children);
   cv = $('#mn-cv'); ctx = cv.getContext('2d', { alpha: false });
-  window.addEventListener('devicemotion', onMotion, { passive: true }); $('#mn-shk').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); shakeBtn(); });
+  window.addEventListener('devicemotion', onMotion, { passive: true });
   cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove); cv.addEventListener('pointerup', onUp); cv.addEventListener('pointercancel', () => { aiming = false; });
   window.addEventListener('resize', () => { if (isOpen) resize(); });
   document.addEventListener('visibilitychange', () => { last = performance.now(); if (document.hidden && isOpen) saveRun(); }); window.addEventListener('pagehide', () => { if (isOpen) saveRun(); });
   const click = (el, f) => $(el).addEventListener('click', () => { A.ui(); H.vib(9); f(); });
+  click('#mn-shpg', askMotion); click('#mn-shpq', () => { shpHide(); close(); });
   document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.addEventListener('click', () => { if (G && G.rep) { rpSpeed(+b.dataset.s); A.select(); } }));
   click('#mn-rpp', () => { const R = G && G.rep; if (!R) return; if (R.done) { const run = R.run; openReplay(run); } else { R.speed = R.speed ? 0 : +(document.querySelector('#mn-rp [data-s].on') || { dataset: { s: 2 } }).dataset.s; $('#mn-rpp').textContent = R.speed ? '❚❚' : '▶'; } });
   $('#mn-tut').addEventListener('click', (e) => { if (e.target.id === 'mn-tutx') tutEnd(false); });
