@@ -4,6 +4,8 @@
 // vers le secteur suivant : l'onde vaporise les petits astres.
 // Unités : largeur du puits = 10, y vers le bas, sol à y = HT.
 
+import { kindOf, strength, SM } from './skills.js';
+
 export const W = 10, HT = 14.5, LINE = 2.7, DROP_Y = 1.35, MAX_TIER = 12;
 // Rangs : 0 poussière · 1 orbe · 2 astéroïde · 3 lune · 4 planète · 5 géante gazeuse · 6 naine orange · 7 soleil · 8 géante rouge · 9 étoile à neutrons · 10 trou noir · 11 quasar · 12 galaxie
 export const NEUTRON = 9, HOLE = 10, GIANT = 8, SUN = 7;
@@ -62,7 +64,7 @@ export function newGame(seed = (Math.random() * 2 ** 32) >>> 0, opt = {}) {
   const G = {
     seed, rs: seed | 0, n: 0, log: [], bodies: [], nid: 1, t: 0, acc: 0, score: 0, depth: 0, drill: 0,
     chain: 0, chainT: 0, maxChain: 0, maxTier: 0, fusions: 0, drops: 0, danger: 0, near: false, cool: 0, over: false,
-    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : opt.shared ? SHARED.ht : HT, shared: opt.shared ? { turn: 0, last: 0, hot: -1, loser: -1, drops: [0, 0] } : null, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
+    cur: null, queue: [], hold: null, swapped: false, ev: [], pend: [], mod: mod(0), inset: 0, eaten: 0, ht: opt.blitz ? BLITZ.ht : opt.shared ? SHARED.ht : HT, shared: opt.shared ? { turn: 0, last: 0, hot: -1, loser: -1, drops: [0, 0] } : null, powers: null, blitz: opt.blitz ? { left: BLITZ.start, started: false, combo: 0, mult: 1, maxMult: 1, last: -9 } : null, timeout: false, shaker: opt.shake ? { cool: 0, n: 0 } : null, sandbox: !!opt.sandbox, // bac à sable : jamais de défaite, pas de score, pas de tirage rare, l'astre choisi reste en main
   };
   G.mod = modOf(G, 0); G.inset = G.mod.inset; G.cur = nextItem(G); G.queue = [nextItem(G), nextItem(G)];
   return G;
@@ -94,7 +96,34 @@ export function drop(G, x) {
 // pour que le serveur, les rediffusions et les fantômes rejouent la partie à l'identique.
 export const maskOf = (p) => Object.keys(p || {}).reduce((m, t) => (p[t] ? m | (1 << +t) : m), 0);
 export const powersOf = (m) => { const p = {}; for (let t = 0; t <= MAX_TIER; t++) if ((m >> t) & 1) p[t] = 1; return p; };
-export function act(G, x) { if (x <= -1e6) { G.powers = powersOf(-1e6 - x); return true; } return swapHold(G); } // entrée négative du journal : en-tête de pouvoirs, sinon échange de réserve
+// Entrées négatives du journal : ≤ -5e6 secousse (mode Shaker) · ≤ -3e6 carte du deck (rang, variante, étoiles) · ≤ -1e6 ancien masque de pouvoirs · -1 échange de réserve
+export function act(G, x) {
+  if (x <= -5e6) { const c = -x - 5e6; shakeApply(G, (Math.floor(c / 1000) - 300) / 10, ((c % 1000) - 300) / 10); return true; }
+  if (x <= -3e6) { const c = -x - 3e6; loadCard(G, Math.floor(c / 1000), Math.floor(c / 10) % 100, c % 10); return true; }
+  if (x <= -1e6) { G.powers = powersOf(-1e6 - x); return true; }
+  return swapHold(G);
+}
+// Deck : chaque carte est consignée en tête du journal (une entrée par carte) ; v = 1 : pouvoir rare (+ étoiles), v = 2 à 8 : apparence à capacité (voir skills.js)
+function loadCard(G, t, v, st) {
+  if (v === 1) { (G.powers = G.powers || {})[t] = 1; (G.star = G.star || {})[t] = st; return; }
+  const k = kindOf(t, v); if (k) (G.load = G.load || {})[t] = { v, k, m: strength(t, v, st) };
+}
+export function equip(G, cards) { for (const c of cards || []) { const st = Math.max(1, Math.min(3, c.stars | 0 || 1)), code = 3e6 + c.tier * 1000 + c.v * 10 + st; G.log.push(G.n, -code); act(G, -code); } }
+const skOf = (G, b) => (b.sk && G.load ? G.load[b.tier] || null : null);
+const starOf = (G, b) => (b.v === 1 && b.eq && G.star ? SM[G.star[b.tier] | 0] || 1 : 1); // force d'un pouvoir rare équipé selon ses étoiles
+// Mode Shaker : une secousse du téléphone bouscule tous les astres (les gros bougent moins). Consignée dans le journal : rediffusion identique.
+export const SHAKE = { cool: 0.28, max: 22 };
+function shakeApply(G, ax, ay) {
+  for (const b of G.bodies) { if (b.dead) continue; const w = (0.75 + 0.5 * roll2(b.id, G.n)) / (0.55 + b.r * 0.45); b.vx += ax * w; b.vy += ay * w; b.hit = true; }
+  if (G.shaker) { G.shaker.cool = SHAKE.cool; G.shaker.n++; }
+  G.ev.push({ t: 'shake', ax, ay });
+}
+export function shake(G, ax, ay) {
+  if (!G.shaker || G.over || G.shaker.cool > 0) return false;
+  const m = Math.hypot(ax, ay); if (!(m >= 1)) return false; if (m > SHAKE.max) { ax *= SHAKE.max / m; ay *= SHAKE.max / m; }
+  const qx = Math.max(-299, Math.min(299, Math.round(ax * 10))), qy = Math.max(-299, Math.min(299, Math.round(ay * 10)));
+  G.log.push(G.n, -(5e6 + (qx + 300) * 1000 + (qy + 300))); shakeApply(G, qx / 10, qy / 10); return true;
+}
 export function swapHold(G) {
   if (G.over || G.swapped || G.shared) return false;
   if (G.hold) { const h = G.hold; G.hold = G.cur; G.cur = h; } else { G.hold = G.cur; G.cur = G.queue.shift(); G.queue.push(nextItem(G)); }
@@ -143,15 +172,20 @@ function fuse(G, a, b) {
   else {
     if (RARE[tier + 1] && rnd(G) < RARE[tier + 1]) { n.v = 1; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: 1, p: RARE[tier + 1] }); }
     else if (G.powers && G.powers[tier + 1] && RARE[tier + 1]) { n.v = 1; n.eq = true; } // pouvoir équipé : la variante à pouvoir à chaque fusion de ce rang, sans le bonus de points d'un tirage rare
+    else if (G.load && G.load[tier + 1]) { n.v = G.load[tier + 1].v; n.eq = true; n.sk = true; } // apparence à capacité du deck
     else if (STYLES[tier + 1]) { let u = roll2(G.seed | 0, G.fusions); STYLES[tier + 1].some((p, i) => { if (u < p) { n.v = 2 + i; G.ev.push({ t: 'rare', x, y, tier: tier + 1, v: n.v, p }); return true; } u -= p; return false; }); }
   }
-  const pts = TIERS[tier + 1].pts * Math.min(G.chain, 8) * ((n.v === 1 && !n.eq) || (n.v && tier + 1 === MAX_TIER) ? 3 : 1) * bm; G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
+  const L = skOf(G, n);
+  if (L && L.k === 'compact') { n.cf = 1 - Math.min(0.24, 0.045 * L.m); n.r *= n.cf; }
+  if (L && L.k === 'echo') G.chainT = CHAIN_WINDOW + 0.22 * L.m;
+  if (L && L.k === 'souffle') { const reach = n.r * (1.3 + 0.3 * L.m); for (const o of G.bodies) if (!o.dead && o !== n && o.k === 'c' && o.tier <= 1 && hyp(G, o.x - n.x, o.y - n.y) < reach + o.r) { o.dead = true; G.score += TIERS[o.tier].pts; G.ev.push({ t: 'vapor', x: o.x, y: o.y, tier: o.tier }); } }
+  const pts = Math.round(TIERS[tier + 1].pts * Math.min(G.chain, 8) * ((n.v === 1 && !n.eq) || (n.v && tier + 1 === MAX_TIER) ? 3 : 1) * bm * (L && L.k === 'eclat' ? 1 + 0.15 * L.m : 1)); G.score += pts; // multiplicateur de chaîne plafonné à ×8 ; une variante rare triple les points
   if (tier + 1 > G.maxTier) G.maxTier = tier + 1;
   if (!G.sandbox && tier === SUN && G.chain >= 3) { G.score += 2000; G.ev.push({ t: 'secret', id: 'binaire', x, y }); } // deux soleils réunis en pleine chaîne
   kick(G, x, y, n.r * 2.1, 2.2 + tier * 0.35);
   G.ev.push({ t: 'merge', x, y, tier: tier + 1, chain: G.chain, pts, id: n.id });
   if (G.sandbox) return;
-  charge(G, tier + 1 + (G.chain - 1));
+  charge(G, tier + 1 + (G.chain - 1) + (L && L.k === 'elan' ? Math.round(1.5 * L.m) : 0));
   if (G.chain === 5) gift(G, 'b'); // belle chaîne : une charge explosive offerte
 }
 
@@ -211,7 +245,11 @@ function collide(G) {
 // Les absorbeurs (trou noir, quasar, galaxie) avalent le plus proche de leurs petits voisins, puis doivent attendre. Jamais un autre absorbeur.
 function absorb(G) {
   for (const a of G.bodies) {
-    if (a.dead || a.et > 0) continue; const pw = absorbOf(a); if (!pw) continue;
+    if (a.dead || a.et > 0) continue; let pw = absorbOf(a); const L = skOf(G, a), sm = starOf(G, a);
+    if (L && L.k === 'vorace' && pw) pw = [pw[0], pw[1] / (1 + 0.2 * L.m), pw[2] + 0.08 * L.m];
+    else if (L && L.k === 'glouton') pw = pw ? [pw[0], pw[1] / (1 + 0.2 * L.m), pw[2]] : [1, 3.6 / (1 + 0.2 * L.m), 0.02];
+    if (pw && sm > 1) pw = [pw[0], pw[1] / sm, pw[2] * sm];
+    if (!pw) continue;
     let best = null, bd = 1e9;
     for (const o of G.bodies) {
       if (o === a || o.dead || o.k !== 'c' || o.tier > pw[0]) continue;
@@ -252,6 +290,7 @@ export function trace(G, x0) {
 function sub(G) {
   const dt = STEP; G.t += dt; G.n++;
   if (G.cool > 0) G.cool -= dt;
+  if (G.shaker && G.shaker.cool > 0) G.shaker.cool -= dt;
   if (G.blitz && G.blitz.started) { const B = G.blitz; if (B.combo && G.t - B.last > BLITZ.fast) { B.combo = 0; B.mult = 1; } B.left -= dt; if (B.left <= 0 && !G.over) { B.left = 0; G.over = true; G.timeout = true; G.ev.push({ t: 'over', timeout: true }); } } // le tempo retombe si on s'arrête ; temps écoulé = fin
   G.inset += (G.mod.inset - G.inset) * Math.min(1, dt * 1.5);
   if (G.chainT > 0) { G.chainT -= dt; if (G.chainT <= 0) { if (G.chain >= 3) G.ev.push({ t: 'chainEnd', chain: G.chain }); G.chain = 0; } }
@@ -262,15 +301,18 @@ function sub(G) {
   }
   const gy = fall(G);
   for (const b of G.bodies) {
-    b.px = b.x; b.py = b.y; b.age += dt; b.vy += gy * dt;
+    const L = skOf(G, b); b.px = b.x; b.py = b.y; b.age += dt; b.vy += gy * dt * (L && L.k === 'lest' ? 1 + 0.14 * L.m : 1);
     if (b.k === 'c') {
-      if (b.tier === GIANT) { if (b.v !== 1) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)); } // la géante rouge enfle tant qu'on ne la fusionne pas ; la supergéante (rare) reste stable
-      else if (b.tier === NEUTRON) { const pu = PULSE[b.v === 1 ? 1 : 0]; b.pt = (b.pt || 0) + dt; if (b.pt >= pu[0]) { b.pt = 0; kick(G, b.x, b.y, b.r * pu[1], pu[2]); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: b.v | 0, reach: pu[1] }); } } // l'étoile à neutrons repousse par impulsions ; le magnétar plus souvent et plus fort
-      else if (b.et > 0) b.et -= dt;
+      if (b.tier === GIANT) { if (b.v !== 1) b.r = RAD[GIANT] * (1 + 0.22 * Math.min(1, b.age / 40)) * (b.cf || 1); } // la géante rouge enfle tant qu'on ne la fusionne pas ; la supergéante (rare) reste stable
+      else if (b.tier === NEUTRON) { let pu = PULSE[b.v === 1 ? 1 : 0]; const sm = starOf(G, b); if (L && L.k === 'pulsar') pu = [pu[0] / (1 + 0.15 * L.m), pu[1] * (1 + 0.1 * L.m), pu[2] * (1 + 0.3 * L.m)]; if (sm > 1) pu = [pu[0] / Math.sqrt(sm), pu[1], pu[2] * sm]; b.pt = (b.pt || 0) + dt; if (b.pt >= pu[0]) { b.pt = 0; kick(G, b.x, b.y, b.r * pu[1], pu[2]); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: b.v | 0, reach: pu[1] }); } } // l'étoile à neutrons repousse par impulsions ; le magnétar plus souvent et plus fort
+      else { if (b.et > 0) b.et -= dt; if (L && L.k === 'onde') { b.pt = (b.pt || 0) + dt; if (b.pt >= 4.6 / (0.7 + 0.3 * L.m)) { b.pt = 0; kick(G, b.x, b.y, b.r * 2.4, 5 + 4 * L.m); G.ev.push({ t: 'pulse', x: b.x, y: b.y, r: b.r, v: 0, reach: 2.4 }); } } }
     }
     const sp = hyp(G, b.vx, b.vy); if (sp > 40) { b.vx *= 40 / sp; b.vy *= 40 / sp; } // pas d'effet tunnel
     b.x += b.vx * dt; b.y += b.vy * dt; b.vx *= 0.9992; b.ang += b.av * dt; b.av *= 0.985;
   }
+  if (G.load) for (const a of G.bodies) { const L = skOf(G, a); if (!L || L.k !== 'aimant' || a.dead) continue; // aimant : attire les astres du même rang
+    const reach = a.r * (1.6 + 0.35 * L.m), f = (3 + 1.5 * L.m) * dt;
+    for (const o of G.bodies) { if (o === a || o.dead || !o.hit || o.k !== 'c' || o.tier !== a.tier) continue; const dx = a.x - o.x, dy = a.y - o.y, d = hyp(G, dx, dy) || 1e-6; if (d < reach + a.r + o.r) { const k = f * (1 - d / (reach + a.r + o.r) * 0.5); o.vx += (dx / d) * k; o.vy += (dy / d) * k; } } }
   for (const b of G.bodies) { b.touch = false; }
   for (let it = 0; it < 6; it++) {
     const m = collide(G);

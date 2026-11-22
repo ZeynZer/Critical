@@ -5,6 +5,7 @@ import * as A from './audio.js';
 import * as F from './fusion.js';
 import { CAT, RAR, POOL, equipable } from './catalog.js';
 import { PACKS, draw as drawPack } from './packs.js';
+import * as SK from './skills.js';
 import * as IM from './immersive.js';
 import { channel } from './realtime.js';
 
@@ -114,6 +115,7 @@ function onEvents() {
         burst(x, y, 110, [255, 240, 220], B.u * 22, 1.3, 4); say('BIG BANG', '+' + fmt(pts), [255, 255, 255]);
         A.win(); A.rumble(); H.vib([40, 30, 40, 30, 80]); }, 650);
       if (!G.nop) { H.track('nova', 1); H.goal('nova'); }
+    } else if (e.t === 'shake') { const m = Math.hypot(e.ax, e.ay); shake = Math.max(shake, 4 + m * 0.9); H.vib(Math.round(10 + m)); A.gulp && A.gulp();
     } else if (e.t === 'pulse') { const mag = e.v ? [90, 255, 200] : [170, 212, 255]; ring(x, y, e.r * B.u, e.r * B.u * (e.reach || 2.7), 0.45, mag, e.v ? 7 : 4); if (e.v) ring(x, y, e.r * B.u, e.r * B.u * e.reach * 0.7, 0.35, [255, 255, 255], 3); A.ping(); }
     else if (e.t === 'swallow') { // le petit astre est aspiré : un filet de lumière file vers l'absorbeur
       if (!G.nop) H.goal('swallow');
@@ -550,7 +552,7 @@ function draw() {
   else if (sv.best) txt(G.score > sv.best ? 'NOUVEAU RECORD' : 'RECORD ' + fmt(sv.best), cx, ty + 35, 9.5, G.score > sv.best ? '#5dffc0' : 'rgba(255,255,255,.5)', 'center', 'Orbitron', 700);
   }
   if (G.duel && duel && duel.op) { const o = duel.op, os = o.final != null ? o.final : o.G.score, d = G.score - os; txt(`VS ${duel.oppName.toUpperCase()} · ${fmt(os)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
-  else if (!G.nop && !G.chal && !G.blitz && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
+  else if (!G.nop && !G.chal && !G.blitz && !G.shaker && tut < 0) { // cible : le rival juste au-dessus de moi (vrai joueur du classement)
     if (gh) { const d = G.score - gh.G.score; txt(`FANTÔME ${gh.name.toUpperCase()} · ${fmt(gh.G.score)} · ${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))}`, cx, ty + 52, 9.5, d >= 0 ? '#5dffc0' : '#ff6a8a', 'center', 'Orbitron', 700); }
     else if (rv && !rvDone) txt(`CIBLE · ${rv.name.toUpperCase()} · encore ${fmt(rv.score - G.score)}`, cx, ty + 52, 9.5, '#ffc247', 'center', 'Orbitron', 700);
   }
@@ -661,7 +663,8 @@ function onMove(e) { if (!aiming) return; const p = pt(e); if (inZone(p)) aimT =
 function onUp() { if (!aiming) return; aiming = false; want = true; }
 
 /* ============================== écrans ============================== */
-const CSS = `
+const CSS = `#mn-shk{position:absolute;z-index:6;right:12px;top:calc(env(safe-area-inset-top,0px) + 66px);display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;font:800 12px var(--disp,system-ui);letter-spacing:.06em;color:#fff;border:1.5px solid rgba(93,255,192,.7);box-shadow:0 0 16px rgba(93,255,192,.35)}#mn-shk:active{transform:scale(.93)}#mn-shk svg{width:16px;height:16px;fill:none;stroke:#5dffc0;stroke-width:2;stroke-linecap:round}#mn-shk[hidden]{display:none}
+
 #mn{position:fixed;inset:0;z-index:9;background:#05060f;display:none}#mn.on{display:block;animation:fade .3s}
 /* pendant une partie, l'accueil (flous, animations) et le canvas principal sont masqués et figés : ils coûtaient cher derrière l'écran de jeu */
 .mn-open #s-title,.mn-open #cv{visibility:hidden}.mn-open #s-title,.mn-open #s-title *{animation-play-state:paused!important}
@@ -696,7 +699,7 @@ const CSS = `
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><button class="glass" id="mn-shk" hidden aria-label="Secouer la cuve"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="2"/><path d="M4 8v8M20 8v8M1.5 10v4M22.5 10v4"/></svg>Secouer</button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p><div id="mn-xp"></div>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
@@ -844,6 +847,31 @@ export function openSandbox() { // tous les astres débloqués en illimité ; ni
 export function openBlitz() { // cuve resserrée, chrono, tempo : même moteur, autre rythme
   open(true); blitzMult = 1; newRun((Math.random() * 2 ** 32) >>> 0, true, { blitz: true }); say('BLITZ', 'LÂCHE VITE · LE TEMPS FILE', MG);
 }
+// Shaker : le mode normal, mais on secoue le téléphone (accéléromètre) pour bousculer les astres et provoquer des fusions. Bouton « Secouer » si pas de capteur.
+let motionOK = false, motionAsked = false, shkSide = 1;
+export function openShaker() {
+  if (!motionAsked && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { motionAsked = true; DeviceMotionEvent.requestPermission().then((r) => { motionOK = r === 'granted'; }).catch(() => {}); } // iPhone : autorisation demandée au toucher
+  open(true); newRun((Math.random() * 2 ** 32) >>> 0, true, { shake: true }); say('SHAKER', 'SECOUE TON TÉLÉPHONE !', [93, 255, 192]); sv.shakerSeen = 1; save(); H.refresh();
+}
+function onMotion(e) { // le téléphone accélère d'un côté : les astres partent de l'autre (inertie) ; plus la secousse est forte, plus ils volent
+  if (!G || !G.shaker || !isOpen || paused || ended || G.over) return;
+  const a = e.acceleration && e.acceleration.x != null ? e.acceleration : null; if (!a) return; motionOK = true;
+  const ix = -(a.x || 0), iy = a.y || 0, m = Math.hypot(ix, iy); if (m < 7) return;
+  if (F.shake(G, ix * 0.85, iy * 0.85)) shkHint = 0;
+}
+let shkHint = 0;
+function shakeBtn() { if (!G || !G.shaker) return; shkSide = -shkSide; F.shake(G, shkSide * 9, -15); } // sans capteur : une bonne secousse vers le haut, alternée gauche / droite
+function endShaker() { // fin d'un Shaker : record propre au mode, récompenses comme une partie normale (pas de classement en ligne)
+  teleRun('shaker'); const rec = G.score > (sv.shaker | 0), lv0 = levelOf(sv.xp).level; sv.shakerRuns = (sv.shakerRuns | 0) + 1; if (rec) sv.shaker = G.score; save();
+  H.track('runs', 1); H.goal('run', { score: G.score, sector: G.depth + 1, over: G.over, drops: G.drops, chain: G.maxChain, tier: G.maxTier });
+  addXp(Math.min(300, Math.round(G.depth * 25 + G.score / 400))); const gain = Math.min(800, Math.round(G.depth * 50 + G.score / 200)) + G.bonus * 10 + (rec && sv.shakerRuns > 1 ? 200 : 0); if (G.over) A.fail();
+  setTimeout(() => {
+    grant(gain, rec && sv.shakerRuns > 1 ? 'dont 200 : record Shaker' : ''); const L = levelInfo(); $('#mn-xp').innerHTML = `<span>NIVEAU ${L.level}${L.level > lv0 ? ' · NIVEAU SUPÉRIEUR !' : ''}</span><i><b style="width:${Math.round(L.pct * 100)}%;background:${rgba(L.col, 1)}"></b></i><small>+${fmt(G.xpGain | 0)} XP · ${fmt(L.cur)} / ${fmt(L.need)}</small>`;
+    $('#mn-ot').textContent = rec && sv.shakerRuns > 1 ? 'Nouveau record Shaker !' : 'Effondrement'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Rejouer au Shaker';
+    $('#mn-os').textContent = `${fmt(G.shaker.n)} secousse${G.shaker.n > 1 ? 's' : ''} · record Shaker ${fmt(sv.shaker | 0)}`; $('#mn-rk').textContent = ''; overPanel({ s: rec }); refreshTitle();
+  }, G.over ? 900 : 0);
+}
+export const shakerInfo = () => ({ best: sv.shaker | 0, runs: sv.shakerRuns | 0, seen: !!sv.shakerSeen });
 export function openDaily() { // même tirage pour tout le monde ; on peut retenter, la récompense tombe une fois par jour
   open(true); const d = H.today(); newRun(hash('critical:defi:seed:' + d), true, { daily: true }); G.chal = todayChal(); G.day = d; say('DÉFI DU JOUR', G.chal[3].toUpperCase(), AM);
 }
@@ -855,25 +883,53 @@ function share() {
 // Capacités équipables : les cartes à pouvoir réel (variante « :1 » de ces rangs). Le deck n'a qu'un nombre limité d'emplacements : il faut choisir.
 export const DECK_TIERS = [7, 8, 9, 10, 11], DECK_MAX = 5, SLOT_COST = { 3: 2500, 4: 8000, 5: 20000 }; // emplacements 1 et 2 offerts
 const ownedPower = (t) => !!sv.cx[t + ':1'];
-const deckRaw = () => { sv.decks = sv.decks || [[], []]; return sv.decks[sv.deckSel | 0] || (sv.decks[sv.deckSel | 0] = []); };
-export const deckTiers = () => deckRaw().filter((t, i) => i < (sv.slots || 2) && ownedPower(t));
-export const deckPowers = () => { const p = {}; for (const t of deckTiers()) p[t] = 1; return p; };
-function migrateDeck() { if (!sv.decks) { const old = Object.keys(sv.power || {}).map(Number).filter((t) => DECK_TIERS.includes(t) && ownedPower(t)).sort((a, b) => b - a); sv.decks = [old.slice(0, 2), []]; sv.deckSel = 0; } sv.slots = Math.max(2, Math.min(DECK_MAX, sv.slots | 0 || 2)); }
+// Deck : des clés de cartes (« 9:4 », « 10:1 »…), une seule par rang. v = 1 : pouvoir rare (rangs DECK_TIERS) ; v = 2 à 8 : apparence à capacité (skills.js).
+const splitKey = (k) => { const [t, v] = String(k).split(':').map(Number); return { tier: t, v: v | 0 }; };
+const deckable = (k) => { const { tier, v } = splitKey(k); return v === 1 ? DECK_TIERS.includes(tier) : !!SK.kindOf(tier, v); };
+const ownedCard = (k) => deckable(k) && !!sv.cx[k];
+export const starsOf = (k) => Math.max(1, Math.min(SK.STAR_MAX, (sv.stars || {})[k] | 0 || 1));
+const deckRaw = () => { sv.decks = sv.decks || [[], []]; const i = sv.deckSel | 0; const d = (sv.decks[i] || []).map((x) => (typeof x === 'number' ? x + ':1' : String(x))); sv.decks[i] = d; return d; };
+export const deckKeys = () => { const seen = new Set(); return deckRaw().filter((k) => { const t = splitKey(k).tier; if (!ownedCard(k) || seen.has(t)) return false; seen.add(t); return true; }).slice(0, sv.slots || 2); };
+export const deckTiers = () => deckKeys().map((k) => splitKey(k).tier);
+export const deckLoad = () => deckKeys().map((k) => ({ ...splitKey(k), stars: starsOf(k) })); // pour F.equip : rang, variante, étoiles
+function migrateDeck() { if (!sv.decks) { const old = Object.keys(sv.power || {}).map(Number).filter((t) => DECK_TIERS.includes(t) && ownedPower(t)).sort((a, b) => b - a); sv.decks = [old.slice(0, 2).map((t) => t + ':1'), []]; sv.deckSel = 0; } sv.decks = sv.decks.map((d) => (d || []).map((x) => (typeof x === 'number' ? x + ':1' : String(x)))); sv.slots = Math.max(2, Math.min(DECK_MAX, sv.slots | 0 || 2)); }
 migrateDeck();
-const abilityCard = (t) => { const k = t + ':1', i = astreInfo(k) || {}; return { tier: t, key: k, name: i.name || k, rar: Math.max(0, i.rar | 0), info: powerText(t, 1), own: ownedPower(t) }; };
-export function deckInfo() {
-  const slots = sv.slots || 2, cards = deckTiers().map(abilityCard), inDeck = new Set(cards.map((c) => c.tier));
-  return { slots, max: DECK_MAX, nextCost: slots < DECK_MAX ? SLOT_COST[slots + 1] : 0, sel: sv.deckSel | 0, cards, free: slots - cards.length, dust: sv.dust,
-    pool: DECK_TIERS.map(abilityCard).map((c) => ({ ...c, inDeck: inDeck.has(c.tier) })), skins: Object.keys(sv.skin || {}).map((t) => ({ tier: +t, key: t + ':' + sv.skin[t], name: (astreInfo(t + ':' + sv.skin[t]) || {}).name || '' })) };
+const starLine = (st) => '★'.repeat(st) + '☆'.repeat(SK.STAR_MAX - st);
+function cardText(k) { // ce que fait la carte, à ses étoiles actuelles
+  const { tier, v } = splitKey(k), st = starsOf(k);
+  if (v === 1) return powerText(tier, 1) + (st > 1 ? ` ${st}★ : ${Math.round((SK.SM[st] - 1) * 100)} % plus puissant.` : '');
+  const d = SK.describe(tier, v, st); return d ? `${d.name} — ${d.text}` : '';
 }
-export function deckAdd(t) { t = +t; if (!DECK_TIERS.includes(t) || !ownedPower(t)) return 'locked'; const d = deckRaw(); if (d.includes(t)) return 'already'; if (deckTiers().length >= (sv.slots || 2)) return 'full'; d.push(t); sv.decks[sv.deckSel | 0] = d.filter((x) => ownedPower(x)); save(); H.refresh(); return 'ok'; }
-export function deckRemove(t) { const d = deckRaw(); const i = d.indexOf(+t); if (i >= 0) d.splice(i, 1); save(); H.refresh(); }
+const deckCard = (k) => { const { tier, v } = splitKey(k), i = astreInfo(k) || {}, st = starsOf(k), rar = Math.max(0, i.rar | 0); return { key: k, tier, v, name: i.name || k, rar, info: cardText(k), own: ownedCard(k), stars: st, starLine: starLine(st), kind: v === 1 ? 'pouvoir' : (SK.describe(tier, v, st) || {}).name || '', up: SK.upgradeCost(rar, st) }; };
+const allDeckKeys = () => { const L = DECK_TIERS.map((t) => t + ':1'); for (const t of Object.keys(CAT)) for (const v of Object.keys(CAT[t])) if (+v >= 2 && +v <= 8 && SK.kindOf(+t, +v)) L.push(t + ':' + v); return L; };
+export function deckInfo() {
+  const slots = sv.slots || 2, keys = deckKeys(), cards = keys.map(deckCard), inDeck = new Set(keys), tiers = new Set(cards.map((c) => c.tier));
+  const pool = allDeckKeys().map(deckCard).map((c) => ({ ...c, inDeck: inDeck.has(c.key), sameTier: !inDeck.has(c.key) && tiers.has(c.tier) })).sort((a, b) => (b.own - a.own) || b.rar - a.rar || a.tier - b.tier);
+  return { slots, max: DECK_MAX, nextCost: slots < DECK_MAX ? SLOT_COST[slots + 1] : 0, sel: sv.deckSel | 0, cards, free: slots - cards.length, dust: sv.dust, frag: sv.fr | 0, pool,
+    skins: Object.keys(sv.skin || {}).map((t) => ({ tier: +t, key: t + ':' + sv.skin[t], name: (astreInfo(t + ':' + sv.skin[t]) || {}).name || '' })) };
+}
+// Ajoute une carte ; une carte du même rang déjà équipée est remplacée (une seule par rang)
+export function deckAdd(k) {
+  if (typeof k === 'number') k = k + ':1'; k = String(k); if (!ownedCard(k)) return 'locked'; const d = deckRaw(), cur = deckKeys(); if (cur.includes(k)) return 'already';
+  const t = splitKey(k).tier, same = cur.find((x) => splitKey(x).tier === t);
+  if (same) { d[d.indexOf(same)] = k; save(); H.refresh(); return 'swap'; }
+  if (cur.length >= (sv.slots || 2)) return 'full';
+  sv.decks[sv.deckSel | 0] = cur.concat(k); save(); H.refresh(); return 'ok';
+}
+export function deckRemove(k) { if (typeof k === 'number') k = k + ':1'; const d = deckRaw(); const i = d.indexOf(String(k)); if (i >= 0) d.splice(i, 1); save(); H.refresh(); }
+// Amélioration d'une carte : 1★ → 2★ → 3★ (fragments stellaires + Voidium)
+export function upgradeCard(k) {
+  k = String(k); if (!ownedCard(k)) return 'locked'; const c = deckCard(k); if (!c.up) return 'max';
+  if ((sv.fr | 0) < c.up.frag) return 'frag'; if (sv.dust < c.up.dust) return 'poor';
+  sv.fr -= c.up.frag; spend(c.up.dust, 'Amélioration ' + c.name); sv.stars = sv.stars || {}; sv.stars[k] = c.stars + 1; addXp(20 * c.stars, true); save(); H.refresh(); return 'ok';
+}
+export const cardInfo = (k) => deckCard(String(k));
 export function deckPreset(i) { sv.deckSel = i ? 1 : 0; deckRaw(); save(); H.refresh(); }
 export function buySlot() { const s = sv.slots || 2; if (s >= DECK_MAX) return 'max'; const c = SLOT_COST[s + 1]; if (!spend(c, 'Emplacement de deck ' + (s + 1))) return 'poor'; sv.slots = s + 1; save(); H.refresh(); return 'ok'; }
 // Toutes les cartes du jeu pour l'écran Collection : rareté 0..5, genre, exemplaires, état d'équipement
 export function collectionEntries() {
   return entries().map((e) => { const i = e.tier >= 0 ? astreInfo(e.key) : null, kind = e.tier < 0 ? 'secret' : e.tier === F.MAX_TIER ? 'galaxie' : e.v === 0 ? 'base' : e.v === 1 ? (DECK_TIERS.includes(e.tier) ? 'capacite' : 'rare') : e.v === 9 ? 'prisme' : e.v >= 4 ? 'skin' : 'style';
-    return { ...e, kind, rar: e.tier < 0 ? 5 : Math.max(0, i ? i.rar : 0), copies: sv.inv[e.key] | 0, skinOn: e.tier >= 0 && e.tier < F.MAX_TIER && e.v >= 2 && sv.skin[e.tier] === e.v, inDeck: kind === 'capacite' && deckTiers().includes(e.tier), ability: kind === 'capacite' || e.tier === F.MAX_TIER || e.tier === 7 || e.tier === 8 || e.tier === 9 || e.tier === 10 || e.tier === 11 }; });
+    return { ...e, kind, rar: e.tier < 0 ? 5 : Math.max(0, i ? i.rar : 0), copies: sv.inv[e.key] | 0, skinOn: e.tier >= 0 && e.tier < F.MAX_TIER && e.v >= 2 && sv.skin[e.tier] === e.v, inDeck: deckKeys().includes(e.key), stars: starsOf(e.key), deckable: deckable(e.key), skill: e.v >= 2 && e.v <= 8 && e.tier < F.MAX_TIER ? (SK.describe(e.tier, e.v, starsOf(e.key)) || {}).name || '' : '', ability: kind === 'capacite' || (e.v >= 2 && e.v <= 8 && !!SK.kindOf(e.tier, e.v)) || e.tier === F.MAX_TIER || e.tier === 7 || e.tier === 8 || e.tier === 9 || e.tier === 10 || e.tier === 11 }; });
 }
 export const skinOf = (t) => sv.skin[t] | 0;
 export const themeList = () => THEMES.map((t) => ({ id: t.id, n: t.n, cost: t.cost, own: !!sv.themes[t.id], on: sv.theme === t.id, th: t }));
@@ -918,15 +974,16 @@ function tutorial() {
   fg.style.transform = `translate(${fx.toFixed(0)}px,${fy.toFixed(0)}px)`; fg.style.opacity = aiming || fx < 0 ? 0 : 1;
 }
 
-function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && !G.blitz && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
+function saveRun() { try { if (G && !G.nop && !ended && !G.over && G.drops > 0 && !G.chal && !G.blitz && !G.shaker && tut < 0) localStorage.setItem(RUN, JSON.stringify(G)); } catch (e) { /* stockage plein : tant pis */ } }
 const dropRun = () => { try { localStorage.removeItem(RUN); } catch (e) { /* ignore */ } };
 function rankLine(r) { const e = $('#mn-rk'); if (e) e.textContent = r ? `${G && G.blitz ? 'Classement Blitz' : 'Classement mondial'} : n° ${fmt(r.rank)} sur ${fmt(r.total)}` : H.online() && !H.named() ? 'Choisis un pseudo pour entrer dans le classement mondial.' : ''; }
 const teleRun = (m, x) => H.tele({ m, s: G.score | 0, t: G.maxTier | 0, x: G.depth + 1, d: Math.round(G.t), n: G.drops | 0, o: !!G.over, f: fpsT > 1 ? Math.round(fpsN / fpsT) : 0, ...x }); // statistiques anonymes
 function endRun() {
   if (ended || !G) return; ended = true; const c = G.chal;
-  if (!c && !G.blitz) dropRun(); // un défi ou un Blitz ne touche pas à la partie normale en attente
+  if (!c && !G.blitz && !G.shaker) dropRun(); // un défi, un Blitz ou un Shaker ne touche pas à la partie normale en attente
   if (c) return endChal(c);
   if (G.blitz) return endBlitz();
+  if (G.shaker) return endShaker();
   teleRun('classic');
   rankLine(null); H.submit({ score: G.score, sector: G.depth + 1, tier: G.maxTier, seed: G.seed, log: G.log, steps: G.n }).then(rankLine, () => {});
   const prevBest = sv.best, prevRuns = sv.runs;
@@ -976,9 +1033,9 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
   }, 900);
 }
 function newRun(seed, keep, opt) {
-  if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
+  if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); $('#mn-shk').hidden = !(opt && opt.shake); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
-  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && deckTiers().length) { const pw = deckPowers(); G.powers = pw; G.log.push(0, -1e6 - F.maskOf(pw)); } // l'en-tête consigne les pouvoirs du deck
+  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && deckKeys().length) F.equip(G, deckLoad()); // l'en-tête du journal consigne le deck (cartes, étoiles) : rediffusion identique
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
@@ -1173,6 +1230,7 @@ export function init(opts) {
   const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   const d = document.createElement('div'); d.innerHTML = HTML + HTML2; document.body.append(...d.children);
   cv = $('#mn-cv'); ctx = cv.getContext('2d', { alpha: false });
+  window.addEventListener('devicemotion', onMotion, { passive: true }); $('#mn-shk').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); shakeBtn(); });
   cv.addEventListener('pointerdown', onDown); cv.addEventListener('pointermove', onMove); cv.addEventListener('pointerup', onUp); cv.addEventListener('pointercancel', () => { aiming = false; });
   window.addEventListener('resize', () => { if (isOpen) resize(); });
   document.addEventListener('visibilitychange', () => { last = performance.now(); if (document.hidden && isOpen) saveRun(); }); window.addEventListener('pagehide', () => { if (isOpen) saveRun(); });
@@ -1189,7 +1247,7 @@ export function init(opts) {
   click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !G.nop && !ended && G.drops > 0) endRun(); else close(); });
   click('#mn-rkb', () => (H.online() && !H.named() ? H.askName() : H.rank()));
   click('#mn-help', () => { $('#mn-quit').textContent = G && G.nop ? 'Quitter' : 'Abandonner la partie'; const l = $('#mn-lad'); if (!l.firstChild) BODIES.forEach((b, i) => { const c = document.createElement('canvas'); c.title = b[0]; paintAstre(c, i + ':0', 34); l.append(c); }); $('#mn-m-help').classList.add('on'); paused = true; });
-  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.blitz ? openBlitz() : G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
+  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.blitz ? openBlitz() : G && G.shaker ? openShaker() : G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
   // bouton principal de l'accueil (home.js le transforme en héros) ; Cascade devient un lien discret
   const menu = $('#s-title .menu');
   if (menu && !$('#b-mine')) { const b = document.createElement('button'); b.className = 'big primary hero'; b.id = 'b-mine'; b.innerHTML = '<span>Jouer</span><small id="b-mine-s"></small>'; menu.insertBefore(b, menu.firstChild); b.addEventListener('click', () => { A.ui(); H.vib(9); open(); }); }

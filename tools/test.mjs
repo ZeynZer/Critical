@@ -200,3 +200,24 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   assert.ok(Math.abs(C.MEAN_MASS - 43 / 15) < 1e-9, 'masse moyenne par astre'); assert.ok(C.pick(0) === 0 && C.pick(0.999) === 3 && [...Array(1000)].every((_, i) => C.TIERS.includes(C.pick(i / 1000))), 'tirage dans les rangs 0 à 3');
   console.log('Grande Cuve OK (' + C.astresPerGalaxy + ' astres par galaxie)');
 }
+{ // Deck de capacités (apparences + étoiles) et mode Shaker : tout passe par le journal, rejeu identique
+  const S = await import('../js/skills.js'), CAT = (await import('../js/catalog.js')).CAT;
+  let n = 0; for (const t of Object.keys(CAT)) for (const v of Object.keys(CAT[t])) if (+v >= 2 && +v <= 8) { assert.ok(S.kindOf(+t, +v), 'capacité pour ' + t + ':' + v); n++; }
+  assert.ok(n >= 40, 'au moins 40 apparences à capacité : ' + n);
+  const kinds = new Set(); for (const t of Object.keys(CAT)) for (const v of Object.keys(CAT[t])) if (+v >= 2) kinds.add(S.kindOf(+t, +v)); assert.ok(kinds.size >= 9, 'capacités variées : ' + [...kinds]);
+  assert.ok(S.strength(9, 4, 3) > S.strength(9, 4, 1) && S.strength(9, 8, 1) > S.strength(9, 2, 1), 'étoiles et rareté renforcent');
+  const deck = [{ tier: 9, v: 4, stars: 3 }, { tier: 4, v: 7, stars: 2 }, { tier: 5, v: 4, stars: 1 }, { tier: 6, v: 5, stars: 1 }, { tier: 10, v: 1, stars: 3 }];
+  const run = (seed, d, shakes) => { const g = F.newGame(seed, { shake: !!shakes }), r = mulberry32(seed); F.equip(g, d); for (let i = 0; i < 260 && !g.over; i++) { F.drop(g, r() * F.W); for (let k = 0; k < 50; k++) { F.tick(g, 1 / 60); if (shakes && k === 25 && i % 3 === 0) F.shake(g, (r() - 0.5) * 40, -r() * 25); } g.ev.length = 0; } return g; };
+  const a = run(11, deck, false), b = F.replay(11, a.log, a.n);
+  assert.equal(b.score, a.score, 'deck : rejeu identique'); assert.equal(b.bodies.length, a.bodies.length);
+  assert.ok(a.bodies.some((x) => x.sk) || a.fusions > 50, 'des astres du deck apparaissent');
+  const c = run(12, deck, true), d2 = F.replay(12, c.log, c.n, { shake: true });
+  assert.ok(c.shaker.n > 20, 'des secousses : ' + c.shaker.n); assert.equal(d2.score, c.score, 'shaker : rejeu identique'); assert.equal(d2.shaker.n, c.shaker.n);
+  // un pulsar 3★ pousse plus fort qu'un 1★ : même situation, vitesse transmise au voisin
+  const push = (stars) => { const g = F.newGame(3); F.equip(g, [{ tier: 9, v: 4, stars }]); const p = { id: 900, k: 'c', tier: 9, x: 5, y: 13, vx: 0, vy: 0, r: 1.94, ang: 0, av: 0, age: 0, hit: true, sk: true, v: 4 }, o = { id: 901, k: 'c', tier: 1, x: 7.6, y: 13, vx: 0, vy: 0, r: 0.42, ang: 0, av: 0, age: 0, hit: true }; g.bodies = [p, o];
+    let best = 0; for (let k = 0; k < 120 * 5; k++) { F.step(g); best = Math.max(best, Math.abs(o.vx)); } return best; };
+  const p1 = push(1), p3 = push(3); assert.ok(p3 > p1 * 1.15, `pulsar 3★ (${p3.toFixed(2)}) > 1★ (${p1.toFixed(2)})`);
+  // les anciennes parties (sans deck) ne changent pas
+  const old = playF(7, 120), again = F.replay(old.seed, old.log, old.n); assert.equal(again.score, old.score, 'ancienne partie inchangée');
+  console.log(`deck et étoiles OK (${n} apparences à capacité, ${kinds.size} capacités, pulsar 1★ ${p1.toFixed(1)} → 3★ ${p3.toFixed(1)}) · shaker OK (${c.shaker.n} secousses rejouées)`);
+}

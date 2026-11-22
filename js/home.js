@@ -26,7 +26,12 @@ const ICONS = {
 const GEM = VD.icon('hm-gem');
 const CHEV = '<svg class="hm-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
-const CSS = `.hm-pg.hm-off *,.hm-pg.hm-off *::before,.hm-pg.hm-off *::after,.hm-hole.hm-off,.hm-hole.hm-off *{animation-play-state:paused!important}
+const CSS = `.hm-newb{display:flex;align-items:center;gap:10px;margin:10px auto 0;max-width:330px;width:calc(100% - 32px);padding:9px 14px 9px 10px;border-radius:20px;border:1.5px solid rgba(93,255,192,.75);background:linear-gradient(120deg,rgba(93,255,192,.24),rgba(77,243,255,.14) 50%,rgba(255,79,216,.2));color:#fff;text-align:left;box-shadow:0 0 22px rgba(93,255,192,.35),inset 0 1px 0 rgba(255,255,255,.35);animation:hm-nbp 2.4s ease-in-out infinite;position:relative;z-index:7}
+.hm-newb i{flex:none;font:900 11px var(--disp);letter-spacing:.08em;color:#04121a;background:#5dffc0;border-radius:9px;padding:5px 7px;box-shadow:0 0 12px #5dffc0;font-style:normal}.hm-newb span{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}.hm-newb b{font:800 13px var(--disp);letter-spacing:.02em}.hm-newb small{font-size:11px;color:rgba(255,255,255,.75)}.hm-newb em{font-style:normal;font-size:22px;color:#5dffc0}
+@keyframes hm-nbp{50%{box-shadow:0 0 30px rgba(93,255,192,.6),inset 0 1px 0 rgba(255,255,255,.35);transform:scale(1.02)}}
+.hm-newt{position:absolute;top:8%;right:6%;z-index:3;font:900 10px var(--disp);letter-spacing:.08em;color:#04121a;background:#5dffc0;border-radius:8px;padding:4px 6px;box-shadow:0 0 12px #5dffc0}
+@media (prefers-reduced-motion:reduce){.hm-newb{animation:none}}
+.hm-pg.hm-off *,.hm-pg.hm-off *::before,.hm-pg.hm-off *::after,.hm-hole.hm-off,.hm-hole.hm-off *{animation-play-state:paused!important}
 
 #s-title.hm{padding:0;overflow:hidden}
 .hm-hw{position:absolute;transition:transform .35s cubic-bezier(.2,.9,.2,1)}.hm-hw::before{content:'';position:absolute;inset:-14%;border-radius:50%;background:radial-gradient(circle,rgba(190,90,255,.36),rgba(255,90,200,.12) 46%,rgba(0,0,0,0) 70%);animation:hm-gl 7s ease-in-out infinite}
@@ -268,10 +273,11 @@ export function init(o = {}) {
   const play = $('#b-mine') || $('#b-endless'), daily = $('#b-daily'), qb = $('#b-quests'), bz = $('#b-blitz');
   const rec = play && ($('#b-mine-s', play) || $('#b-endless-s', play));
   live = make('span', 'hm-live');
-  const hid = make('div', 'hm-hid'); for (const b of [play, daily, bz, $('#b-sandbox')]) if (b) hid.append(b); scr.append(hid); // les boutons d'origine restent dans la page (câblage, textes mis à jour) mais cachés : l'astre central est le bouton
+  const hid = make('div', 'hm-hid'); for (const b of [play, daily, bz, $('#b-shaker'), $('#b-sandbox')]) if (b) hid.append(b); scr.append(hid); // les boutons d'origine restent dans la page (câblage, textes mis à jour) mais cachés : l'astre central est le bouton
   // — modes : un astre par mode (key = astre du jeu, peint en direct) ; ajouter un mode = ajouter une ligne ici
   const MODES = [
     { id: 'play', n: 'Univers', col: [190, 110, 255], btn: play, cta: 'Jouer', sub: () => (rec && rec.textContent) || 'Fusionne, monte de secteur, bats ton record', art: 'hole' },
+    { id: 'shaker', n: 'Shaker', col: [93, 255, 192], btn: $('#b-shaker'), cta: 'Secouer !', sub: () => 'Secoue ton téléphone : les astres valsent et fusionnent', key: '5:5', isNew: true },
     { id: 'blitz', n: 'Blitz', col: [77, 243, 255], btn: bz, cta: 'Lancer le Blitz', sub: () => 'Cuve étroite · chrono · tempo jusqu\'à ×5', key: '9' },
     { id: 'daily', n: 'Défi du jour', col: [255, 194, 71], btn: daily, cta: 'Relever le défi', sub: () => (daily && daily.querySelector('small') && daily.querySelector('small').textContent) || 'Une règle, tout le monde', key: '7', live: true },
     { id: 'duel', n: 'Duel 1v1', col: [255, 106, 138], btn: pager.querySelector('#b-duel') || $('#b-duel'), cta: 'Choisir un duel', sub: () => 'Duel de cuve classé Elo · duel classique', key: '11' },
@@ -284,7 +290,7 @@ export function init(o = {}) {
     const it = make('div', 'hm-it'); it.style.setProperty('--c', m.col.join(',')); const ib = make('div', 'hm-ib');
     if (m.art === 'hole') { const im = new Image(); im.src = 'assets/hole.webp'; im.alt = ''; im.decoding = 'async'; ib.append(im); }
     else { const c = document.createElement('canvas'); c.dataset.key = m.key; m.cv = c; if (opts.paint) opts.paint(c, m.key, 200, false); ib.append(c); }
-    it.append(ib); if (m.live) it.append(live); it.setAttribute('role', 'button'); it.setAttribute('aria-label', m.n); items.push(it); slot.append(it);
+    it.append(ib); if (m.live) it.append(live); if (m.isNew && !(opts.shaker && opts.shaker().runs > 2)) it.append(make('span', 'hm-newt', 'NEW')); it.setAttribute('role', 'button'); it.setAttribute('aria-label', m.n); items.push(it); slot.append(it);
   });
   const info = make('div', 'hm-di'), nm = make('p', 'hm-dn'), ds = make('p', 'hm-ds'), cta = make('button', 'hm-cta'), dots = make('div', 'hm-dots'); dots.append(...MODES.map(() => make('i')));
   info.append(nm, ds, cta); slot.append(dots);
@@ -304,6 +310,13 @@ export function init(o = {}) {
     anim = 0; const d = target - pos; if (Math.abs(d) > 0.002 && !drag) { pos += d * (reduce ? 1 : 0.2); } else if (!drag) pos = target;
     layout(); const m = MODES[sel]; if (m.cv && opts.paint && now - paintAt > 66 && Math.abs(pos - sel) < 0.3 && scr.classList.contains('on')) { paintAt = now; opts.paint(m.cv, m.key, 200, true); }
     if (drag || Math.abs(target - pos) > 0.002 || (m.cv && scr.classList.contains('on') && !document.hidden)) anim = requestAnimationFrame(step);
+  }
+  // annonce du nouveau mode sur l'accueil : un toucher amène la roue sur le Shaker (disparaît après quelques parties)
+  const iSh = MODES.findIndex((m) => m.id === 'shaker');
+  if (iSh >= 0 && !(opts.shaker && opts.shaker().runs > 2)) {
+    const nb = make('button', 'hm-newb', '<i>NEW</i><span><b>Nouveau mode : Shaker !</b><small>Secoue ton téléphone, fais valser les astres</small></span><em>›</em>');
+    nb.addEventListener('click', () => { select(iSh); nb.classList.add('go'); });
+    setTimeout(() => { const tg = document.querySelector('#s-title .tag'); if (tg && tg.parentElement) tg.after(nb); else if (slot.parentElement) slot.before(nb); }, 0); // une fois la page Jouer montée
   }
   const launch = () => { const m = MODES[sel]; if (opts.sfx) opts.sfx(); if (m.btn) m.btn.click(); };
   cta.addEventListener('click', launch);

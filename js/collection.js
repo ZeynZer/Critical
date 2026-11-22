@@ -40,6 +40,8 @@ const CSS = `
 @keyframes co-rot{to{transform:rotate(1turn)}}
 @keyframes co-sh{0%{transform:translateX(0)}55%,100%{transform:translateX(330%)}}
 @media (prefers-reduced-motion:reduce){.co-c.on .fx::before,.co-c.r5.on .rb{animation:none}}
+.co-c .stx{font:800 8.5px var(--disp);letter-spacing:.04em;color:#ffd75a;text-shadow:0 0 6px rgba(255,200,80,.6);position:relative;z-index:1}
+.dk-up{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}.dk-up>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.dk-up b{font-size:12.5px}.dk-up small{font-size:11px;line-height:1.35;color:rgba(255,255,255,.65)}.dk-up em{font-style:normal;color:#ffd75a;font-size:12px}.dk-up button{flex:none;height:34px;padding:0 12px;border-radius:17px;border:0;font:800 10.5px var(--disp);color:#fff;background:linear-gradient(135deg,#ffb347,#ff5fd8)}.dk-up button:disabled{opacity:.4}
 .co-empty{padding:30px 10px;text-align:center;color:rgba(255,255,255,.55);font-size:13px}
 .co-h{margin:6px 0 0;font:800 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.6)}.co-p{margin:0;font-size:12px;line-height:1.45;color:rgba(255,255,255,.6)}
 .dk-pre{display:flex;gap:6px}.dk-pre button{flex:1;height:34px;border-radius:17px;font:800 11px var(--disp);color:rgba(255,255,255,.65);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.dk-pre button.on{color:#fff;background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
@@ -68,6 +70,7 @@ export function mount(page, api) {
     if (e.ok && e.rar === 5) b.append(make('i', 'rb'), make('i', 'sp'));
     if (e.ok && e.tier >= 0) b.append(thumb(e.key, e.tier)); else b.append(make('div', 'q', e.ok ? '★' : '?'));
     b.append(make('b', '', e.ok ? esc(e.name) : '???'), make('small', '', e.ok ? RN[e.rar].toUpperCase() : ''));
+    if (e.ok && e.deckable) b.append(make('span', 'stx', (e.skill ? esc(e.skill) + ' ' : '') + '★'.repeat(e.stars || 1)));
     if (e.ok && e.copies > 1) b.append(make('span', 'cp', '×' + e.copies)); if (e.inDeck) b.append(make('span', 'bd', 'DECK')); else if (e.skinOn) b.append(make('span', 'bd', 'ÉQUIPÉ')); if (e.ok && e.ability && !e.inDeck) b.append(make('span', 'ab', '✦'));
     if (e.ok && e.rar >= 4) { b.append(make('i', 'fx')); if (io) io.observe(b); else b.classList.add('on'); }
     if (e.ok && e.tier >= 0) b.addEventListener('click', () => open(e));
@@ -83,10 +86,16 @@ export function mount(page, api) {
     m.querySelector('[data-go]').addEventListener('click', () => { const r = api.frag.craft(key); m.remove(); if (r === 'ok') { api.vib && api.vib([14, 40, 14]); api.toast('Carte fabriquée : ' + ci.name); render(); const e = api.entries().find((x) => x.key === key); if (e) open(e); } else if (r === 'poor') api.toast('Pas assez de fragments'); });
     document.body.append(m);
   }
-  function actionsOf(e) { // boutons de la carte immersive
-    if (e.kind === 'capacite') return [{ label: () => (api.deck.info().cards.some((c) => c.tier === e.tier) ? 'Retirer du deck' : 'Mettre dans le deck'), primary: () => api.deck.info().cards.some((c) => c.tier === e.tier), run: () => { const on = api.deck.info().cards.some((c) => c.tier === e.tier); if (on) api.deck.remove(e.tier); else if (api.deck.add(e.tier) === 'full') api.toast('Deck plein : retire une capacité ou débloque un emplacement'); render(); } }];
-    if (api.skin.equipable(e.tier, e.v) && e.v >= 2) return [{ label: () => (api.skin.of(e.tier) === e.v ? 'Retirer l\'apparence' : 'Équiper l\'apparence'), primary: () => api.skin.of(e.tier) === e.v, run: () => { api.skin.equip(e.tier, api.skin.of(e.tier) === e.v ? 0 : e.v); render(); } }];
-    return null;
+  const inDeck = (k) => api.deck.info().cards.some((c) => c.key === k);
+  const UPMSG = { ok: 'Carte améliorée !', frag: 'Pas assez de fragments stellaires (les doublons en rapportent)', poor: 'Pas assez de Voidium', max: 'Déjà au maximum (3★)', locked: 'Carte pas encore obtenue' };
+  function actionsOf(e) { // boutons de la carte immersive : deck, amélioration, apparence
+    const A = [];
+    if (e.deckable) {
+      A.push({ label: () => (inDeck(e.key) ? 'Retirer du deck' : 'Mettre dans le deck'), primary: () => inDeck(e.key), run: () => { if (inDeck(e.key)) api.deck.remove(e.key); else { const r = api.deck.add(e.key); api.toast(r === 'full' ? 'Deck plein : retire une carte ou débloque un emplacement' : r === 'swap' ? 'Carte équipée (elle remplace celle du même rang)' : 'Carte équipée'); } render(); } });
+      A.push({ label: () => { const c = api.deck.card(e.key); return c.up ? `Améliorer ${'★'.repeat(c.stars + 1)} · ✦ ${fmt(c.up.frag)} + ${fmt(c.up.dust)} Voidium` : `${'★'.repeat(c.stars)} Niveau maximum`; }, primary: () => false, run: () => { const r = api.deck.upgrade(e.key); api.toast(UPMSG[r] || ''); if (r === 'ok') api.vib && api.vib([14, 40, 14]); render(); } });
+    }
+    if (api.skin.equipable(e.tier, e.v) && e.v >= 2) A.push({ label: () => (api.skin.of(e.tier) === e.v ? 'Retirer l\'apparence' : 'Équiper l\'apparence'), primary: () => api.skin.of(e.tier) === e.v, run: () => { api.skin.equip(e.tier, api.skin.of(e.tier) === e.v ? 0 : e.v); render(); } });
+    return A.length ? A : null;
   }
   const open = (e) => api.view(e.key, actionsOf(e));
   /* ---------- cartes ---------- */
@@ -113,21 +122,24 @@ export function mount(page, api) {
     const slots = make('div', 'dk-slots'), els = []; body.append(slots);
     for (let i = 0; i < d.max; i++) { // une seule rangée : emplacements et plateau visibles ensemble, pour pouvoir glisser sans défiler
       const s = make('div', 'dk-s'); els.push(s);
-      if (i < d.slots) { const k = d.cards[i]; if (k) { s.classList.add('full'); s.style.setProperty('--c', RC[k.rar]); const cv = document.createElement('canvas'); api.paint(cv, k.key, 40, false); s.append(cv, make('b', '', esc(k.name))); const x = make('button', 'x', '✕'); x.setAttribute('aria-label', 'Retirer ' + k.name); x.addEventListener('click', () => { api.deck.remove(k.tier); api.vib && api.vib(6); render(); }); s.append(x); } else s.append(make('div', 'em', '+')); }
+      if (i < d.slots) { const k = d.cards[i]; if (k) { s.classList.add('full'); s.style.setProperty('--c', RC[k.rar]); const cv = document.createElement('canvas'); api.paint(cv, k.key, 40, false); s.append(cv, make('b', '', esc(k.name)), make('small', 'stx', '★'.repeat(k.stars))); const x = make('button', 'x', '✕'); x.setAttribute('aria-label', 'Retirer ' + k.name); x.addEventListener('click', () => { api.deck.remove(k.key); api.vib && api.vib(6); render(); }); s.append(x); } else s.append(make('div', 'em', '+')); }
       else if (i === d.slots) { s.classList.add('lk'); const b = make('button', 'dk-buy', `🔓<span>${fmt(d.nextCost)}</span>`); b.setAttribute('aria-label', 'Débloquer un emplacement pour ' + fmt(d.nextCost) + ' Voidium'); b.disabled = d.dust < d.nextCost; b.addEventListener('click', () => { const r = api.deck.buySlot(); api.toast(r === 'ok' ? 'Emplacement débloqué !' : r === 'poor' ? 'Pas assez de Voidium' : 'Déjà au maximum'); render(); }); s.append(b); }
       else { s.classList.add('lk'); s.style.opacity = '.35'; s.append(make('div', 'em', '🔒')); }
       slots.append(s);
     }
     body.append(make('p', 'co-p', `${d.cards.length} / ${d.slots} emplacements utilisés. Glisse une carte du plateau vers le haut pour l'équiper, ou touche-la.`));
     const tray = make('div', 'dk-tray'); body.append(tray);
-    for (const c of d.pool) {
-      const t = make('div', 'dk-t' + (c.own ? (c.inDeck ? ' used' : '') : ' lock')); t.style.setProperty('--c', RC[c.rar]);
-      if (c.own) { const cv = document.createElement('canvas'); api.paint(cv, c.key, 52, false); t.append(cv); } else t.append(make('div', 'q', '?'));
-      t.append(make('b', '', c.own ? esc(c.name) : '???'), make('small', '', c.own ? esc(c.info) : 'À obtenir en pack ou en jouant')); tray.append(t);
-      if (c.own && !c.inDeck) grab(t, c, els, d);
+    const owned = d.pool.filter((c) => c.own), locked = d.pool.length - owned.length;
+    for (const c of owned) {
+      const t = make('div', 'dk-t' + (c.inDeck ? ' used' : '')); t.style.setProperty('--c', RC[c.rar]);
+      const cv = document.createElement('canvas'); api.paint(cv, c.key, 52, false); t.append(cv);
+      t.append(make('b', '', esc(c.name)), make('small', 'stx', esc(c.kind === 'pouvoir' ? 'Pouvoir' : c.kind) + ' ' + '★'.repeat(c.stars)), make('small', '', esc(c.info))); tray.append(t);
+      if (!c.inDeck) grab(t, c, els, d);
     }
+    if (!owned.length) tray.append(make('p', 'co-p', 'Aucune carte à capacité pour l\'instant : ouvre des packs ou joue pour en obtenir.'));
+    body.append(make('p', 'co-p', `${owned.length} carte${owned.length > 1 ? 's' : ''} à capacité · ${locked} à découvrir. Chaque apparence a sa capacité ; une seule carte par rang (en placer une autre du même rang la remplace).`));
     body.append(make('h3', 'co-h', 'En partie'));
-    if (d.cards.length) for (const k of d.cards) body.append(make('div', 'dk-ab', `<b style="color:${RC[k.rar]}">${esc(k.name)}</b><small>${esc(k.info)}</small>`)); else body.append(make('p', 'co-p', 'Aucune capacité équipée : tes astres sont normaux. Équipe-en pour changer les règles à ton avantage. Inactif en duel, défi du jour et bac à sable ; aucun bonus de points.'));
+    if (d.cards.length) for (const k of d.cards) { const row = make('div', 'dk-up', `<div><b style="color:${RC[k.rar]}">${esc(k.name)} <em>${k.starLine}</em></b><small>${esc(k.info)}</small></div>`), ub = make('button', '', k.up ? `★ ${fmt(k.up.frag)} ✦ · ${fmt(k.up.dust)}` : 'MAX'); ub.disabled = !k.up || d.frag < k.up.frag || d.dust < k.up.dust; ub.setAttribute('aria-label', k.up ? `Améliorer ${k.name} pour ${fmt(k.up.frag)} fragments et ${fmt(k.up.dust)} Voidium` : 'Niveau maximum'); ub.addEventListener('click', () => { const r = api.deck.upgrade(k.key); api.toast(UPMSG[r] || ''); if (r === 'ok') api.vib && api.vib([14, 40, 14]); render(); }); row.append(ub); body.append(row); } else body.append(make('p', 'co-p', 'Aucune carte équipée : tes astres sont normaux. Équipe des cartes pour changer les règles à ton avantage (aimant, onde, éclat, souffle…). Actif en Univers, Blitz et Shaker ; inactif en duel, défi du jour et bac à sable.'));
     if (d.skins.length) { body.append(make('h3', 'co-h', 'Apparences équipées')); const sk = make('div', 'dk-sk'); for (const s of d.skins) { const b = make('button'); const cv = document.createElement('canvas'); api.paint(cv, s.key, 30, false); b.append(cv, document.createTextNode(s.name + ' ✕')); b.addEventListener('click', () => { api.skin.equip(s.tier, 0); render(); }); sk.append(b); } body.append(sk); }
   }
   function grab(t, c, els, d) { // vertical = on saisit la carte (le navigateur garde le défilement horizontal du plateau) ; simple toucher = placer dans le premier emplacement libre
@@ -138,7 +150,7 @@ export function mount(page, api) {
       if (!ghost) { if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) * 0.8 && dy < 0) { ghost = make('div', 'dk-ghost'); const cv = document.createElement('canvas'); api.paint(cv, c.key, 52, false); ghost.append(cv, make('div', '', esc(c.name))); document.body.append(ghost); try { t.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } st.moved = true; api.vib && api.vib(8); } else return; }
       ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px'; const i = slotAt(e.clientX, e.clientY); if (i !== over) { els.forEach((s, k) => s.classList.toggle('over', k === i)); over = i; }
     });
-    const end = (e) => { if (!st || e.pointerId !== st.id) return; const s0 = st; st = null; if (ghost) { ghost.remove(); ghost = null; els.forEach((s) => s.classList.remove('over')); if (e.type === 'pointerup' && over >= 0) { const r = api.deck.add(c.tier); api.toast(r === 'full' ? 'Deck plein' : 'Capacité équipée'); api.vib && api.vib([8, 20, 8]); render(); } over = -1; return; } if (e.type === 'pointerup' && !s0.moved && Math.abs(e.clientX - s0.x) < 8) { const r = api.deck.add(c.tier); if (r === 'full') api.toast('Deck plein : retire une capacité ou débloque un emplacement'); api.vib && api.vib(8); render(); } };
+    const end = (e) => { if (!st || e.pointerId !== st.id) return; const s0 = st; st = null; if (ghost) { ghost.remove(); ghost = null; els.forEach((s) => s.classList.remove('over')); if (e.type === 'pointerup' && over >= 0) { const r = api.deck.add(c.key); api.toast(r === 'full' ? 'Deck plein' : r === 'swap' ? 'Remplace la carte du même rang' : 'Carte équipée'); api.vib && api.vib([8, 20, 8]); render(); } over = -1; return; } if (e.type === 'pointerup' && !s0.moved && Math.abs(e.clientX - s0.x) < 8) { const r = api.deck.add(c.key); if (r === 'full') api.toast('Deck plein : retire une carte ou débloque un emplacement'); else if (r === 'swap') api.toast('Remplace la carte du même rang'); api.vib && api.vib(8); render(); } };
     t.addEventListener('pointerup', end); t.addEventListener('pointercancel', end);
   }
   /* ---------- décors ---------- */

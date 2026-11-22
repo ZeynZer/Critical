@@ -777,7 +777,7 @@ begin
   if p_runs is not null and json_typeof(p_runs) = 'array' then
     for e in select * from json_array_elements(p_runs) loop
       n := n + 1; exit when n > 10;
-      if (e->>'m') in ('classic', 'blitz', 'daily', 'duel') then
+      if (e->>'m') in ('classic', 'blitz', 'daily', 'duel', 'shaker') then
         insert into tele_runs (did, mode, score, tier, sector, secs, drops, over, fps)
           values (p_did, e->>'m', least(greatest(coalesce((e->>'s')::integer, 0), 0), 100000000), least(greatest(coalesce((e->>'t')::integer, 0), 0), 12), least(greatest(coalesce((e->>'x')::integer, 1), 0), 99),
                   least(greatest(coalesce((e->>'d')::integer, 0), 0), 86400), least(greatest(coalesce((e->>'n')::integer, 0), 0), 100000), coalesce((e->>'o')::boolean, false), nullif(least(greatest(coalesce((e->>'f')::integer, 0), 0), 240), 0));
