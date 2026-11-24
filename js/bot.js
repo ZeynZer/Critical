@@ -22,7 +22,7 @@ function sim(G, steps) { // s'arrête dès que la pile est immobile (même résu
 
 // Note d'une situation, comme un bon joueur : survivre d'abord (marge sous la ligne) ; les gros au fond, les tailles qui décroissent
 // en montant (un petit astre enterré sous un gros ne fusionnera plus) ; voisins de tailles proches ; astres identiques rapprochés ; pile basse.
-export const WEIGHTS = { margin: 4.5, marginK: 900, danger: 60000, score: 1.0, height: 9, count: 25, touch: 60, touchT: 45, bury: 160, smooth: 18, group: 40, wall: 20, feed: 260, clutter: 70 };
+export const WEIGHTS = { margin: 4.5, marginK: 900, danger: 60000, score: 1.0, height: 9, count: 25, touch: 60, touchT: 45, bury: 160, smooth: 18, group: 40, wall: 20, feed: 120, clutter: 0, joker: 2500, comet: 700 };
 export function evaluate(G, s0, W = WEIGHTS) {
   if (G.over) return -1e12;
   const B = G.bodies, HT = G.ht || F.HT; let v = 0, top = HT, big = null;
@@ -32,6 +32,8 @@ export function evaluate(G, s0, W = WEIGHTS) {
   for (const o of B) { if (o.k !== 'c' || o.tier > 3) continue; let fed = false, can = false;
     for (const [a, pw] of eaters) { if (o.tier > pw[0]) continue; can = true; if (Math.hypot(o.x - a.x, o.y - a.y) - a.r - o.r < pw[2] + 0.35) { fed = true; break; } }
     if (fed) v += W.feed * (1 + o.tier * 0.4); else if (can || o.tier <= 1) v -= W.clutter * (1 + o.tier * 0.3); }
+  // atouts gardés en réserve : la matière exotique (copie l'astre touché : sur une galaxie, Big Bang) et la comète (nettoie les petits débris)
+  if (G.hold && G.hold.k === 'j') v += W.joker; else if (G.hold && G.hold.k === 'b') v += W.comet;
   const margin = top - F.LINE;
   if (margin < W.margin) v -= (W.margin - margin) ** 2 * W.marginK;
   v -= G.danger * W.danger;
@@ -53,6 +55,8 @@ export function evaluate(G, s0, W = WEIGHTS) {
 function positions(G, it, n) { // grille régulière + aplomb des astres identiques (les plus hauts)
   const r = rOf(it), lo = G.inset + r + 0.03, hi = F.W - G.inset - r - 0.03, xs = [];
   for (let i = 0; i < n; i++) xs.push(lo + (hi - lo) * (i / (n - 1)));
+  if (it.k === 'j') for (const b of G.bodies.filter((o) => o.k === 'c').sort((a, b) => b.tier - a.tier).slice(0, 5)) xs.push(Math.max(lo, Math.min(hi, b.x)), Math.max(lo, Math.min(hi, b.x - b.r * 0.4)), Math.max(lo, Math.min(hi, b.x + b.r * 0.4))); // matière exotique : viser les plus gros
+  if (it.k === 'b') for (const b of G.bodies) if (b.k === 'c' && b.tier <= 3) xs.push(Math.max(lo, Math.min(hi, b.x))); // comète : sur les petits débris
   if (it.k === 'c') for (const b of G.bodies) { const pw = F.absorbOf(b); if (pw && it.tier <= pw[0]) xs.push(Math.max(lo, Math.min(hi, b.x)), Math.max(lo, Math.min(hi, b.x - b.r * 0.5)), Math.max(lo, Math.min(hi, b.x + b.r * 0.5))); } // au-dessus d'un avaleur qui peut le manger
   if (it.k === 'c') for (const b of G.bodies.filter((o) => o.k === 'c' && o.tier === it.tier).sort((a, b) => a.y - b.y).slice(0, 3)) xs.push(Math.max(lo, Math.min(hi, b.x)), Math.max(lo, Math.min(hi, b.x - b.r * 0.6)), Math.max(lo, Math.min(hi, b.x + b.r * 0.6)));
   return [...new Set(xs.map((x) => Math.round(x * 100) / 100))];

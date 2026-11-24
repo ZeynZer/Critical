@@ -19,6 +19,7 @@ Jeu mobile de fusion d'astres (PWA hors-ligne, servi sur zeynzer.com via GitHub 
 ```
 node tools/test.mjs                      # moteur : déterminisme, physique, reprise, rejeu, cuve partagée, event
 node tools/balance.mjs                   # banc d'équilibrage (robots hasard / viseur) : le talent doit payer
+# robots intelligents : js/bot.js (choose, playGame, WEIGHTS) ; une partie Expert ≈ 2 min de calcul, Maître ≈ 5-9 min ; très grande variance d'une graine à l'autre (±70 k) : comparer des réglages sur ≥ 10 parties
 python3 -m http.server 8000              # serveur local pour les tests navigateur (il tombe parfois : le relancer)
 ```
 Tests SQL (PostgreSQL 16 local) : démarrer `pg_ctlcluster 16 main start`, créer une base vierge, `create role anon nologin; create role authenticated nologin;`, charger `supabase/schema.sql` puis `supabase/tests/{community,elo,blitz,event,analytics,save}.sql` **chacun sur une base neuve** (les pseudos de test se heurtent sinon : `name_taken`).
