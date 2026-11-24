@@ -31,4 +31,4 @@ Tests navigateur : Playwright est préinstallé (`require('/opt/node22/lib/node_
 - `T[] || unknown` / noms ambigus en plpgsql : caster en `::text`, qualifier les colonnes dans les `assert`.
 - Vidéo/capture : `recordVideo` de Playwright → `ffmpeg` ; la bande-annonce a été produite ainsi (non versionnée).
 - Les mêmes tests tournent sur GitHub (`.github/workflows/tests.yml`).
-- Économie mesurée (robots, nov. 2026) : jouer au hasard rapporte presque autant que viser (×1,2), parties ≈ 8 min. Changer la difficulté casse les rediffusions/scores : ne le faire qu'avec une version de moteur stockée avec chaque score.
+- Robots (nov. 2026) : hasard ≈ « viser l'astre identique » (×1,2), ils perdent toujours vers 60-130 k points (secteur 8-10, ≈ 8-12 min). Les vrais joueurs font bien mieux (top : 884 k, secteur 35) : le talent compte, les robots naïfs ne le mesurent pas. Changer la difficulté casse les rediffusions/scores : ne le faire qu'avec une version de moteur stockée avec chaque score.
