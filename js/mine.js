@@ -6,6 +6,7 @@ import * as F from './fusion.js';
 import { CAT, RAR, POOL, equipable } from './catalog.js';
 import { PACKS, draw as drawPack } from './packs.js';
 import * as SK from './skills.js';
+import * as BOT from './bot.js';
 import * as IM from './immersive.js';
 import { channel } from './realtime.js';
 
@@ -135,7 +136,7 @@ function onEvents() {
       }
     }
     else if (e.t === 'secret') { const S = SECRETS[e.id]; if (!G.nop && !sv.cx[e.id]) { sv.cx[e.id] = 1; save(); G.bonus += 40; } say(S[0].toUpperCase(), 'DÉCOUVERTE SECRÈTE', AM); ring(x, y, 6, W * 0.6, 0.8, AM, 6); A.win();
-    } else if (e.t === 'over') { if (G.rep) G.rep.done = true; else if (G.duel) duelFinish(); else endRun(); }
+    } else if (e.t === 'over') { if (G.bot) { endBot(); continue; } if (G.rep) G.rep.done = true; else if (G.duel) duelFinish(); else endRun(); }
   }
   G.ev.length = 0;
 }
@@ -580,7 +581,7 @@ const miniU = (it) => Math.min(B.u, 20 / (it.k === 'c' ? F.TIERS[it.tier].r : F.
 /* ============================== boucle ============================== */
 function update(dt) {
   T += dt;
-  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else if (G.duel) duelTick(dt); else { F.tick(G, slow > 0 ? dt * 0.3 : dt); if (gh) stepGhost(); } onEvents(); }
+  if (hitstop > 0) hitstop -= dt; else if (!ended && !paused) { if (G.rep) driveReplay(dt); else if (G.duel) duelTick(dt); else if (G.bot) botTick(dt); else { F.tick(G, slow > 0 ? dt * 0.3 : dt); if (gh) stepGhost(); } onEvents(); }
   if (slow > 0) slow -= dt;
   if (warp > 0) { const w0 = warp; warp = Math.max(0, warp - dt / 1.8); if (w0 > 1 - BANG && warp <= 1 - BANG) bang(); }
   if (G.danger > 0 && !ended && !paused && T - beatT > 0.62 - 0.3 * G.danger) { beatT = T; A.chestBeat(G.danger); H.vib(6); } // le cœur s'emballe près de la ligne
@@ -655,7 +656,7 @@ function frame(now) {
 const pt = (e) => ({ x: e.clientX, y: e.clientY }); // le canvas couvre tout l'écran
 const inZone = (p) => p.x > B.x - 18 && p.x < B.x + B.w + 18 && p.y > B.y - 60 && p.y < B.y + B.h + 20; // la cuve, avec une petite marge
 function onDown(e) { // appuie dans la cuve (même pendant qu'un astre tombe), glisse, relâche ; sortir de la cuve annule
-  if (!G || G.over || G.rep) return; if (reveal) { if (reveal.l > 1.6) { reveal.l = reveal.d; slow = 0; } return; } const p = pt(e);
+  if (!G || G.over || G.rep || G.bot) return; if (reveal) { if (reveal.l > 1.6) { reveal.l = reveal.d; slow = 0; } return; } const p = pt(e);
   if (!G.sandbox && p.y > holdR.y - 14 && p.x < holdR.x + holdR.w + 14) { if (!(G.duel && duel.phase !== 'play') && F.swapHold(G)) { A.select(); H.vib(8); if (!G.nop) H.goal('hold'); if (G.duel) dsendDrop(); } return; }
   if (!inZone(p)) return;
   aiming = true; aimT = (p.x - B.x) / B.u; try { cv.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
@@ -664,7 +665,8 @@ function onMove(e) { if (!aiming) return; const p = pt(e); if (inZone(p)) aimT =
 function onUp() { if (!aiming) return; aiming = false; want = true; }
 
 /* ============================== écrans ============================== */
-const CSS = `
+const CSS = `#mn-bot{position:absolute;z-index:7;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-radius:18px;font:600 11px var(--font,system-ui);color:#fff}#mn-bot[hidden]{display:none}#mn-bot b{font:800 11px var(--disp,system-ui);color:#ffc247;letter-spacing:.06em}#mn-bots{display:flex;gap:4px;flex:1}#mn-bots button{flex:1;height:30px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font:800 11px var(--disp,system-ui)}#mn-bots button.on{background:rgba(255,194,71,.3);border-color:#ffc247}#mn-botr{min-width:64px;text-align:right;color:rgba(255,255,255,.7)}#mn-botx{height:30px;padding:0 10px;border-radius:12px;border:1px solid rgba(255,120,140,.5);background:rgba(255,80,110,.15);color:#fff;font:700 11px var(--font,system-ui)}
+
 
 #mn{position:fixed;inset:0;z-index:9;background:#05060f;display:none}#mn.on{display:block;animation:fade .3s}
 /* pendant une partie, l'accueil (flous, animations) et le canvas principal sont masqués et figés : ils coûtaient cher derrière l'écran de jeu */
@@ -700,7 +702,7 @@ const CSS = `
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div class="glass" id="mn-bot" hidden><b id="mn-botn"></b><div id="mn-bots"></div><span id="mn-botr"></span><button id="mn-botx">Arrêter</button></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p><div id="mn-xp"></div>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
@@ -887,6 +889,34 @@ function endShaker() { // fin d'un Shaker : record propre au mode, récompenses 
   }, G.over ? 900 : 0);
 }
 export const shakerInfo = () => ({ best: sv.shaker | 0, runs: sv.shakerRuns | 0, seen: !!sv.shakerSeen });
+// Robots (console admin) : un robot joue la partie à la place du joueur, de ×1 à ×100. Aucun gain, aucun score envoyé, aucun record.
+const BOT_SPEEDS = [1, 4, 16, 50, 100];
+let botReal = 0, botRealT = 0, botRealG = 0;
+export function botWatch({ level = 'maitre', mode = 'classic', speed = 1 } = {}) {
+  open(true); newRun((Math.random() * 2 ** 32) >>> 0, true, mode === 'blitz' ? { blitz: true, bot: true } : { bot: true }); G.nop = true;
+  G.bot = { level, speed, mode, last: -9, t0: performance.now() }; botReal = 0; botRealT = performance.now(); botRealG = 0;
+  $('#mn-bot').hidden = false; $('#mn-botn').textContent = 'ROBOT ' + (BOT.LEVELS[level] || {}).n.toUpperCase();
+  $('#mn-bots').innerHTML = BOT_SPEEDS.map((v) => `<button data-v="${v}" class="${v === speed ? 'on' : ''}">×${v}</button>`).join('');
+  say('ROBOT ' + (BOT.LEVELS[level] || {}).n.toUpperCase(), 'AUCUN GAIN · AUCUN SCORE ENVOYÉ', [255, 194, 71]);
+}
+function botTick(dt) { // vitesse visée × temps réel, dans un budget de 30 ms par image (la réflexion du robot peut limiter la vitesse réelle)
+  const B2 = G.bot, goal = Math.min(dt, 0.05) * B2.speed, t0 = performance.now(); let done = 0;
+  while (done < goal && !G.over && performance.now() - t0 < 30) {
+    if (BOT.ready(G, B2.last)) { const d = BOT.choose(G, B2.level); if (d.hold) F.swapHold(G); if (F.drop(G, d.x)) { B2.last = G.t; aimX = aimT = d.x; } }
+    F.step(G); done += 1 / 120;
+    if (B2.speed >= 16 && G.ev.length > 40) G.ev.splice(0, G.ev.length - 40);
+  }
+  if (B2.speed >= 16) hitstop = 0;
+  botRealG += done; const now = performance.now(); if (now - botRealT > 700) { botReal = botRealG / ((now - botRealT) / 1000); botRealT = now; botRealG = 0; $('#mn-botr').textContent = `réel ×${botReal >= 10 ? Math.round(botReal) : botReal.toFixed(1)}`; }
+}
+function endBot() { // résultat du robot : rien n'est enregistré
+  if (ended) return; ended = true; const B2 = G.bot, mins = G.t / 60;
+  setTimeout(() => {
+    $('#mn-xp').innerHTML = ''; $('#mn-ot').textContent = 'Robot ' + (BOT.LEVELS[B2.level] || {}).n + ' : fin'; $('#mn-share').hidden = true; $('#mn-again').textContent = 'Relancer le robot';
+    $('#mn-os').textContent = `${fmt(G.drops)} lâchers · ${mins >= 1 ? Math.round(mins) + ' min' : Math.round(G.t) + ' s'} de jeu · aucun gain`; $('#mn-rk').textContent = '';
+    overPanel({}); $('#mn-bot').hidden = true;
+  }, 600);
+}
 export function openDaily() { // même tirage pour tout le monde ; on peut retenter, la récompense tombe une fois par jour
   open(true); const d = H.today(); newRun(hash('critical:defi:seed:' + d), true, { daily: true }); G.chal = todayChal(); G.day = d; say('DÉFI DU JOUR', G.chal[3].toUpperCase(), AM);
 }
@@ -1050,7 +1080,8 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
-  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily)) && deckKeys().length) F.equip(G, deckLoad()); // l'en-tête du journal consigne le deck (cartes, étoiles) : rediffusion identique
+  $('#mn-bot').hidden = !(opt && opt.bot);
+  if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily || opt.bot)) && deckKeys().length) F.equip(G, deckLoad()); // l'en-tête du journal consigne le deck (cartes, étoiles) : rediffusion identique
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
   rv = null; rvDone = false; gh = null; const tok = ++runTok;
   if (!opt && H.online()) H.rival(sv.best).then((r) => {
@@ -1238,7 +1269,7 @@ export function open(fresh) { // fresh : on va lancer autre chose qu'une partie 
   else newRun();
   last = performance.now(); if (!raf) raf = requestAnimationFrame(frame);
 }
-function close() { if (duel) duelClose(); H.back(); save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
+function close() { $('#mn-bot').hidden = true; if (duel) duelClose(); H.back(); save(); H.time(sv.time); A.setMood(0); isOpen = false; document.documentElement.classList.remove('mn-open'); $('#mn').classList.remove('on'); $('#mn-m-over').classList.remove('on'); refreshTitle(); }
 export function init(opts) {
   Object.assign(H, opts); DPR = Math.min(window.devicePixelRatio || 1, 2); // pour les vignettes dessinées avant la première partie
   { const retro = syncFrags(); if (retro && !sv.frTold) { sv.frTold = 1; save(); setTimeout(() => H.toast(`Tes doublons valent maintenant +${fmt(retro)} fragments stellaires`), 4500); } else if (!sv.frTold) { sv.frTold = 1; save(); } } // conversion unique des anciens doublons
@@ -1250,6 +1281,8 @@ export function init(opts) {
   window.addEventListener('resize', () => { if (isOpen) resize(); });
   document.addEventListener('visibilitychange', () => { last = performance.now(); if (document.hidden && isOpen) saveRun(); }); window.addEventListener('pagehide', () => { if (isOpen) saveRun(); });
   const click = (el, f) => $(el).addEventListener('click', () => { A.ui(); H.vib(9); f(); });
+  $('#mn-bots').addEventListener('click', (e) => { const v = +e.target.dataset.v; if (!v || !G || !G.bot) return; G.bot.speed = v; $('#mn-bots').querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.v === v)); });
+  click('#mn-botx', () => { if (G && G.bot && !ended) { G.over = true; endBot(); } });
   click('#mn-shpg', askMotion); click('#mn-shpq', () => { shpHide(); close(); });
   document.querySelectorAll('#mn-rp [data-s]').forEach((b) => b.addEventListener('click', () => { if (G && G.rep) { rpSpeed(+b.dataset.s); A.select(); } }));
   click('#mn-rpp', () => { const R = G && G.rep; if (!R) return; if (R.done) { const run = R.run; openReplay(run); } else { R.speed = R.speed ? 0 : +(document.querySelector('#mn-rp [data-s].on') || { dataset: { s: 2 } }).dataset.s; $('#mn-rpp').textContent = R.speed ? '❚❚' : '▶'; } });
@@ -1263,7 +1296,7 @@ export function init(opts) {
   click('#mn-quit', () => { $('#mn-m-help').classList.remove('on'); paused = false; if (G && !G.nop && !ended && G.drops > 0) endRun(); else close(); });
   click('#mn-rkb', () => (H.online() && !H.named() ? H.askName() : H.rank()));
   click('#mn-help', () => { $('#mn-quit').textContent = G && G.nop ? 'Quitter' : 'Abandonner la partie'; const l = $('#mn-lad'); if (!l.firstChild) BODIES.forEach((b, i) => { const c = document.createElement('canvas'); c.title = b[0]; paintAstre(c, i + ':0', 34); l.append(c); }); $('#mn-m-help').classList.add('on'); paused = true; });
-  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.blitz ? openBlitz() : G && G.shaker ? openShaker() : G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
+  click('#mn-hok', () => { $('#mn-m-help').classList.remove('on'); paused = false; }); click('#mn-again', () => (G && G.bot ? botWatch({ level: G.bot.level, mode: G.bot.mode, speed: G.bot.speed }) : G && G.blitz ? openBlitz() : G && G.shaker ? openShaker() : G && G.chal ? openDaily() : newRun())); click('#mn-share', share); click('#mn-thok', () => $('#mn-m-themes').classList.remove('on')); click('#mn-cxb', showCodex); click('#mn-cxok', () => $('#mn-m-codex').classList.remove('on')); click('#mn-menu', close);
   // bouton principal de l'accueil (home.js le transforme en héros) ; Cascade devient un lien discret
   const menu = $('#s-title .menu');
   if (menu && !$('#b-mine')) { const b = document.createElement('button'); b.className = 'big primary hero'; b.id = 'b-mine'; b.innerHTML = '<span>Jouer</span><small id="b-mine-s"></small>'; menu.insertBefore(b, menu.firstChild); b.addEventListener('click', () => { A.ui(); H.vib(9); open(); }); }

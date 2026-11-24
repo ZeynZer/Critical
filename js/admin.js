@@ -33,7 +33,7 @@ const CSS = `
 export function mount(api) {
   const st = make('style'); st.textContent = CSS; document.head.appendChild(st);
   const m = make('div', 'modal ad-m', `<div class="ad-in"><div class="ad-hd"><h2>Administration<small>Console du créateur</small></h2><button class="ad-x" id="ad-x2" aria-label="Fermer">✕</button></div>
-<div class="ad-tabs"><button data-t="dash" class="on">Tableau</button><button data-t="analyse">Analyse</button><button data-t="players">Joueurs</button><button data-t="send">Cadeaux et annonces</button><button data-t="event">Événement</button><button data-t="ideas">Idées</button><button data-t="tools">Outils</button></div><div class="ad-body" id="ad-body"></div></div>`); m.id = 'ad-m'; document.body.append(m);
+<div class="ad-tabs"><button data-t="dash" class="on">Tableau</button><button data-t="analyse">Analyse</button><button data-t="bots">Robots</button><button data-t="players">Joueurs</button><button data-t="send">Cadeaux et annonces</button><button data-t="event">Événement</button><button data-t="ideas">Idées</button><button data-t="tools">Outils</button></div><div class="ad-body" id="ad-body"></div></div>`); m.id = 'ad-m'; document.body.append(m);
   const body = m.querySelector('#ad-body'); let tab = 'dash', sel = null, armed = null, ideasUi = null, anUi = null; const panes = {};
   const run = async (fn, args, ok) => { try { const r = await api.call(fn, args); if (ok) api.toast(ok); return r === undefined || r === null ? true : r; } catch (e) { api.toast('Refusé : ' + e.message); return null; } };
   const confirmed = (key) => { if (armed === key) { armed = null; return true; } armed = key; api.toast('Touche encore pour confirmer'); setTimeout(() => { if (armed === key) armed = null; }, 3000); return false; }; // actions destructrices ou massives : deux appuis
@@ -103,6 +103,37 @@ export function mount(api) {
     const r1 = make('div', 'ad-r'); r1.append(hrs, goal); const r2 = make('div', 'ad-r'); r2.append(go, end, btn('Actualiser', '', show));
     p.append(sec('Événement en cours', box), sec('Nouvel événement', make('p', '', 'Remplace l\'événement en cours. 1 galaxie ≈ 1 429 astres posés ; un joueur actif en pose environ 7 000 par heure (≈ 5 galaxies). Objectif conseillé ≈ 5 × joueurs actifs × heures de jeu ÷ 2.'), nm, r1, r2)); p.show = show;
   }
+  /* ---------- robots : regarder une partie (×1 à ×100) ou lancer une série en arrière-plan ---------- */
+  function buildBots() {
+    const p = panes.bots, LV = [['maitre', 'Maître'], ['expert', 'Expert'], ['viseur', 'Viseur'], ['naif', 'Naïf']];
+    const opt = (pairs, v) => pairs.map(([k, n]) => `<option value="${k}"${k === v ? ' selected' : ''}>${n}</option>`).join('');
+    const lv = make('select'), md = make('select'), sp = make('select'); lv.innerHTML = opt(LV, 'maitre'); md.innerHTML = opt([['classic', 'Univers'], ['blitz', 'Blitz']], 'classic'); sp.innerHTML = opt([1, 4, 16, 50, 100].map((v) => [String(v), '×' + v]), '16');
+    const r1 = make('div', 'ad-r'); r1.append(lv, md, sp);
+    const watch = btn('Regarder le robot jouer', 'go', () => { m.classList.remove('on'); api.bot.watch({ level: lv.value, mode: md.value, speed: +sp.value }); });
+    p.append(sec('Regarder un robot', make('p', '', 'Le robot joue une vraie partie sous tes yeux ; vitesse réglable pendant la partie (×1 à ×100). Aucun gain, aucun score envoyé, aucun record. Maître : teste chaque position sur une copie de la partie et regarde un coup plus loin avec l\'astre suivant (il ne voit que ce que voit un joueur). À très grande vitesse, sa réflexion limite la vitesse réelle (affichée en bas).'), r1, watch));
+    const lv2 = make('select'), md2 = make('select'), n2 = make('select'), mx = make('select'); lv2.innerHTML = opt(LV, 'maitre'); md2.innerHTML = opt([['classic', 'Univers'], ['blitz', 'Blitz']], 'classic'); n2.innerHTML = opt([['3', '3 parties'], ['5', '5 parties'], ['10', '10 parties'], ['25', '25 parties']], '5'); mx.innerHTML = opt([['1000', '1 000 lâchers max'], ['3000', '3 000 lâchers max'], ['10000', 'sans limite']], '3000');
+    const r2 = make('div', 'ad-r'); r2.append(lv2, md2); const r3 = make('div', 'ad-r'); r3.append(n2, mx);
+    const out = make('div'), go = btn('Lancer la série', 'go', start), stop = btn('Arrêter', '', () => { if (wk) { wk.terminate(); wk = null; state.textContent = 'Série arrêtée.'; go.disabled = false; } }), state = make('p', '', '');
+    let wk = null, rows = [];
+    function table() {
+      const done = rows.filter(Boolean), sc = done.map((r) => r.score).sort((a, b) => a - b), med = sc.length ? sc[sc.length >> 1] : 0;
+      out.innerHTML = (done.length ? `<div class="ad-g"><div class="ad-k"><b>${fmt(med)}</b><span>score médian</span></div><div class="ad-k"><b>${fmt(sc[sc.length - 1] || 0)}</b><span>meilleur</span></div><div class="ad-k"><b>${fmt(done.reduce((a, r) => a + r.sector, 0) / done.length)}</b><span>secteur moyen</span></div></div>` : '')
+        + '<div class="ad-tbl" style="grid-template-columns:1fr">' + rows.map((r, i) => (r ? `<div><span>Partie ${i + 1} · ${r.over ? 'perdue' : 'arrêtée'} · ${fmt(r.drops)} lâchers · ${r.mins} min de jeu (calcul ${r.real} s)</span><b>${fmt(r.score)} · secteur ${r.sector}</b></div>` : '')).join('') + '</div>';
+    }
+    function start() {
+      if (wk) return; if (typeof Worker === 'undefined') return api.toast('Indisponible sur cet appareil');
+      try { wk = new Worker(new URL('./botworker.js', import.meta.url), { type: 'module' }); } catch (e) { wk = null; return api.toast('Indisponible sur cet appareil'); }
+      const games = +n2.value; rows = Array(games).fill(null); table(); go.disabled = true; state.textContent = 'Calcul en cours (en arrière-plan)…';
+      wk.onmessage = (e) => { const d = e.data;
+        if (d.t === 'p') state.textContent = `Partie ${d.i + 1} / ${games} : ${fmt(d.drops)} lâchers, ${fmt(d.score)} points…`;
+        else if (d.t === 'r') { rows[d.i] = d; table(); }
+        else if (d.t === 'end') { state.textContent = 'Série terminée.'; go.disabled = false; wk.terminate(); wk = null; } };
+      wk.onerror = () => { state.textContent = 'Erreur du calcul.'; go.disabled = false; if (wk) wk.terminate(); wk = null; };
+      wk.postMessage({ level: lv2.value, mode: md2.value, games, maxDrops: +mx.value, seed0: (Math.random() * 2 ** 31) >>> 0 });
+    }
+    const r4 = make('div', 'ad-r'); r4.append(go, stop);
+    p.append(sec('Série de parties', make('p', '', 'Plusieurs parties complètes calculées sans affichage, aussi vite que l\'appareil le permet, pour mesurer un niveau de robot (équilibrage). Rien n\'est enregistré.'), r2, r3, r4, state, out));
+  }
   /* ---------- outils sur cet appareil ---------- */
   function buildTools() {
     const p = panes.tools, a = make('div', 'ad-r'), rr = make('div', 'ad-rar'); a.append(btn('+10 000 Voidium', '', () => { api.local.e(); api.toast('Fait'); }), btn('+1 000 XP', '', () => { api.local.x(); api.toast('Fait'); }), btn('3 packs de chaque', '', () => { api.local.p(); api.toast('Fait'); }), btn('Tout débloquer', '', () => { api.local.u(); api.toast('Fait'); }));
@@ -110,8 +141,8 @@ export function mount(api) {
     p.append(sec('Sur cet appareil', make('p', '', 'Ces actions ne touchent que ta sauvegarde locale.'), a), sec('Tester l\'ouverture de pack', make('p', '', 'Aperçu gratuit de l\'animation complète avec une rareté forcée (voir : galaxie, supernova, trou noir, convergence).'), rr));
   }
   function setTab(t) { tab = t; m.querySelectorAll('.ad-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t)); for (const [k, el] of Object.entries(panes)) el.hidden = k !== t; body.scrollTop = 0; if (t === 'dash') dash(); else if (t === 'analyse') { if (!anUi) anUi = buildAnalytics(panes.analyse, { load: (d) => run('admin_analytics', { p_days: d }), tierName: api.tierName, toast: api.toast }); anUi.show(); } else if (t === 'players') { if (!panes.players.querySelector('#ad-list').children.length) search(); } else if (t === 'send') panes.send.load && panes.send.load(); else if (t === 'event') panes.event.show && panes.event.show(); else if (t === 'ideas') { if (!ideasUi) ideasUi = mountIdeas(panes.ideas, { call: (fn, args) => api.call(fn, args), name: () => 'admin', askName() {}, isAdmin: () => true, toast: api.toast, vib: api.vib || (() => {}) }); ideasUi.refresh(); } }
-  for (const k of ['dash', 'analyse', 'players', 'send', 'event', 'ideas', 'tools']) { const el = make('div'); el.style.cssText = 'display:flex;flex-direction:column;gap:10px'; el.hidden = true; panes[k] = el; body.append(el); }
-  buildPlayers(); buildSend(); buildEvent(); buildTools();
+  for (const k of ['dash', 'analyse', 'players', 'send', 'event', 'ideas', 'bots', 'tools']) { const el = make('div'); el.style.cssText = 'display:flex;flex-direction:column;gap:10px'; el.hidden = true; panes[k] = el; body.append(el); }
+  buildPlayers(); buildSend(); buildEvent(); buildBots(); buildTools();
   m.querySelector('.ad-tabs').addEventListener('click', (e) => { const t = e.target.dataset.t; if (t) setTab(t); });
   m.querySelector('#ad-x2').addEventListener('click', () => m.classList.remove('on'));
   return { open() { m.classList.add('on'); setTab(tab); } };

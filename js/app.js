@@ -61,7 +61,7 @@ for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec 
 QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
 GOALS.init({ pack: MINE.packAdd, grant: MINE.grant, xp: MINE.giveXp, level: () => MINE.levelInfo().level, toast, vib, sfx: A.ui, changed: refresh });
 let packs = null;
-const adm = ADMIN.mount({ call: RANK.admin, toast, vib, tierName: MINE.tierName, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
+const adm = ADMIN.mount({ bot: { watch: MINE.botWatch }, call: RANK.admin, toast, vib, tierName: MINE.tierName, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
 tap('#o-admin', () => { $('#m-settings').classList.remove('on'); adm.open(); });
 const evColors = Array.from({ length: 13 }, (_, i) => (MINE.BODIES[i] || [0, [200, 200, 255]])[1]);
 const ev = EVENT.mount({ call: RANK.call, name: RANK.name, askName: RANK.askName, claim: RANK.eventClaim, colors: evColors, sprite: (t) => { const c = document.createElement('canvas'); MINE.paintAstre(c, t >= 12 ? '12:2' : String(t), 96, false, true); return c; }, accent: (i) => ACCENTS[Math.max(0, Math.min(11, i | 0))].c.join(','), toast, vib, sfx: A.ui });

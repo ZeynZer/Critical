@@ -221,3 +221,11 @@ const playF = (seed, drops) => { const g = F.newGame(seed), r = mulberry32(seed 
   const old = playF(7, 120), again = F.replay(old.seed, old.log, old.n); assert.equal(again.score, old.score, 'ancienne partie inchangée');
   console.log(`deck et étoiles OK (${n} apparences à capacité, ${kinds.size} capacités, pulsar 1★ ${p1.toFixed(1)} → 3★ ${p3.toFixed(1)}) · shaker OK (${c.shaker.n} secousses rejouées)`);
 }
+{ // Robots : la réflexion se fait sur des copies (la vraie partie n'est jamais modifiée), décision dans la cuve
+  const BOT = await import('../js/bot.js'); const g = F.newGame(21); let s = 3; const r = () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+  for (let i = 0; i < 25; i++) { F.drop(g, 0.6 + r() * 8.8); for (let k = 0; k < 120; k++) F.step(g); }
+  const snap = JSON.stringify(g); for (const lv of ['naif', 'viseur', 'expert', 'maitre']) { const d = BOT.choose(g, lv, r); assert.ok(d.x > 0 && d.x < F.W && typeof d.hold === 'boolean', lv + ' : décision valide'); }
+  assert.equal(JSON.stringify(g), snap, 'la partie n\'est pas modifiée par la réflexion');
+  const short = BOT.playGame(9, 'expert', { maxDrops: 40 }); assert.ok(short.drops >= 40 || short.over, 'partie de robot');
+  console.log('robots OK (expert : ' + short.score + ' pts en 40 lâchers)');
+}
