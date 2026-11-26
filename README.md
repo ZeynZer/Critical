@@ -83,6 +83,11 @@ On lâche des astres dans une cuve ; deux identiques fusionnent en un plus gros 
 
 Les tables sont fermées (RLS sans policy) : la clé publique ne peut appeler que 7 fonctions (`register`, `submit_score`, `leaderboard`, `my_rank`, `set_profile`, `get_profile`, `report_playtime`) qui valident leurs entrées. La vitrine d'un profil est déclarative : le serveur vérifie le format, pas que l'astre a vraiment été obtenu. Le temps de jeu est déclaré par l'appareil mais borné par le temps réellement écoulé depuis le dernier envoi. Chaque score est stocké avec sa graine et son journal de lâchers, que `replay()` peut rejouer à l'identique pour une vérification côté serveur.
 
+## Application Android (Google Play)
+- Paquet `zeynzer.critical`, construit avec PWABuilder (Trusted Web Activity) à partir de zeynzer.com. `.well-known/assetlinks.json` (+ `.nojekyll`) prouve que le site appartient à l'appli : sans lui, une barre d'adresse s'affiche. L'empreinte est celle de la clé de signature Google Play (Console › Intégrité de l'appli).
+- Plein écran : le manifeste demande `display: fullscreen` (pris en compte à la prochaine génération de l'appli) ; en attendant, dans l'appli Android, le jeu passe en plein écran (sans barre d'état) au premier appui et y revient après un retour d'arrière-plan.
+- Fluidité : pendant l'écran « Zeyn's Games », le moteur est préchauffé et les polices chargées ; à l'ouverture d'une partie, tous les astres sont préparés d'avance ; l'accueil (Défis, Collection) n'est plus reconstruit pendant une partie, seulement à la sortie (c'était la cause des gros à-coups en jeu).
+
 ## Logo et icônes
 `icons/logo.png` est le logo (1024 px) ; toutes les tailles (`icons/icon-*.png`, versions maskable, `favicon.ico`, `assets/social.png`) en sont dérivées, et `assets/hole.webp` (le trou noir de l'accueil) en est l'anneau détouré.
 

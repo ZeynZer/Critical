@@ -399,14 +399,19 @@ export function profile(name, key) { // pastille « profil » du haut de l'écra
   const b = $('.hm-pf'); if (!b) return; const a = $('.hm-pfa', b), t = $('b', b); t.textContent = name || 'Profil'; b.title = name || ''; a.textContent = '';
   if (key && opts.paint) { const c = document.createElement('canvas'); a.append(c); opts.paint(c, key, 30, false); } else a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4.2 4.2-6 8-6s6.8 1.8 8 6"/></svg>';
 }
-export function update({ dust = 0, daily = null, codex = 0, themes = null, level = null, goals = null } = {}) {
+let pendUp = null; // pendant une partie, l'accueil est caché : on ne le reconstruit pas (c'était la cause des gros à-coups en jeu), on le fera à la sortie
+export function update(o = {}) {
+  if (document.documentElement.classList.contains('mn-open')) { pendUp = o; return; } pendUp = null; doUpdate(o);
+}
+new MutationObserver(() => { if (pendUp && !document.documentElement.classList.contains('mn-open')) update(pendUp); }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+function doUpdate({ dust = 0, daily = null, codex = 0, themes = null, level = null, goals = null } = {}) {
   if (col) col.refresh(); if (chp) { chp.refresh(); const t = qa('.hm-tab').pop(); if (t) t.classList.toggle('dot', chp.count() > 0); }
   const lv = $('.hm-lv'); if (lv && level) { lv.style.setProperty('--p', Math.round(level.pct * 100)); lv.style.setProperty('--c', `rgb(${level.col.join(',')})`); $('b', lv).textContent = level.level; }
   const sub = (id, t) => { const e = $(id + ' small'); if (e && t) e.textContent = t; };
   sub('#b-codex', codex ? `${codex} découverte${codex > 1 ? 's' : ''}` : 'Fusionne pour découvrir'); if (themes) sub('#b-themes', `${themes[0]} sur ${themes[1]} possédés`); sub('#b-rank', 'Mondial et défi du jour'); sub('#b-profile', 'Ton astre, ta vitrine, ta devise');
   const p = $('#t-stars');
   if (p) {
-    if (!p.firstChild) p.innerHTML = GEM + '<b class="hm-eclats">0</b><span>Voidium</span>'; p.addEventListener('click', () => { opts.sfx && opts.sfx(); opts.economy && opts.economy(); });
+    if (!p.firstChild) { p.innerHTML = GEM + '<b class="hm-eclats">0</b><span>Voidium</span>'; p.addEventListener('click', () => { opts.sfx && opts.sfx(); opts.economy && opts.economy(); }); } // un seul écouteur (avant : un de plus à chaque mise à jour)
     const n = Math.round(dust), el = $('.hm-eclats', p); cancelAnimationFrame(dustRaf);
     if (shownDust === null || document.hidden) { shownDust = n; el.textContent = n.toLocaleString('fr-FR'); }
     else if (shownDust !== n) { const from = shownDust, t0 = performance.now(); p.classList.remove('pop'); void p.offsetWidth; if (n > from) p.classList.add('pop');

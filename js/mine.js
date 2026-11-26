@@ -20,7 +20,8 @@ const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const rnd = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
-const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
+const NF = new Intl.NumberFormat('fr-FR'), NF1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }); // formateurs créés une fois (toLocaleString à chaque image coûte cher sur Android)
+const fmt = (n) => NF.format(Math.round(n));
 const H = { tele: () => {}, vib: () => {}, toast: () => {}, today: () => '', time: () => {}, track: () => {}, quests: () => '', refresh: () => {}, submit: () => Promise.resolve(null), rank: () => {}, askName: () => {}, named: () => true, online: () => false, name: () => '', goal: () => {}, back: () => {}, challenge: () => Promise.resolve(), challengeCancel: () => {}, rival: () => Promise.resolve(null), runOf: () => Promise.resolve(null) };
 const RUN = 'critical.genese.run'; // partie en cours, pour la reprendre après fermeture de l'application
 const SECRETS = { binaire: ['Étoile binaire', 'Fusionne deux soleils pendant une chaîne ×3'], festin: ['Festin cosmique', 'Tes trous noirs, quasars et galaxies avalent 5 astres en une partie'], bigbang: ['Big Bang', 'Fusionne deux galaxies : tout disparaît'] };
@@ -382,7 +383,7 @@ function drawItem(it, x, y, sc = 1, ang = 0, u = B.u) {
 }
 
 /* ============================== rendu ============================== */
-const sec = (x) => x.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+const sec = (x) => NF1.format(x);
 // Description d'un pouvoir, construite depuis les tables du moteur (une seule source de vérité)
 export function powerText(tier, v = 0) {
   const t = F.ABSORB[tier], pw = t && t[tier === F.MAX_TIER ? Math.min(v, 5) : v === 1 ? 1 : 0];
@@ -1256,13 +1257,22 @@ export const ghostOn = () => !!sv.ghost;
 export const setGhost = (v) => { sv.ghost = !!v; save(); };
 function refreshTitle() { const s = $('#b-mine-s'); if (s) s.textContent = sv.best ? `Record ${fmt(sv.best)} · secteur ${sv.depth}` : 'Touche pour commencer'; H.refresh(); }
 export const busy = () => isOpen;
+// Préchauffage, pendant l'écran « Zeyn's Games » : polices du jeu chargées, moteur physique déjà « rodé » (le navigateur optimise
+// le code qui a déjà tourné), par petits morceaux pour ne pas gêner l'animation. Avant, ce rodage se faisait pendant la première partie.
+export function warmUp() {
+  try { if (document.fonts) { document.fonts.load('900 20px Orbitron'); document.fonts.load('700 12px Orbitron'); } } catch (e) { /* ignore */ }
+  const g = F.newGame(20261126); let n = 0;
+  const chunk = () => { const t0 = performance.now(); while (performance.now() - t0 < 8 && n < 70 && !g.over) { F.drop(g, 1.2 + ((n * 3.7) % 7.6)); for (let i = 0; i < 24; i++) F.tick(g, 0.05); n++; } if (n < 70 && !g.over) setTimeout(chunk, 20); };
+  setTimeout(chunk, 60);
+}
 export { rankLine };
 export const stats = () => ({ ...sv });
 export { showCodex as openCodex };
 export function open(fresh) { // fresh : on va lancer autre chose qu'une partie normale (défi du jour)
   isOpen = true; sprites.clear(); $('#mn').classList.add('on'); document.documentElement.classList.add('mn-open'); lowFx = (navigator.hardwareConcurrency || 4) <= 4;
   G = null; let old = null; try { old = JSON.parse(localStorage.getItem(RUN) || 'null'); } catch (e) { /* ignore */ }
-  resize(); tut = -1; $('#mn').classList.remove('tut');
+  resize(); for (let t = 0; t <= F.MAX_TIER; t++) { try { sprite(t, sv.skin[t] || 0); } catch (e) { /* ignore */ } } // tous les astres préparés d'avance : plus d'à-coup quand un nouveau rang apparaît
+  tut = -1; $('#mn').classList.remove('tut');
   if (fresh === true) { /* l'appelant crée sa partie */ }
   else if (!sv.tut) { newRun(7); tut = 0; $('#mn').classList.add('tut'); } // première fois : partie guidée
   else if (old && Array.isArray(old.bodies) && Array.isArray(old.log) && !old.over) { newRun(1, true); G = old; G.ev = []; shown = G.score; texB = makeTex(G.depth); H.toast('Partie reprise'); }
