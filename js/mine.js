@@ -462,6 +462,28 @@ function lqBoxes(bs) {
   catch (e) { lqFail = true; return false; }
   return true;
 }
+// Astres en verre liquide (privé, réservé à l'administrateur) : toute la cuve est rendue en sphères de verre par liquid.js (orbs)
+let orbG = null, orbFail = false; const orbC = document.createElement('canvas');
+const orbCol = (it) => (it.k === 'j' ? [190, 130, 255] : it.k === 'b' ? [255, 150, 70] : BODIES[it.tier][1]);
+const itR = (it) => (it.k === 'c' ? (it.r || F.TIERS[it.tier].r) : F.R_SPECIAL);
+function popSc(b) { const t0 = pops.get(b.id); if (t0 == null) return 1; const p = (T - t0) / 0.4; if (p >= 1) { pops.delete(b.id); return 1; } return 1 + Math.sin(p * Math.PI * 2.2) * (1 - p) * 0.26 + (p < 0.15 ? (p / 0.15 - 1) * 0.4 : 0); }
+function lqOrbs(extra) {
+  if (!LQ.orbsOn() || orbFail) return false;
+  if (!orbG) { orbG = LQ.orbs(orbC); if (!orbG) { orbFail = true; return false; } }
+  const pad = 34, x0 = B.x - pad, y0 = B.y - pad, w = B.w + pad * 2, h = B.h + pad * 2, k = cv.width / W, list = [];
+  for (const b of G.bodies) list.push({ x: sx(b.x) - x0, y: sy(b.y) - y0, r: itR(b) * B.u * popSc(b), tier: b.k === 'c' ? b.tier : 0, col: orbCol(b) });
+  if (extra) list.push({ ...extra, x: extra.x - x0, y: extra.y - y0 });
+  try { orbG.render(cv, x0 * k, y0 * k, w * k, h * k, list, w, h, Math.min(k, 1.1), T); ctx.drawImage(orbC, x0, y0, w, h); } catch (e) { orbFail = true; return false; }
+  return true;
+}
+function glassBead(it, x, y, rad, a = 1) { // bille de verre simplifiée (cases Réserve / Suivant, Big Bang) quand les astres sont en verre liquide
+  const c = orbCol(it), dk = c.map((v) => v * 0.3); ctx.globalAlpha = a;
+  const g = ctx.createRadialGradient(x - rad * 0.35, y - rad * 0.4, rad * 0.05, x, y, rad); g.addColorStop(0, 'rgba(255,255,255,.9)'); g.addColorStop(0.22, rgba(c, 0.6)); g.addColorStop(0.75, rgba(dk, 0.55)); g.addColorStop(1, rgba(c, 0.95));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fill();
+  const k2 = ctx.createRadialGradient(x, y, 0, x, y, rad * 0.45); k2.addColorStop(0, rgba(c.map((v) => Math.min(255, v + 90)), 0.95)); k2.addColorStop(1, rgba(c, 0)); ctx.fillStyle = k2; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.globalAlpha = 1;
+}
+const beadOr = (it, x, y, sc, u) => { if (LQ.orbsOn() && !orbFail) glassBead(it, x, y, itR(it) * u * sc); else drawItem(it, x, y, sc, 0, u); };
 function glassBox(x, y, w, h, r, hi = 0.2) { // panneau de verre : voile, reflet haut, liseré
   rr(x, y, w, h, r); const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,255,255,.13)'); g.addColorStop(0.5, 'rgba(255,255,255,.035)'); g.addColorStop(1, 'rgba(255,255,255,.08)'); ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = `rgba(255,255,255,${hi})`; ctx.lineWidth = 1.2; ctx.stroke();
@@ -504,17 +526,17 @@ function draw() {
       if (n > 3) { ctx.globalAlpha = 0.3; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(sx(tr[n - 2]), sy(tr[n - 1]), (it.k === 'c' ? F.TIERS[it.tier].r : F.R_SPECIAL) * B.u, 0, TAU); ctx.stroke(); }
       ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = ready ? 1 : 0.6; drawItem(it, ax, ay + (ready ? Math.sin(T * 2.6) * 2 : 0), ready ? 1 : 0.9); ctx.globalAlpha = 1;
+    var curOrb = LQ.orbsOn() && !orbFail ? { x: ax, y: ay + (ready ? Math.sin(T * 2.6) * 2 : 0), r: itR(it) * B.u * (ready ? 1 : 0.9), tier: it.k === 'c' ? it.tier : 0, col: orbCol(it) } : null;
+    if (!curOrb) { ctx.globalAlpha = ready ? 1 : 0.6; drawItem(it, ax, ay + (ready ? Math.sin(T * 2.6) * 2 : 0), ready ? 1 : 0.9); ctx.globalAlpha = 1; }
     if (it.k === 'j' || it.k === 'b') { // astre spécial en main : halo + étiquette bien visibles ; la jauge se remplit pendant que les touches sont ignorées
       const jc = it.k === 'j' ? [190, 130, 255] : [255, 150, 70], lk = clamp((giftLock - T) / giftDur, 0, 1), r0 = B.u * 1.55; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gg = ctx.createRadialGradient(ax, ay, r0 * 0.3, ax, ay, r0 * 2.1); gg.addColorStop(0, rgba(jc, 0.45 + 0.15 * Math.sin(T * 6))); gg.addColorStop(1, rgba(jc, 0)); ctx.fillStyle = gg; ctx.fillRect(ax - r0 * 2.1, ay - r0 * 2.1, r0 * 4.2, r0 * 4.2); ctx.restore();
       ctx.lineWidth = 3; ctx.strokeStyle = rgba(jc, 0.9); ctx.beginPath(); ctx.arc(ax, ay, r0, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - lk)); ctx.stroke(); if (lk > 0) { ctx.globalAlpha = 0.5; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ax, ay, r0, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1; }
       txt(it.k === 'j' ? 'MATIÈRE EXOTIQUE' : 'COMÈTE', ax, ay - r0 - 14, 10, rgba(jc, 1), 'center', 'Orbitron', 800); txt(it.k === 'j' ? 'copie l\'astre qu\'elle touche' : 'explose au contact', ax, ay - r0 - 2, 9, 'rgba(255,255,255,.75)', 'center', 'system-ui', 600); }
   }
   // astres
+  const orbsDone = lqOrbs(typeof curOrb !== 'undefined' ? curOrb : null); // verre liquide : toute la cuve d'un coup
   for (const b of G.bodies) {
-    const t0 = pops.get(b.id); let sc = 1;
-    if (t0 != null) { const p = (T - t0) / 0.4; if (p >= 1) pops.delete(b.id); else sc = 1 + Math.sin(p * Math.PI * 2.2) * (1 - p) * 0.26 + (p < 0.15 ? (p / 0.15 - 1) * 0.4 : 0); }
-    drawItem(b, sx(b.x), sy(b.y), sc, b.ang);
+    if (!orbsDone) drawItem(b, sx(b.x), sy(b.y), popSc(b), b.ang);
     if (G.shared && b.o != null) { ctx.strokeStyle = rgba(b.o ? MG : CY, 0.75); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx(b.x), sy(b.y), b.r * B.u * 1.04, 0, TAU); ctx.stroke(); } // couleur du joueur : cyan (créateur du salon) ou magenta
   }
   // aura des absorbeurs : jusqu'où ils avalent. Nette = prêt à avaler, discrète = en train de digérer. Les astres qui s'en approchent sont prévenus.
@@ -524,7 +546,8 @@ function draw() {
   }
   for (const g of ghosts) { // Big Bang : les astres disparus tournent et fondent vers le point d'impact
     const p = clamp((T - g.t0) / 0.65, 0, 1), e = p * p * (3 - 2 * p), an = e * 2.2, dx = g.x0 - g.cx, dy = g.y0 - g.cy, c = Math.cos(an), sn = Math.sin(an), k = 1 - e;
-    drawItem({ k: 'c', tier: g.tier, v: g.v, r: g.r }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, Math.max(0.05, 1 - e * 0.9), e * 3);
+    if (orbsDone) glassBead({ k: 'c', tier: g.tier }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, (g.r || F.TIERS[g.tier].r) * B.u * Math.max(0.05, 1 - e * 0.9));
+    else drawItem({ k: 'c', tier: g.tier, v: g.v, r: g.r }, g.cx + (dx * c - dy * sn) * k, g.cy + (dx * sn + dy * c) * k, Math.max(0.05, 1 - e * 0.9), e * 3);
   }
   const og = gh && !G.nop ? gh.G : G.duel && duel && duel.op ? duel.op.G : null;
   if (og) { ctx.lineWidth = 1.4; ctx.strokeStyle = G.duel ? 'rgba(255,170,90,.42)' : 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of og.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
@@ -577,11 +600,11 @@ function draw() {
   const nx = B.x + B.w, lq = lqBoxes([{ x: hr.x, y: by, w: hr.w, h: hr.h, r: 20 }, { x: nx - 124, y: by, w: 124, h: hr.h, r: 20 }]);
   if (!lq) glassBox(hr.x, by, hr.w, hr.h, 20, G.swapped ? 0.14 : 0.45);
   if (tut === 3) { ctx.strokeStyle = rgba(CY, 0.55 + 0.45 * Math.sin(T * 6)); ctx.lineWidth = 3; rr(hr.x - 4, by - 4, hr.w + 8, hr.h + 8, 24); ctx.stroke(); } // étape « réserve » : la boîte à toucher clignote
-  if (G.hold) { ctx.globalAlpha = G.swapped ? 0.4 : 1; drawItem(G.hold, hr.x + hr.w / 2, by + hr.h / 2, 1, 0, miniU(G.hold)); ctx.globalAlpha = 1; } else txt('⇄', hr.x + hr.w / 2, by + hr.h / 2 + 8, 22, 'rgba(255,255,255,.3)', 'center', 'system-ui', 400);
+  if (G.hold) { ctx.globalAlpha = G.swapped ? 0.4 : 1; beadOr(G.hold, hr.x + hr.w / 2, by + hr.h / 2, 1, miniU(G.hold)); ctx.globalAlpha = 1; } else txt('⇄', hr.x + hr.w / 2, by + hr.h / 2 + 8, 22, 'rgba(255,255,255,.3)', 'center', 'system-ui', 400);
   txt('SUIVANT', nx - 62, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
   if (!lq) glassBox(nx - 124, by, 124, hr.h, 20);
   const gp = clamp(1 - (T - giftT) * 2, 0, 1);
-  drawItem(G.queue[0], nx - 84, by + hr.h / 2, 1 + gp * 0.5, 0, miniU(G.queue[0])); ctx.globalAlpha = 0.55; drawItem(G.queue[1], nx - 32, by + hr.h / 2, 0.7, 0, miniU(G.queue[1])); ctx.globalAlpha = 1;
+  beadOr(G.queue[0], nx - 84, by + hr.h / 2, 1 + gp * 0.5, miniU(G.queue[0])); ctx.globalAlpha = 0.55; beadOr(G.queue[1], nx - 32, by + hr.h / 2, 0.7, miniU(G.queue[1])); ctx.globalAlpha = 1;
   }
   // annonce (chaîne, saut, nouvel astre)
   if (reveal) drawReveal();
