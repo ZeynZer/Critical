@@ -3,6 +3,7 @@
 // morceau d'une toile du jeu (fond étoilé de l'accueil, cuve en partie) et il n'y a pas de boucle propre : c'est le jeu qui demande un rendu.
 // Réservé à l'administrateur pour l'instant (Réglages › Verre liquide) ; repli automatique sur le verre dépoli habituel sans WebGL2.
 const MAX = 8;
+const fsFor = (max) => FS.replace('#define MAX 8', '#define MAX ' + max);
 const VS = `#version 300 es
 in vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
 const FS = `#version 300 es
@@ -51,19 +52,19 @@ export function setOn(v) { enabled = !!v; }
 // Crée un rendu de verre sur `canvas`. Renvoie null sans WebGL2.
 // render(src, sx, sy, sw, sh, shapes, cssW, cssH, dpr) : src = toile de fond, (sx, sy, sw, sh) = la zone de src derrière le calque (pixels de src),
 // shapes = [{ x, y, w, h, r }] en px CSS dans le calque (centre, demi-largeur, demi-hauteur, rayon d'angle).
-export function glass(canvas, params = {}) {
+export function glass(canvas, params = {}, max = MAX) {
   const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: true });
   if (!gl) return null;
   const P = Object.assign({ ior: 1.5, bezel: 30, depth: 40, disp: 0.04, blur: 1.5, tint: 0.06, fuse: 60, light: -45, spec: 1, shadow: 0.25 }, params);
   const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
-  let prog; try { prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog); } catch (e) { return null; }
+  let prog; try { prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fsFor(max))); gl.linkProgram(prog); gl.useProgram(prog); } catch (e) { return null; }
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   const al = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
   const U = {}; for (const n of ['uBg', 'uRes', 'uS', 'uR', 'uN', 'uK', 'uIor', 'uBezel', 'uDepth', 'uDisp', 'uBlur', 'uTint', 'uLight', 'uSpec', 'uDpr', 'uShadow', 'uEdge']) U[n] = gl.getUniformLocation(prog, n);
   const tx = gl.createTexture(), bc = document.createElement('canvas'), bx = bc.getContext('2d');
   gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
   for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
-  const a = new Float32Array(MAX * 4), r = new Float32Array(MAX);
+  const a = new Float32Array(max * 4), r = new Float32Array(max);
   function render(src, sx, sy, sw, shh, shapes, W, H, dpr) {
     const cw = Math.max(1, Math.round(W * dpr)), ch = Math.max(1, Math.round(H * dpr));
     if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
@@ -72,7 +73,7 @@ export function glass(canvas, params = {}) {
     gl.bindTexture(gl.TEXTURE_2D, tx); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bc); gl.generateMipmap(gl.TEXTURE_2D);
     gl.viewport(0, 0, cw, ch); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-    const s = shapes.slice(0, MAX); a.fill(0); r.fill(0);
+    const s = shapes.slice(0, max); a.fill(0); r.fill(0);
     s.forEach((q, i) => { a.set([q.x * dpr, q.y * dpr, q.w * dpr, q.h * dpr], i * 4); r[i] = (q.r == null ? 20 : q.r) * dpr; });
     gl.uniform1i(U.uBg, 0); gl.uniform2f(U.uRes, cw, ch); gl.uniform4fv(U.uS, a); gl.uniform1fv(U.uR, r); gl.uniform1i(U.uN, s.length);
     gl.uniform1f(U.uK, Math.max(P.fuse, 0.01) * dpr); gl.uniform1f(U.uIor, P.ior); gl.uniform1f(U.uBezel, P.bezel); gl.uniform1f(U.uDepth, P.depth);
@@ -100,7 +101,7 @@ export function tabBar(on) {
   } };
   tab.update(); return tab;
 }
-export const tabUpdate = () => { if (tab) tab.update(); };
+export const tabUpdate = () => { if (tab) tab.update(); if (full) full.dirty = true; }; // appelé par le fond étoilé après chaque image
 
 // ============ Astres en verre liquide (privé, réservé à l'administrateur) ============
 // Chaque astre devient une sphère de verre qui réfracte la cuve (dispersion RVB), teintée de la couleur de son rang, avec un cœur lumineux
@@ -184,3 +185,43 @@ export function setOrbs(v) { orbsEnabled = !!v; }
 let paneEnabled = false;
 export const paneOn = () => paneEnabled && supported();
 export function setPane(v) { paneEnabled = !!v; }
+
+// ============ Mode « Full Glass » (console admin) ============
+// Tout le verre dépoli de l'accueil (barre du haut, pastilles, boutons, barre d'onglets, cartes) devient du verre liquide : un seul calque WebGL
+// posé juste au-dessus du fond étoilé et sous l'interface ; il dessine un vrai verre sous chaque élément, qui le suit (défilement, pages).
+// Seul l'élément le plus extérieur est transformé (les boutons dans une carte gardent leur style). Les fenêtres (modales) restent en verre dépoli.
+let full = null;
+export const fullOn = () => !!full;
+const FULL_CSS = '.lq-off{background:transparent!important;background-color:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;border-color:rgba(255,255,255,.14)!important}.lq-off::before,.lq-off::after{opacity:0!important}.lq-full-cv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}';
+function glassy(e) { if (e.classList.contains('gl') || e.classList.contains('glass')) return true; const cs = getComputedStyle(e); const bf = cs.backdropFilter || cs.webkitBackdropFilter; return !!bf && bf !== 'none'; }
+export function setFull(on) {
+  const scr = document.getElementById('s-title'), bg = scr && scr.querySelector('.hm-bg'), space = scr && scr.querySelector('.hm-space');
+  if (!on || !supported() || !scr || !bg || !space) { if (full) { cancelAnimationFrame(full.raf); clearInterval(full.iv); full.cv.remove(); full.els.forEach((e) => e.classList.remove('lq-off')); full = null; } return false; }
+  if (full) return true;
+  if (!document.getElementById('lq-full-css')) { const st = document.createElement('style'); st.id = 'lq-full-css'; st.textContent = FULL_CSS; document.head.append(st); }
+  const cv = document.createElement('canvas'); cv.className = 'lq-full-cv'; const g = glass(cv, { ior: 1.5, bezel: 20, depth: 26, disp: 0.04, blur: 1.2, tint: 0.09, fuse: 1, spec: 1, shadow: 0.22 }, 24);
+  if (!g) return false;
+  space.after(cv);
+  const R = new WeakMap(); // rayon d'angle de chaque élément
+  full = { cv, g, els: [], raf: 0, iv: 0, dirty: true, sig: '' };
+  const collect = () => { // éléments en verre de l'accueil, hors fenêtres et messages ; seulement les plus extérieurs
+    const all = [...scr.querySelectorAll('*')].filter((e) => !e.closest('.modal,#toast,.lq-full-cv') && glassy(e));
+    const outer = all.filter((e) => !all.some((o) => o !== e && o.contains(e)));
+    for (const e of full.els) if (!outer.includes(e)) e.classList.remove('lq-off');
+    for (const e of outer) { e.classList.add('lq-off'); if (!R.has(e)) R.set(e, parseFloat(getComputedStyle(e).borderTopLeftRadius) || 16); }
+    full.els = outer;
+  };
+  collect(); full.iv = setInterval(collect, 1500);
+  const loop = () => {
+    full.raf = requestAnimationFrame(loop);
+    if (!scr.classList.contains('on') || document.hidden || document.documentElement.classList.contains('mn-open')) return;
+    const base = bg.getBoundingClientRect(), W = base.width, H = base.height, sh = [];
+    for (const e of full.els) { const r = e.getBoundingClientRect(); if (r.width < 4 || r.height < 4 || r.right < base.left || r.left > base.right || r.bottom < base.top || r.top > base.bottom) continue;
+      sh.push({ x: r.left - base.left + r.width / 2, y: r.top - base.top + r.height / 2, w: r.width / 2, h: r.height / 2, r: Math.min(R.get(e) || 16, r.width / 2, r.height / 2), a: r.width * r.height }); }
+    sh.sort((p, q) => q.a - p.a);
+    const sig = sh.map((q) => Math.round(q.x) + ',' + Math.round(q.y)).join(';'); // rien n'a bougé et le fond est le même : on garde l'image
+    if (!full.dirty && sig === full.sig) return; full.dirty = false; full.sig = sig;
+    g.render(space, 0, 0, space.width, space.height, sh.slice(0, 24), W, H, Math.min(devicePixelRatio || 1, 1.25));
+  };
+  loop(); return true;
+}

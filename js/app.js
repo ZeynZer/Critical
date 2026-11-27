@@ -21,7 +21,7 @@ import * as LQ from './liquid.js';
 
 const $ = (s) => document.querySelector(s);
 const KEY = 'critical.v1';
-const S = { sfx: true, mus: true, vib: true, quick: false, lq: false, lqa: false, lqp: false };
+const S = { sfx: true, mus: true, vib: true, quick: false, lq: false, lqa: false, lqp: false, lqf: false };
 try { Object.assign(S, (JSON.parse(localStorage.getItem(KEY) || '{}').set) || {}); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ set: S })); } catch (e) { /* ignore */ } };
 const vib = (p) => { if (S.vib && navigator.vibrate) try { navigator.vibrate(p); } catch (e) { /* ignore */ } };
@@ -46,7 +46,10 @@ $('#o-sfx').onchange = (e) => { S.sfx = e.target.checked; A.setSfx(S.sfx); save(
 $('#o-mus').onchange = (e) => { S.mus = e.target.checked; A.setMusic(S.mus); save(); };
 $('#o-duel').onchange = (e) => RANK.setNoDuel(!e.target.checked);
 $('#o-quick').onchange = (e) => { S.quick = e.target.checked; save(); };
-const lqApply = () => { const v = !!S.lq && RANK.isAdmin() && LQ.supported(); LQ.setOn(v); LQ.tabBar(v); LQ.setOrbs(!!S.lqa && RANK.isAdmin() && LQ.supported()); LQ.setPane(!!S.lqp && RANK.isAdmin() && LQ.supported()); }; // verre liquide : réservé à l'administrateur pour l'instant
+const lqApply = () => { // verre liquide : réservé à l'administrateur ; Full Glass (console admin) active tout d'un coup
+  const ad = RANK.isAdmin() && LQ.supported(), fu = ad && !!S.lqf, v = ad && (!!S.lq || fu);
+  LQ.setOn(v); LQ.tabBar(v && !fu); LQ.setFull(fu); LQ.setOrbs(ad && !!S.lqa); LQ.setPane(ad && (!!S.lqp || fu));
+}; // verre liquide : réservé à l'administrateur pour l'instant
 $('#o-lqp').onchange = (e) => { S.lqp = e.target.checked; save(); lqApply(); toast(S.lqp ? 'Cuve en verre liquide activée' : 'Cuve en verre liquide désactivée'); };
 $('#o-lqa').onchange = (e) => { S.lqa = e.target.checked; save(); lqApply(); toast(S.lqa ? 'Astres en verre liquide activés' : 'Astres en verre liquide désactivés'); };
 $('#o-lq').onchange = (e) => { S.lq = e.target.checked; save(); lqApply(); toast(S.lq ? 'Verre liquide activé' : 'Verre liquide désactivé'); };
@@ -66,7 +69,7 @@ for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec 
 QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
 GOALS.init({ pack: MINE.packAdd, grant: MINE.grant, xp: MINE.giveXp, level: () => MINE.levelInfo().level, toast, vib, sfx: A.ui, changed: refresh });
 let packs = null;
-const adm = ADMIN.mount({ bot: { watch: MINE.botWatch }, call: RANK.admin, toast, vib, tierName: MINE.tierName, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
+const adm = ADMIN.mount({ glass: { supported: LQ.supported, full: () => !!S.lqf, setFull: (v) => { S.lqf = !!v; save(); lqApply(); } }, bot: { watch: MINE.botWatch }, call: RANK.admin, toast, vib, tierName: MINE.tierName, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
 tap('#o-admin', () => { $('#m-settings').classList.remove('on'); adm.open(); });
 const evColors = Array.from({ length: 13 }, (_, i) => (MINE.BODIES[i] || [0, [200, 200, 255]])[1]);
 const ev = EVENT.mount({ call: RANK.call, name: RANK.name, askName: RANK.askName, claim: RANK.eventClaim, colors: evColors, sprite: (t) => { const c = document.createElement('canvas'); MINE.paintAstre(c, t >= 12 ? '12:2' : String(t), 96, false, true); return c; }, accent: (i) => ACCENTS[Math.max(0, Math.min(11, i | 0))].c.join(','), toast, vib, sfx: A.ui });
