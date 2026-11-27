@@ -7,6 +7,7 @@ import { CAT, RAR, POOL, equipable } from './catalog.js';
 import { PACKS, draw as drawPack } from './packs.js';
 import * as SK from './skills.js';
 import * as BOT from './bot.js';
+import * as LQ from './liquid.js';
 import * as IM from './immersive.js';
 import { channel } from './realtime.js';
 
@@ -449,6 +450,17 @@ function resize() {
 }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function txt(s, x, y, size, col, align = 'center', font = 'Orbitron', weight = 900) { ctx.font = `${weight} ${size}px ${font},system-ui,sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col; ctx.fillText(s, x, y); }
+// Verre liquide (réservé admin) : les cases RÉSERVE et SUIVANT réfractent la cuve qu'elles recouvrent ; les astres sont dessinés par-dessus, nets.
+let lqG = null, lqFail = false, lqN = 0, lqKey = ''; const lqC = document.createElement('canvas');
+function lqBoxes(bs) {
+  if (!LQ.on() || lqFail) return false;
+  if (!lqG) { lqG = LQ.glass(lqC, { ior: 1.5, bezel: 13, depth: 20, disp: 0.05, blur: 1.6, tint: 0.07, fuse: 24, spec: 1, shadow: 0.3 }); if (!lqG) { lqFail = true; return false; } }
+  const pad = 12, x0 = Math.min(...bs.map((b) => b.x)) - pad, y0 = Math.min(...bs.map((b) => b.y)) - pad, x1 = Math.max(...bs.map((b) => b.x + b.w)) + pad, y1 = Math.max(...bs.map((b) => b.y + b.h)) + pad, w = x1 - x0, h = y1 - y0, k = cv.width / W;
+  const key = [x0, y0, w, h].map(Math.round).join(',');
+  try { if (key !== lqKey || ++lqN % 2 === 0) { lqKey = key; lqG.render(cv, x0 * k, y0 * k, w * k, h * k, bs.map((b) => ({ x: b.x + b.w / 2 - x0, y: b.y + b.h / 2 - y0, w: b.w / 2, h: b.h / 2, r: b.r })), w, h, Math.min(k, 1.5)); } ctx.drawImage(lqC, x0, y0, w, h); } // verre recalculé une image sur deux (décor presque immobile), résolution ×1,5 au plus
+  catch (e) { lqFail = true; return false; }
+  return true;
+}
 function glassBox(x, y, w, h, r, hi = 0.2) { // panneau de verre : voile, reflet haut, liseré
   rr(x, y, w, h, r); const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,255,255,.13)'); g.addColorStop(0.5, 'rgba(255,255,255,.035)'); g.addColorStop(1, 'rgba(255,255,255,.08)'); ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = `rgba(255,255,255,${hi})`; ctx.lineWidth = 1.2; ctx.stroke();
@@ -561,11 +573,12 @@ function draw() {
   if (!(G.sandbox || G.rep)) {
   const hr = holdR, by = hr.y;
   txt('RÉSERVE', hr.x + hr.w / 2, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
-  glassBox(hr.x, by, hr.w, hr.h, 20, G.swapped ? 0.14 : 0.45);
+  const nx = B.x + B.w, lq = lqBoxes([{ x: hr.x, y: by, w: hr.w, h: hr.h, r: 20 }, { x: nx - 124, y: by, w: 124, h: hr.h, r: 20 }]);
+  if (!lq) glassBox(hr.x, by, hr.w, hr.h, 20, G.swapped ? 0.14 : 0.45);
   if (tut === 3) { ctx.strokeStyle = rgba(CY, 0.55 + 0.45 * Math.sin(T * 6)); ctx.lineWidth = 3; rr(hr.x - 4, by - 4, hr.w + 8, hr.h + 8, 24); ctx.stroke(); } // étape « réserve » : la boîte à toucher clignote
   if (G.hold) { ctx.globalAlpha = G.swapped ? 0.4 : 1; drawItem(G.hold, hr.x + hr.w / 2, by + hr.h / 2, 1, 0, miniU(G.hold)); ctx.globalAlpha = 1; } else txt('⇄', hr.x + hr.w / 2, by + hr.h / 2 + 8, 22, 'rgba(255,255,255,.3)', 'center', 'system-ui', 400);
-  const nx = B.x + B.w; txt('SUIVANT', nx - 62, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
-  glassBox(nx - 124, by, 124, hr.h, 20);
+  txt('SUIVANT', nx - 62, by - 6, 9, 'rgba(255,255,255,.6)', 'center', 'Orbitron', 700);
+  if (!lq) glassBox(nx - 124, by, 124, hr.h, 20);
   const gp = clamp(1 - (T - giftT) * 2, 0, 1);
   drawItem(G.queue[0], nx - 84, by + hr.h / 2, 1 + gp * 0.5, 0, miniU(G.queue[0])); ctx.globalAlpha = 0.55; drawItem(G.queue[1], nx - 32, by + hr.h / 2, 0.7, 0, miniU(G.queue[1])); ctx.globalAlpha = 1;
   }

@@ -1,3 +1,4 @@
+import { tabUpdate } from './liquid.js';
 import * as VD from './voidium.js';
 // Critical — écran d'accueil « Liquid Glass ».
 // Non destructif : il réorganise les boutons EXISTANTS (mêmes identifiants, mêmes actions) et ajoute des décors.
@@ -230,6 +231,7 @@ function space(cv, scr) {
       x.strokeStyle = `rgba(215,232,255,${al})`; x.lineWidth = 1 + s.z; x.beginPath(); x.ellipse(cx, cy, rad, rad * 0.92, 0, s.a - len, s.a + 0.002); x.stroke();
     }
     x.globalCompositeOperation = 'source-over';
+    tabUpdate(); // barre d'onglets en verre liquide (si activé) : réfracte cette image du fond
   };
   requestAnimationFrame(frame);
 }

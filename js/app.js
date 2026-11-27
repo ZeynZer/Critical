@@ -17,10 +17,11 @@ import { equipable } from './catalog.js';
 import { ACCENTS } from './style.js';
 import * as PACKUI from './packui.js';
 import * as CLOUD from './cloud.js';
+import * as LQ from './liquid.js';
 
 const $ = (s) => document.querySelector(s);
 const KEY = 'critical.v1';
-const S = { sfx: true, mus: true, vib: true, quick: false };
+const S = { sfx: true, mus: true, vib: true, quick: false, lq: false };
 try { Object.assign(S, (JSON.parse(localStorage.getItem(KEY) || '{}').set) || {}); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ set: S })); } catch (e) { /* ignore */ } };
 const vib = (p) => { if (S.vib && navigator.vibrate) try { navigator.vibrate(p); } catch (e) { /* ignore */ } };
@@ -39,12 +40,14 @@ const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f
 tap('#o-prof', () => { $('#m-settings').classList.remove('on'); RANK.openMyProfile(); });
 tap('#o-save', () => { $('#m-settings').classList.remove('on'); CLOUD.open(toast); });
 tap('#o-install', () => { $('#m-settings').classList.remove('on'); INSTALL.show(); });
-tap('#b-set2', () => { $('#o-admin').hidden = !RANK.isAdmin(); $('#o-install').hidden = !INSTALL.canInstall(); $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-tele').checked = TELE.enabled(); $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-quick').checked = S.quick; $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
+tap('#b-set2', () => { $('#o-admin').hidden = !RANK.isAdmin(); $('#o-install').hidden = !INSTALL.canInstall(); $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-tele').checked = TELE.enabled(); $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-quick').checked = S.quick; $('#o-lqw').hidden = !RANK.isAdmin(); $('#o-lq').checked = !!S.lq; $('#o-lq').disabled = !LQ.supported(); $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
 tap('#o-close', () => $('#m-settings').classList.remove('on'));
 $('#o-sfx').onchange = (e) => { S.sfx = e.target.checked; A.setSfx(S.sfx); save(); };
 $('#o-mus').onchange = (e) => { S.mus = e.target.checked; A.setMusic(S.mus); save(); };
 $('#o-duel').onchange = (e) => RANK.setNoDuel(!e.target.checked);
 $('#o-quick').onchange = (e) => { S.quick = e.target.checked; save(); };
+const lqApply = () => { const v = !!S.lq && RANK.isAdmin() && LQ.supported(); LQ.setOn(v); LQ.tabBar(v); }; // verre liquide : réservé à l'administrateur pour l'instant
+$('#o-lq').onchange = (e) => { S.lq = e.target.checked; save(); lqApply(); toast(S.lq ? 'Verre liquide activé' : 'Verre liquide désactivé'); };
 $('#o-tele').onchange = (e) => TELE.setEnabled(e.target.checked);
 $('#o-gh').onchange = (e) => MINE.setGhost(e.target.checked);
 $('#o-vib').onchange = (e) => { S.vib = e.target.checked; save(); vib([14, 40, 14]); };
@@ -75,6 +78,7 @@ const avatar = () => { const d = $('#b-profile'), k = RANK.avatarKey(); if (!d) 
 const pastille = () => HOME.profile(RANK.name(), RANK.avatarKey());
 RANK.whenProfile(() => { avatar(); pastille(); }); RANK.whenNamed(() => { MINE.rankLine(); pastille(); }); avatar(); pastille();
 refresh();
+setTimeout(lqApply, 0); // une fois l'accueil monté
 
 // démarrage : « Zeyn's Games » en fondu, puis un appui pour entrer (c'est aussi lui qui débloque le son)
 const sp = $('#splash');
