@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "zeynzer.critical",
+      "sha256_cert_fingerprints": [
+        "45:C9:02:64:BB:9D:3E:F3:A2:0B:9D:F2:F6:78:3E:4D:3B:97:69:69:90:14:50:97:F3:D1:E8:AB:B4:D7:AF:3D"
+      ]
+    }
+  }
+]

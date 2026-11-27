@@ -4,9 +4,10 @@
   "description": "Fusionne les astres, de l'orbe au trou noir.",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "orientation": "portrait-primary",
-  "background_color": "#05060f",
+  "background_color": "#02030a",
   "theme_color": "#05060f",
   "lang": "fr",
   "icons": [

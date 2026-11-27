@@ -82,7 +82,12 @@ setTimeout(lqApply, 0); // une fois l'accueil monté
 
 // démarrage : « Zeyn's Games » en fondu, puis un appui pour entrer (c'est aussi lui qui débloque le son)
 const sp = $('#splash');
-setTimeout(() => sp.classList.add('ready'), 1700);
+setTimeout(() => sp.classList.add('ready'), 1700); MINE.warmUp();
+// Application Android (Google Play) : vrai plein écran, sans la barre d'état (heure, batterie). Le navigateur n'accepte de passer
+// en plein écran qu'après un appui : au premier appui (« Appuie pour jouer »), puis de nouveau si on l'a quitté (retour d'arrière-plan…).
+const inApp = (() => { try { if (document.referrer.startsWith('android-app://')) sessionStorage.setItem('critical.twa', '1'); return sessionStorage.getItem('critical.twa') === '1' || (/Android/i.test(navigator.userAgent) && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches); } catch (e) { return false; } })();
+const goFull = () => { const d = document.documentElement; if (!inApp || document.fullscreenElement || !d.requestFullscreen) return; d.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* refusé : on réessaiera au prochain appui */ }); };
+document.addEventListener('pointerup', goFull, true);
 sp.addEventListener('pointerup', () => { if (!sp.classList.contains('ready')) return; A.init(); A.resume(); A.ui(); sp.classList.add('out'); setTimeout(() => sp.remove(), 700);
   // premier lancement : présentation animée puis partie guidée ; sinon, simple indice de glissement dans le menu
   INSTALL.maybe(() => { if (MINE.isNew() && !INTRO.seen()) INTRO.show({ paint: MINE.paintAstre, sfx: A.ui, onPlay: () => MINE.open(), onSkip: () => setTimeout(HOME.hint, 600) }); else setTimeout(HOME.hint, 1400); }); // d'abord le guide d'installation (téléphone, app non installée), puis la présentation
