@@ -9,7 +9,7 @@ const FS = `#version 300 es
 precision highp float;
 #define MAX ${MAX}
 uniform sampler2D uBg;uniform vec2 uRes;uniform vec4 uS[MAX];uniform float uR[MAX];uniform int uN;
-uniform float uK,uIor,uBezel,uDepth,uDisp,uBlur,uTint,uLight,uSpec,uDpr,uShadow;
+uniform float uK,uIor,uBezel,uDepth,uDisp,uBlur,uTint,uLight,uSpec,uDpr,uShadow;uniform int uEdge;
 out vec4 o;
 float sdBox(vec2 p,vec2 b,float r){r=min(r,min(b.x,b.y));vec2 q=abs(p)-b+r;return length(max(q,0.))+min(max(q.x,q.y),0.)-r;}
 float smin(float a,float b,float k){float h=max(k-abs(a-b),0.)/k;return min(a,b)-h*h*k*.25;}
@@ -26,6 +26,7 @@ void main(){
  float d=map(p),ds=map(p-vec2(0.,8.*uDpr));
  float sh=(1.-smoothstep(-8.*uDpr,26.*uDpr,ds))*uShadow;
  if(d>1.5*uDpr){o=vec4(0.,0.,0.,sh);return;}
+ if(uEdge==1&&-d>uBezel*uDpr+1.){o=vec4(0.);return;} // vitre : le centre plat ne déforme rien, on y laisse l'image d'origine (nette, et rien à calculer)
  float bez=uBezel*uDpr,t=clamp(-d/bez,0.,1.),e=1.-t,root=sqrt(max(1.-e*e,1e-4));
  float h=bez*root,slope=min(e/root,40.);
  vec2 gd=vec2(map(p+vec2(1,0))-map(p-vec2(1,0)),map(p+vec2(0,1))-map(p-vec2(0,1)));gd/=max(length(gd),1e-5);
@@ -58,7 +59,7 @@ export function glass(canvas, params = {}) {
   let prog; try { prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog); } catch (e) { return null; }
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   const al = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
-  const U = {}; for (const n of ['uBg', 'uRes', 'uS', 'uR', 'uN', 'uK', 'uIor', 'uBezel', 'uDepth', 'uDisp', 'uBlur', 'uTint', 'uLight', 'uSpec', 'uDpr', 'uShadow']) U[n] = gl.getUniformLocation(prog, n);
+  const U = {}; for (const n of ['uBg', 'uRes', 'uS', 'uR', 'uN', 'uK', 'uIor', 'uBezel', 'uDepth', 'uDisp', 'uBlur', 'uTint', 'uLight', 'uSpec', 'uDpr', 'uShadow', 'uEdge']) U[n] = gl.getUniformLocation(prog, n);
   const tx = gl.createTexture(), bc = document.createElement('canvas'), bx = bc.getContext('2d');
   gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
   for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
@@ -76,7 +77,7 @@ export function glass(canvas, params = {}) {
     gl.uniform1i(U.uBg, 0); gl.uniform2f(U.uRes, cw, ch); gl.uniform4fv(U.uS, a); gl.uniform1fv(U.uR, r); gl.uniform1i(U.uN, s.length);
     gl.uniform1f(U.uK, Math.max(P.fuse, 0.01) * dpr); gl.uniform1f(U.uIor, P.ior); gl.uniform1f(U.uBezel, P.bezel); gl.uniform1f(U.uDepth, P.depth);
     gl.uniform1f(U.uDisp, P.disp); gl.uniform1f(U.uBlur, P.blur); gl.uniform1f(U.uTint, P.tint); gl.uniform1f(U.uLight, P.light);
-    gl.uniform1f(U.uSpec, P.spec); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uShadow, P.shadow);
+    gl.uniform1f(U.uSpec, P.spec); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uShadow, P.shadow); gl.uniform1i(U.uEdge, P.edge ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   return { render, params: P, destroy() { gl.deleteProgram(prog); gl.deleteTexture(tx); gl.deleteBuffer(buf); } };
@@ -180,3 +181,6 @@ export function orbs(canvas) {
 let orbsEnabled = false;
 export const orbsOn = () => orbsEnabled && supported();
 export function setOrbs(v) { orbsEnabled = !!v; }
+let paneEnabled = false;
+export const paneOn = () => paneEnabled && supported();
+export function setPane(v) { paneEnabled = !!v; }

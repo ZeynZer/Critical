@@ -484,6 +484,19 @@ function glassBead(it, x, y, rad, a = 1) { // bille de verre simplifiée (cases 
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.globalAlpha = 1;
 }
 const beadOr = (it, x, y, sc, u) => { if (LQ.orbsOn() && !orbFail) glassBead(it, x, y, itR(it) * u * sc); else drawItem(it, x, y, sc, 0, u); };
+// Cuve en verre liquide (privé, compte admin) : une vitre de verre posée DEVANT les astres ; ses bords courbent ce qu'il y a derrière,
+// son centre plat laisse les astres intacts (rien n'y est recalculé) ; un reflet léger glisse sur la surface.
+let paneG = null, paneFail = false; const paneC = document.createElement('canvas');
+function lqPane(x, y, w, h, r) {
+  if (!LQ.paneOn() || paneFail) return false;
+  if (!paneG) { paneG = LQ.glass(paneC, { ior: 1.45, bezel: 20, depth: 10, disp: 0.03, blur: 0, tint: 0.04, fuse: 10, spec: 1.1, shadow: 0, edge: true }); if (!paneG) { paneFail = true; return false; } }
+  const pad = 4, x0 = x - pad, y0 = y - pad, cw = w + pad * 2, ch = h + pad * 2, k = cv.width / W;
+  try { paneG.render(cv, x0 * k, y0 * k, cw * k, ch * k, [{ x: cw / 2, y: ch / 2, w: w / 2, h: h / 2, r }], cw, ch, Math.min(k, 2)); ctx.drawImage(paneC, x0, y0, cw, ch); } catch (e) { paneFail = true; return false; }
+  ctx.save(); rr(x, y, w, h, r); ctx.clip(); // reflet de la vitre : une large bande claire qui glisse lentement en diagonale
+  const sx0 = x + ((T * 0.06) % 1.6 - 0.3) * w * 1.4, g = ctx.createLinearGradient(sx0, y, sx0 + w * 0.55, y + h * 0.35); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,.06)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h); const t = ctx.createLinearGradient(0, y, 0, y + h * 0.25); t.addColorStop(0, 'rgba(255,255,255,.07)'); t.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = t; ctx.fillRect(x, y, w, h * 0.25); ctx.restore();
+  return true;
+}
 function glassBox(x, y, w, h, r, hi = 0.2) { // panneau de verre : voile, reflet haut, liseré
   rr(x, y, w, h, r); const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,255,255,.13)'); g.addColorStop(0.5, 'rgba(255,255,255,.035)'); g.addColorStop(1, 'rgba(255,255,255,.08)'); ctx.fillStyle = g; ctx.fill();
   ctx.strokeStyle = `rgba(255,255,255,${hi})`; ctx.lineWidth = 1.2; ctx.stroke();
@@ -511,7 +524,7 @@ function draw() {
   if (q >= 0) { const z = im ? 1 - 0.12 * p * p : 1 + 0.1 * (1 - p) ** 3; ctx.translate(mx, my); ctx.scale(z, z); ctx.translate(-mx, -my); } // la cuve est aspirée puis rebondit
   // puits de gravité : une cuve de verre
   ctx.fillStyle = 'rgba(4,6,20,.42)'; rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.fill();
-  glassBox(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22, 0.26);
+  if (!LQ.paneOn()) glassBox(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22, 0.26); // (cuve en verre liquide : la vitre est posée après les astres)
   const sheen = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0); sheen.addColorStop(0, 'rgba(255,255,255,.1)'); sheen.addColorStop(0.07, 'rgba(255,255,255,0)'); sheen.addColorStop(0.95, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(255,255,255,.07)'); ctx.fillStyle = sheen; ctx.fillRect(B.x, B.y - 30, B.w, B.h + 20);
   if (G.inset > 0.02) { const iw = G.inset * B.u; ctx.fillStyle = 'rgba(255,79,216,.16)'; ctx.fillRect(B.x, B.y - 30, iw, B.h + 30); ctx.fillRect(B.x + B.w - iw, B.y - 30, iw, B.h + 30); } // parois resserrées
   // ligne de danger
@@ -551,6 +564,7 @@ function draw() {
   }
   const og = gh && !G.nop ? gh.G : G.duel && duel && duel.op ? duel.op.G : null;
   if (og) { ctx.lineWidth = 1.4; ctx.strokeStyle = G.duel ? 'rgba(255,170,90,.42)' : 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of og.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
+  lqPane(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); // vitre de verre liquide devant les astres (si activée)
   // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
   if (!G.sandbox) {
   ctx.lineCap = 'round'; ctx.strokeStyle = dg > 0 ? rgba([255, 80, 110], 0.8 + 0.2 * Math.sin(T * 14)) : G.near ? rgba([255, 194, 71], 0.75 + 0.25 * Math.sin(T * 6)) : 'rgba(255,255,255,.55)';
