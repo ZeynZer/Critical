@@ -104,6 +104,7 @@ function onEvents() {
     else if (e.t === 'pierce') {
       // saut : l'espace se contracte (implosion), bang, puis le nouveau secteur se déploie — voir draw() et bang()
       texA = texB; texB = makeTex(e.depth); warp = 1; shake = 6; callout = null;
+      secStart(e.depth);
       warpMsg = ['SECTEUR ' + (e.depth + 1), (G.mod.n || sectorName(e.depth)).toUpperCase() + ' · +' + fmt(e.pts), e.depth];
       A.chestRise(0.75); H.vib(20);
       H.track('depth', e.depth + 1, true); if (!G.nop) H.goal('sector', { n: e.depth + 1 });
@@ -451,6 +452,68 @@ function resize() {
 }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function txt(s, x, y, size, col, align = 'center', font = 'Orbitron', weight = 900) { ctx.font = `${weight} ${size}px ${font},system-ui,sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = col; ctx.fillText(s, x, y); }
+/* ============================== effets de secteur (visuels seulement : la physique ne change pas) ============================== */
+// Chaque règle de secteur se voit : brume, traînées de chute, poussières qui montent, parois d'énergie… Deux anomalies de 30 s :
+// Grand Vide (la lumière s'éteint, seuls les astres éclairent) et Horizon (la lumière se courbe autour des trous noirs et quasars).
+// Réglage « Effets de secteur » (activé par défaut) ; mouvement réduit = effets immobiles ; la vraie lentille (shader) est réservée à l'admin pour l'instant.
+const SECT = [['Calme', 'Gravité normale : reprends ton souffle.'], ['Brume', 'Chute ralentie : les astres flottent dans la brume.'], ['Cuve étroite', 'Les parois se resserrent : moins de place.'],
+  ['Gravité accrue', 'Les astres tombent plus vite.'], ['Gravité forte', 'Tout tombe très vite : vise avant de lâcher.'], ['Légèreté', 'Chute lente : tu as le temps de viser.'],
+  ['Gravité faible', 'Les astres planent longtemps.'], ['Puits resserré', 'Les parois se referment encore plus.'], ['Chaos originel', 'Gravité accrue et parois resserrées.']];
+const ANOM = { 6: ['ANOMALIE · GRAND VIDE', 'La lumière s\'éteint : seuls les astres éclairent.'], 7: ['ANOMALIE · HORIZON', 'La lumière se courbe autour des trous noirs.'] };
+let secOn = true, secLens = false, secT0 = 0, secAnn = 0, anomAnn = false; const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+export function setSectorFx(on, lensOk) { secOn = !!on; secLens = !!lensOk; }
+const SP = Array.from({ length: 70 }, (_, i) => ({ x: rnd(i * 3.1 + 1), y: rnd(i * 7.7 + 2), z: 0.3 + rnd(i * 1.9 + 3) * 0.7, p: rnd(i * 5.3 + 4) * TAU }));
+const secMi = () => (G ? G.depth % 9 : 0), anomA = () => { if (!G || !ANOM[secMi()] || G.duel || G.sandbox) return 0; const t = T - secT0 - 3; return t < 0 || t > 30 ? 0 : clamp(Math.min(t / 2, (30 - t) / 2), 0, 1); };
+function secStart(d, quiet) { secT0 = T; anomAnn = false; if (!quiet && secOn) secAnn = T + 1.3; }
+function secAnnounce(t1, t2, t3) { const e = $('#mn-sec'); if (!e) return; $('#mn-secn').textContent = t1; $('#mn-sect').textContent = t2; $('#mn-secd').textContent = t3; e.classList.remove('on'); void e.offsetWidth; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 3400); }
+function sectorTick() {
+  if (!secOn || !G) return;
+  if (secAnn && T >= secAnn) { secAnn = 0; const m = SECT[secMi()]; secAnnounce('SECTEUR ' + (G.depth + 1) + ' · ' + sectorName(G.depth).toUpperCase(), m[0], m[1]); }
+  if (!anomAnn && anomA() > 0) { anomAnn = true; const a = ANOM[secMi()]; secAnnounce(a[0], a[0].split('· ')[1], a[1]); }
+}
+const secTime = () => (RM ? 0 : T);
+function sectorBack() { // derrière les astres
+  if (!secOn || !G || G.rep && G.rep.speed > 4) return; const mi = secMi(), a = clamp((T - secT0) / 1.5, 0, 1), t = secTime(); if (!mi || a <= 0) return;
+  ctx.save(); rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.clip();
+  if (mi === 1) { for (let i = 0; i < 6; i++) { const s = SP[i], cx = B.x + (((s.x + t * 0.012 * s.z) % 1.3) - 0.15) * B.w, cy = B.y + s.y * B.h, r = B.w * (0.35 + 0.3 * s.z), g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(210,225,255,${0.14 * a})`); g.addColorStop(1, 'rgba(210,225,255,0)'); ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); } }
+  if (mi === 3 || mi === 4 || mi === 8) { const k = mi === 4 ? 1.7 : 1; ctx.lineCap = 'round'; for (let i = 0; i < (mi === 8 ? 14 : 26); i++) { const s = SP[i], x = B.x + s.x * B.w, y = B.y + ((s.y + t * (0.22 + 0.3 * s.z) * k) % 1) * B.h, l = 16 * s.z * k; ctx.strokeStyle = `rgba(170,200,255,${0.26 * a * s.z})`; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y - l); ctx.lineTo(x, y); ctx.stroke(); }
+    const g = ctx.createLinearGradient(0, B.y + B.h * 0.55, 0, B.y + B.h); g.addColorStop(0, 'rgba(0,0,10,0)'); g.addColorStop(1, `rgba(0,0,10,${0.28 * a * k / 1.7})`); ctx.fillStyle = g; ctx.fillRect(B.x, B.y + B.h * 0.55, B.w, B.h * 0.45); }
+  if (mi === 5 || mi === 6) { for (let i = 0; i < 34; i++) { const s = SP[i], y = B.y + (1 - ((s.y + t * 0.045 * s.z * (mi === 6 ? 0.7 : 1)) % 1)) * B.h, x = B.x + (s.x + Math.sin(t * 0.8 + s.p) * 0.02) * B.w; ctx.fillStyle = `rgba(${mi === 5 ? '150,255,220' : '180,220,255'},${0.5 * a * s.z})`; ctx.beginPath(); ctx.arc(x, y, 1 + 1.6 * s.z, 0, TAU); ctx.fill(); }
+    const g = ctx.createLinearGradient(0, B.y, 0, B.y + B.h * 0.4); g.addColorStop(0, `rgba(170,255,230,${0.08 * a})`); g.addColorStop(1, 'rgba(170,255,230,0)'); ctx.fillStyle = g; ctx.fillRect(B.x, B.y, B.w, B.h * 0.4); }
+  if ((mi === 2 || mi === 7 || mi === 8) && G.inset > 0.05) { const col = mi === 8 ? [255, 80, 110] : [255, 79, 216]; for (const side of [0, 1]) { const x0 = side ? sx(F.W - G.inset) : sx(G.inset);
+    const g = ctx.createLinearGradient(x0 + (side ? 12 : -12), 0, x0, 0); g.addColorStop(0, rgba(col, 0)); g.addColorStop(1, rgba(col, 0.22 * a)); ctx.fillStyle = g; ctx.fillRect(side ? x0 : x0 - 12, B.y, 12, B.h);
+    ctx.strokeStyle = rgba(col, 0.75 * a); ctx.lineWidth = 1.6; ctx.beginPath(); for (let y = B.y; y <= B.y + B.h; y += 8) { const x = x0 + Math.sin(y * 0.06 + t * 3 + side) * 1.8; y === B.y ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke();
+    if (mi === 8) { ctx.strokeStyle = rgba([80, 220, 255], 0.35 * a); ctx.beginPath(); for (let y = B.y; y <= B.y + B.h; y += 8) { const x = x0 + 2 + Math.sin(y * 0.06 + t * 3.4 + side) * 1.8; y === B.y ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke(); } } }
+  ctx.restore();
+}
+let dkC = null, dkX = null, lensG = null, lensFail = false; const lensC = document.createElement('canvas');
+function sectorFront() { // devant les astres (sous la ligne de défaite et l'interface)
+  if (!secOn || !G) return; const mi = secMi(), a = clamp((T - secT0) / 1.5, 0, 1), t = secTime(), an = anomA();
+  if (mi === 1 && a > 0) { ctx.save(); rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.clip(); for (let i = 6; i < 10; i++) { const s = SP[i], cx = B.x + (((s.x - t * 0.009 * s.z) % 1.3 + 1.3) % 1.3 - 0.15) * B.w, cy = B.y + s.y * B.h, r = B.w * 0.4, g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(220,230,255,${0.045 * a})`); g.addColorStop(1, 'rgba(220,230,255,0)'); ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); } ctx.restore(); }
+  if (an <= 0) return;
+  if (mi === 6) { // Grand Vide : ténèbres, chaque astre éclaire autour de lui ; la zone de lâcher reste un peu visible
+    const x0 = B.x - 4, y0 = B.y - 40, w = B.w + 8, h = B.h + 44, k = Math.min(DPR, 1.5);
+    if (!dkC) { dkC = document.createElement('canvas'); dkX = dkC.getContext('2d'); }
+    if (dkC.width !== Math.round(w * k) || dkC.height !== Math.round(h * k)) { dkC.width = Math.round(w * k); dkC.height = Math.round(h * k); }
+    dkX.setTransform(k, 0, 0, k, -x0 * k, -y0 * k); dkX.globalCompositeOperation = 'source-over'; dkX.clearRect(x0, y0, w, h); dkX.fillStyle = `rgba(0,0,6,${0.93 * an})`; dkX.fillRect(x0, y0, w, h);
+    dkX.globalCompositeOperation = 'destination-out';
+    const hole = (x, y, r, s, r0) => { const g = dkX.createRadialGradient(x, y, r0 || r * 0.5, x, y, r); g.addColorStop(0, `rgba(0,0,0,${s})`); g.addColorStop(1, 'rgba(0,0,0,0)'); dkX.fillStyle = g; dkX.fillRect(x - r, y - r, r * 2, r * 2); };
+    for (const b of G.bodies) { const rr0 = (b.r || 0.5) * B.u; hole(sx(b.x), sy(b.y), rr0 * (b.k === 'c' && b.tier >= 7 ? 1.9 : 1.5), 1, rr0 * 0.85); } // chaque astre n'éclaire qu'autour de lui (les étoiles un peu plus)
+    if (G.cur) hole(sx(F.clampX(G.cur, aimX, G.inset)), sy(F.DROP_Y), B.u * 2.2, 0.9);
+    const g = dkX.createLinearGradient(0, y0, 0, sy(F.LINE) + 18); g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)'); dkX.fillStyle = g; dkX.fillRect(x0, y0, w, sy(F.LINE) + 18 - y0);
+    ctx.drawImage(dkC, x0, y0, w, h);
+  }
+  if (mi === 7) { // Horizon : lumière courbée autour des trous noirs et quasars (shader pour l'admin, anneau de photons pour tous)
+    const L = G.bodies.filter((b) => b.k === 'c' && (b.tier === 10 || b.tier === 11)).slice(0, 6);
+    let done = false;
+    if (secLens && L.length && !lensFail && LQ.supported()) {
+      if (!lensG) { lensG = LQ.lens(lensC); if (!lensG) lensFail = true; }
+      if (lensG) { const x0 = B.x - 4, y0 = B.y - 40, w = B.w + 8, h = B.h + 44, k = cv.width / W;
+        try { lensG.render(cv, x0 * k, y0 * k, w * k, h * k, L.map((b) => ({ x: sx(b.x) - x0, y: sy(b.y) - y0, r: b.r * B.u, s: an })), w, h, Math.min(k, 1.5), 0.16); ctx.drawImage(lensC, x0, y0, w, h); done = true; } catch (e) { lensFail = true; } }
+    }
+    for (const b of L) { const x = sx(b.x), y = sy(b.y), r = b.r * B.u; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(x, y, r * 1.3, x, y, r * (done ? 1.9 : 2.3)); g.addColorStop(0, `rgba(255,210,150,${(done ? 0.12 : 0.28) * an})`); g.addColorStop(0.35, `rgba(255,170,90,${(done ? 0.05 : 0.12) * an})`); g.addColorStop(1, 'rgba(255,170,90,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, TAU); ctx.fill(); ctx.restore(); }
+  }
+}
 // Verre liquide (réservé admin) : les cases RÉSERVE et SUIVANT réfractent la cuve qu'elles recouvrent ; les astres sont dessinés par-dessus, nets.
 let lqG = null, lqFail = false, lqN = 0, lqKey = ''; const lqC = document.createElement('canvas');
 function lqBoxes(bs) {
@@ -525,6 +588,7 @@ function draw() {
   // puits de gravité : une cuve de verre
   ctx.fillStyle = 'rgba(4,6,20,.42)'; rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.fill();
   if (!LQ.paneOn()) glassBox(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22, 0.26); // (cuve en verre liquide : la vitre est posée après les astres)
+  sectorBack(); sectorTick();
   const sheen = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0); sheen.addColorStop(0, 'rgba(255,255,255,.1)'); sheen.addColorStop(0.07, 'rgba(255,255,255,0)'); sheen.addColorStop(0.95, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(255,255,255,.07)'); ctx.fillStyle = sheen; ctx.fillRect(B.x, B.y - 30, B.w, B.h + 20);
   if (G.inset > 0.02) { const iw = G.inset * B.u; ctx.fillStyle = 'rgba(255,79,216,.16)'; ctx.fillRect(B.x, B.y - 30, iw, B.h + 30); ctx.fillRect(B.x + B.w - iw, B.y - 30, iw, B.h + 30); } // parois resserrées
   // ligne de danger
@@ -564,6 +628,7 @@ function draw() {
   }
   const og = gh && !G.nop ? gh.G : G.duel && duel && duel.op ? duel.op.G : null;
   if (og) { ctx.lineWidth = 1.4; ctx.strokeStyle = G.duel ? 'rgba(255,170,90,.42)' : 'rgba(160,190,255,.34)'; ctx.beginPath(); for (const b of og.bodies) { const gx = sx(b.x), gy = sy(b.y), gr = b.r * B.u; ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); } ctx.stroke(); } // fantôme : contours des astres du rival
+  sectorFront();
   lqPane(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); // vitre de verre liquide devant les astres (si activée)
   // ligne de défaite, PAR-DESSUS les astres : la pile peut la dépasser (on ne perd que si un astre est entièrement au-dessus), elle doit rester visible
   if (!G.sandbox) {
@@ -716,7 +781,8 @@ function onMove(e) { if (!aiming) return; const p = pt(e); if (inZone(p)) aimT =
 function onUp() { if (!aiming) return; aiming = false; want = true; }
 
 /* ============================== écrans ============================== */
-const CSS = `#mn-bot{position:absolute;z-index:7;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-radius:18px;font:600 11px var(--font,system-ui);color:#fff}#mn-bot[hidden]{display:none}#mn-bot b{font:800 11px var(--disp,system-ui);color:#ffc247;letter-spacing:.06em}#mn-bots{display:flex;gap:4px;flex:1}#mn-bots button{flex:1;height:30px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font:800 11px var(--disp,system-ui)}#mn-bots button.on{background:rgba(255,194,71,.3);border-color:#ffc247}#mn-botr{min-width:64px;text-align:right;color:rgba(255,255,255,.7)}#mn-botx{height:30px;padding:0 10px;border-radius:12px;border:1px solid rgba(255,120,140,.5);background:rgba(255,80,110,.15);color:#fff;font:700 11px var(--font,system-ui)}
+const CSS = `#mn-sec{position:absolute;z-index:6;left:50%;top:27%;width:min(300px,78vw);transform:translate(-50%,-10px) scale(.96);opacity:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 16px;border-radius:22px;text-align:center;transition:opacity .35s,transform .35s}#mn-sec.on{opacity:1;transform:translate(-50%,0) scale(1)}#mn-sec small{font:800 10px var(--disp,system-ui);letter-spacing:.14em;color:#4df3ff}#mn-sec b{font:900 22px var(--disp,system-ui);color:#fff;text-shadow:0 0 18px rgba(255,79,216,.55)}#mn-sec span{font:600 12.5px var(--font,system-ui);color:rgba(255,255,255,.82);line-height:1.35}
+#mn-bot{position:absolute;z-index:7;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;border-radius:18px;font:600 11px var(--font,system-ui);color:#fff}#mn-bot[hidden]{display:none}#mn-bot b{font:800 11px var(--disp,system-ui);color:#ffc247;letter-spacing:.06em}#mn-bots{display:flex;gap:4px;flex:1}#mn-bots button{flex:1;height:30px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font:800 11px var(--disp,system-ui)}#mn-bots button.on{background:rgba(255,194,71,.3);border-color:#ffc247}#mn-botr{min-width:64px;text-align:right;color:rgba(255,255,255,.7)}#mn-botx{height:30px;padding:0 10px;border-radius:12px;border:1px solid rgba(255,120,140,.5);background:rgba(255,80,110,.15);color:#fff;font:700 11px var(--font,system-ui)}
 
 
 #mn{position:fixed;inset:0;z-index:9;background:#05060f;display:none}#mn.on{display:block;animation:fade .3s}
@@ -753,7 +819,7 @@ const CSS = `#mn-bot{position:absolute;z-index:7;left:10px;right:10px;bottom:cal
 const HTML = `
 <div id="mn"><canvas id="mn-cv"></canvas>
 <button class="icon glass" id="mn-back" aria-label="Retour"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-tut"></div><div class="glass" id="mn-bot" hidden><b id="mn-botn"></b><div id="mn-bots"></div><span id="mn-botr"></span><button id="mn-botx">Arrêter</button></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
+<button class="icon glass" id="mn-help" aria-label="Règles"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg></button><div class="glass" id="mn-sec"><small id="mn-secn"></small><b id="mn-sect"></b><span id="mn-secd"></span></div><div class="glass" id="mn-tut"></div><div class="glass" id="mn-bot" hidden><b id="mn-botn"></b><div id="mn-bots"></div><span id="mn-botr"></span><button id="mn-botx">Arrêter</button></div><div id="mn-fg"><i></i></div><div id="mn-rp"><button class="glass" id="mn-rpp">❚❚</button><span id="mn-rpn"></span><div><button data-s="1">×1</button><button data-s="2">×2</button><button data-s="4">×4</button><button data-s="8">×8</button><button data-s="16">×16</button></div></div><div id="mn-sb"><div id="mn-sbl"></div><button class="glass" id="mn-sbc">Vider</button></div></div>
 <div class="modal" id="mn-m-over"><div class="card glass"><h2 id="mn-ot">Effondrement</h2><p id="mn-os"></p><div id="mn-xp"></div>
 <div class="stats"><div id="mn-c1"><b id="mn-o1">0</b><span>points</span></div><div id="mn-c2"><b id="mn-o2">0</b><span>secteur</span></div><div id="mn-c3"><b id="mn-o3">0</b><span>chaîne max</span></div><div id="mn-c4"><b id="mn-o4" style="font-size:15px">–</b><span>plus gros astre</span></div></div>
 <p id="mn-rk"></p><div class="fg-q" id="mn-q"></div>
@@ -1131,6 +1197,7 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
+  secStart(0, true);
   $('#mn-bot').hidden = !(opt && opt.bot);
   if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily || opt.bot)) && deckKeys().length) F.equip(G, deckLoad()); // l'en-tête du journal consigne le deck (cartes, étoiles) : rediffusion identique
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');

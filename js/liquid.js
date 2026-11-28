@@ -225,3 +225,53 @@ export function setFull(on) {
   };
   loop(); return true;
 }
+
+// ============ Lentille gravitationnelle (secteur Horizon) ============
+// Autour de chaque trou noir / quasar de la cuve, la lumière se courbe : l'image de la cuve est déplacée vers l'astre (anneau d'Einstein),
+// un anneau de photons brille faiblement. Hors de la zone d'influence, le calque est transparent (l'image d'origine reste nette).
+// Purement visuel : la physique ne change pas ; déplacement volontairement modéré pour ne jamais tromper la visée.
+const LMAX = 6;
+const LFS = `#version 300 es
+precision highp float;
+uniform sampler2D uBg;uniform vec2 uRes;uniform vec4 uL[${LMAX}];uniform int uN;uniform float uDpr,uT,uK;
+out vec4 o;
+vec4 tex(vec2 p){return texture(uBg,vec2(p.x/uRes.x,1.-p.y/uRes.y));}
+void main(){
+ vec2 p=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y), off=vec2(0.); float inf=0., ring=0.;
+ for(int i=0;i<${LMAX};i++){ if(i>=uN)break; if(length(p-uL[i].xy)<uL[i].z*1.02){o=vec4(0.);return;} } // l'intérieur d'un trou noir ou d'un quasar n'est jamais déformé
+ for(int i=0;i<${LMAX};i++){ if(i>=uN)break; vec2 v=p-uL[i].xy; float d=max(length(v),1.), r=uL[i].z, R=r*2.4;
+  if(d<r*1.02||d>R)continue;                                   // l'astre lui-même et le lointain : intacts
+  float f=smoothstep(R,r*1.15,d);                               // influence qui s'éteint en douceur
+  off+=-v/d*(uK*r*r/d)*f*uL[i].w; inf=max(inf,f);
+  ring+=exp(-pow((d-r*1.55)/(r*.07),2.))*.35*uL[i].w;
+ }
+ if(inf<.003){o=vec4(0.);return;}
+ vec4 c=tex(p+off); vec3 col=c.rgb+vec3(1.,.85,.65)*ring;
+ float a=clamp(inf*1.4,0.,1.); o=vec4(col*a,a);
+}`;
+export function lens(canvas) {
+  const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: true });
+  if (!gl) return null;
+  const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+  let prog; try { prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, LFS)); gl.linkProgram(prog); if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null; gl.useProgram(prog); } catch (e) { return null; }
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const al = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
+  const U = {}; for (const n of ['uBg', 'uRes', 'uL', 'uN', 'uDpr', 'uT', 'uK']) U[n] = gl.getUniformLocation(prog, n);
+  const tx = gl.createTexture(), bc = document.createElement('canvas'), bx = bc.getContext('2d');
+  gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
+  const L = new Float32Array(LMAX * 4);
+  // list : [{ x, y, r, s }] en px CSS dans le calque (s = intensité 0..1, pour l'apparition en fondu)
+  function render(src, sx, sy, sw, shh, list, W, H, dpr, k = 0.42) {
+    const cw = Math.max(1, Math.round(W * dpr)), ch = Math.max(1, Math.round(H * dpr));
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+    if (bc.width !== cw || bc.height !== ch) { bc.width = cw; bc.height = ch; }
+    bx.clearRect(0, 0, cw, ch); bx.drawImage(src, sx, sy, sw, shh, 0, 0, cw, ch);
+    gl.bindTexture(gl.TEXTURE_2D, tx); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bc);
+    gl.viewport(0, 0, cw, ch); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    const ls = list.slice(0, LMAX); L.fill(0); ls.forEach((q, i) => L.set([q.x * dpr, q.y * dpr, q.r * dpr, q.s], i * 4));
+    gl.uniform1i(U.uBg, 0); gl.uniform2f(U.uRes, cw, ch); gl.uniform4fv(U.uL, L); gl.uniform1i(U.uN, ls.length); gl.uniform1f(U.uDpr, dpr); gl.uniform1f(U.uK, k);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  return { render };
+}
