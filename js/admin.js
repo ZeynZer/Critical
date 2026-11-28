@@ -28,12 +28,13 @@ const CSS = `
 .ad-fiche{display:flex;flex-direction:column;gap:10px}.ad-id{display:flex;align-items:center;gap:12px}.ad-id h4{margin:0;font:900 18px var(--disp)}.ad-id p{margin:2px 0 0;font-size:11.5px;color:rgba(255,255,255,.55)}
 .ad-tbl{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px}.ad-tbl div{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}.ad-tbl span{color:rgba(255,255,255,.5)}.ad-tbl b{font-weight:700;text-align:right}
 .ad-an{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.05);font-size:12px}.ad-an span{flex:1;min-width:0}.ad-an em{font-style:normal;font-size:10px;color:rgba(255,255,255,.45);display:block}.ad-an.off{opacity:.5}
+.ad-fx{display:grid;grid-template-columns:1fr 1fr;gap:7px}.ad-fxb{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#fff;text-align:left}.ad-fxb b{font:800 12.5px var(--font)}.ad-fxb small{font-size:10.5px;line-height:1.3;color:rgba(255,255,255,.6)}.ad-fxb.on{border-color:#ffc247;background:rgba(255,194,71,.16);box-shadow:inset 0 0 0 1px rgba(255,194,71,.5)}
 .ad-rar{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
 `;
 export function mount(api) {
   const st = make('style'); st.textContent = CSS; document.head.appendChild(st);
   const m = make('div', 'modal ad-m', `<div class="ad-in"><div class="ad-hd"><h2>Administration<small>Console du créateur</small></h2><button class="ad-x" id="ad-x2" aria-label="Fermer">✕</button></div>
-<div class="ad-tabs"><button data-t="dash" class="on">Tableau</button><button data-t="analyse">Analyse</button><button data-t="bots">Robots</button><button data-t="players">Joueurs</button><button data-t="send">Cadeaux et annonces</button><button data-t="event">Événement</button><button data-t="ideas">Idées</button><button data-t="tools">Outils</button></div><div class="ad-body" id="ad-body"></div></div>`); m.id = 'ad-m'; document.body.append(m);
+<div class="ad-tabs"><button data-t="dash" class="on">Tableau</button><button data-t="analyse">Analyse</button><button data-t="bots">Robots</button><button data-t="fx">Shaders</button><button data-t="players">Joueurs</button><button data-t="send">Cadeaux et annonces</button><button data-t="event">Événement</button><button data-t="ideas">Idées</button><button data-t="tools">Outils</button></div><div class="ad-body" id="ad-body"></div></div>`); m.id = 'ad-m'; document.body.append(m);
   const body = m.querySelector('#ad-body'); let tab = 'dash', sel = null, armed = null, ideasUi = null, anUi = null; const panes = {};
   const run = async (fn, args, ok) => { try { const r = await api.call(fn, args); if (ok) api.toast(ok); return r === undefined || r === null ? true : r; } catch (e) { api.toast('Refusé : ' + e.message); return null; } };
   const confirmed = (key) => { if (armed === key) { armed = null; return true; } armed = key; api.toast('Touche encore pour confirmer'); setTimeout(() => { if (armed === key) armed = null; }, 3000); return false; }; // actions destructrices ou massives : deux appuis
@@ -134,6 +135,16 @@ export function mount(api) {
     const r4 = make('div', 'ad-r'); r4.append(go, stop);
     p.append(sec('Série de parties', make('p', '', 'Plusieurs parties complètes calculées sans affichage, aussi vite que l\'appareil le permet, pour mesurer un niveau de robot (équilibrage). Rien n\'est enregistré.'), r2, r3, r4, state, out));
   }
+  /* ---------- banc de shaders : un effet choisi s'applique partout, sur cet appareil seulement ---------- */
+  function buildFx() {
+    const p = panes.fx, grid = make('div', 'ad-fx'), cur = make('p', '');
+    const paint = () => { const on = api.fx.get(); grid.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === on)); const it = api.fx.list().find((x) => x[0] === on); cur.innerHTML = on ? `Actif : <b>${esc(it ? it[1] : on)}</b> — ${esc(it ? it[2] : '')}` : 'Aucun effet actif.'; };
+    const add = (k, n, d, tag) => { const b = make('button', 'ad-fxb', `<b>${esc(n)}</b><small>${tag ? 'Shader · ' : ''}${esc(d)}</small>`); b.dataset.k = k; b.addEventListener('click', () => { api.fx.set(api.fx.get() === k ? '' : k); paint(); }); grid.append(b); };
+    add('', 'Aucun', 'Le jeu normal, sans effet.'); for (const [k, n, d, tag] of api.fx.list()) add(k, n, d, tag);
+    const sb = btn('Tester dans le bac à sable', 'go', () => { m.classList.remove('on'); api.fx.sandbox(); });
+    p.append(sec('Shaders à tester', make('p', '', 'Sur cet appareil seulement, jamais chez les joueurs. L\'effet choisi s\'applique tout de suite et partout (Univers, Blitz, bac à sable…) jusqu\'à ce que tu en changes. Touche encore un effet actif pour le couper. Purement visuel : la physique ne change pas.'), cur, sb, grid));
+    paint();
+  }
   /* ---------- outils sur cet appareil ---------- */
   function buildTools() {
     const p = panes.tools, a = make('div', 'ad-r'), rr = make('div', 'ad-rar'); a.append(btn('+10 000 Voidium', '', () => { api.local.e(); api.toast('Fait'); }), btn('+1 000 XP', '', () => { api.local.x(); api.toast('Fait'); }), btn('3 packs de chaque', '', () => { api.local.p(); api.toast('Fait'); }), btn('Tout débloquer', '', () => { api.local.u(); api.toast('Fait'); }));
@@ -144,8 +155,8 @@ export function mount(api) {
     p.append(sec('Sur cet appareil', make('p', '', 'Ces actions ne touchent que ta sauvegarde locale.'), a), sec('Tester l\'ouverture de pack', make('p', '', 'Aperçu gratuit de l\'animation complète avec une rareté forcée (voir : galaxie, supernova, trou noir, convergence).'), rr));
   }
   function setTab(t) { tab = t; m.querySelectorAll('.ad-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t)); for (const [k, el] of Object.entries(panes)) el.hidden = k !== t; body.scrollTop = 0; if (t === 'dash') dash(); else if (t === 'analyse') { if (!anUi) anUi = buildAnalytics(panes.analyse, { load: (d) => run('admin_analytics', { p_days: d }), tierName: api.tierName, toast: api.toast }); anUi.show(); } else if (t === 'players') { if (!panes.players.querySelector('#ad-list').children.length) search(); } else if (t === 'send') panes.send.load && panes.send.load(); else if (t === 'event') panes.event.show && panes.event.show(); else if (t === 'ideas') { if (!ideasUi) ideasUi = mountIdeas(panes.ideas, { call: (fn, args) => api.call(fn, args), name: () => 'admin', askName() {}, isAdmin: () => true, toast: api.toast, vib: api.vib || (() => {}) }); ideasUi.refresh(); } }
-  for (const k of ['dash', 'analyse', 'players', 'send', 'event', 'ideas', 'bots', 'tools']) { const el = make('div'); el.style.cssText = 'display:flex;flex-direction:column;gap:10px'; el.hidden = true; panes[k] = el; body.append(el); }
-  buildPlayers(); buildSend(); buildEvent(); buildBots(); buildTools();
+  for (const k of ['dash', 'analyse', 'players', 'send', 'event', 'ideas', 'bots', 'fx', 'tools']) { const el = make('div'); el.style.cssText = 'display:flex;flex-direction:column;gap:10px'; el.hidden = true; panes[k] = el; body.append(el); }
+  buildPlayers(); buildSend(); buildEvent(); buildBots(); buildFx(); buildTools();
   m.querySelector('.ad-tabs').addEventListener('click', (e) => { const t = e.target.dataset.t; if (t) setTab(t); });
   m.querySelector('#ad-x2').addEventListener('click', () => m.classList.remove('on'));
   return { open() { m.classList.add('on'); setTab(tab); } };

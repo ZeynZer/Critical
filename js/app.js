@@ -21,7 +21,7 @@ import * as LQ from './liquid.js';
 
 const $ = (s) => document.querySelector(s);
 const KEY = 'critical.v1';
-const S = { sfx: true, mus: true, vib: true, quick: false, lq: false, lqa: false, lqp: false, lqf: false, secfx: true };
+const S = { sfx: true, mus: true, vib: true, quick: false, lq: false, lqa: false, lqp: false, lqf: false, fx: '' };
 try { Object.assign(S, (JSON.parse(localStorage.getItem(KEY) || '{}').set) || {}); } catch (e) { /* stockage indisponible */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ set: S })); } catch (e) { /* ignore */ } };
 const vib = (p) => { if (S.vib && navigator.vibrate) try { navigator.vibrate(p); } catch (e) { /* ignore */ } };
@@ -40,7 +40,7 @@ const tap = (id, f) => $(id).addEventListener('click', () => { A.ui(); vib(9); f
 tap('#o-prof', () => { $('#m-settings').classList.remove('on'); RANK.openMyProfile(); });
 tap('#o-save', () => { $('#m-settings').classList.remove('on'); CLOUD.open(toast); });
 tap('#o-install', () => { $('#m-settings').classList.remove('on'); INSTALL.show(); });
-tap('#b-set2', () => { $('#o-admin').hidden = !RANK.isAdmin(); $('#o-install').hidden = !INSTALL.canInstall(); $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-tele').checked = TELE.enabled(); $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-quick').checked = S.quick; $('#o-secfx').checked = S.secfx !== false; $('#o-lqw').hidden = !RANK.isAdmin(); $('#o-lqaw').hidden = !RANK.isAdmin(); $('#o-lqpw').hidden = !RANK.isAdmin(); $('#o-lqp').checked = !!S.lqp; $('#o-lqp').disabled = !LQ.supported(); $('#o-lqa').checked = !!S.lqa; $('#o-lqa').disabled = !LQ.supported(); $('#o-lq').checked = !!S.lq; $('#o-lq').disabled = !LQ.supported(); $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
+tap('#b-set2', () => { $('#o-admin').hidden = !RANK.isAdmin(); $('#o-install').hidden = !INSTALL.canInstall(); $('#o-name').textContent = RANK.name() || 'Choisir un pseudo'; $('#o-tele').checked = TELE.enabled(); $('#o-sfx').checked = S.sfx; $('#o-mus').checked = S.mus; $('#o-vib').checked = S.vib; $('#o-gh').checked = MINE.ghostOn(); $('#o-quick').checked = S.quick; $('#o-lqw').hidden = !RANK.isAdmin(); $('#o-lqaw').hidden = !RANK.isAdmin(); $('#o-lqpw').hidden = !RANK.isAdmin(); $('#o-lqp').checked = !!S.lqp; $('#o-lqp').disabled = !LQ.supported(); $('#o-lqa').checked = !!S.lqa; $('#o-lqa').disabled = !LQ.supported(); $('#o-lq').checked = !!S.lq; $('#o-lq').disabled = !LQ.supported(); $('#o-duel').checked = !RANK.noDuel(); $('#m-settings').classList.add('on'); });
 tap('#o-close', () => $('#m-settings').classList.remove('on'));
 $('#o-sfx').onchange = (e) => { S.sfx = e.target.checked; A.setSfx(S.sfx); save(); };
 $('#o-mus').onchange = (e) => { S.mus = e.target.checked; A.setMusic(S.mus); save(); };
@@ -48,10 +48,9 @@ $('#o-duel').onchange = (e) => RANK.setNoDuel(!e.target.checked);
 $('#o-quick').onchange = (e) => { S.quick = e.target.checked; save(); };
 const lqApply = () => { // verre liquide : réservé à l'administrateur ; Full Glass (console admin) active tout d'un coup
   const ad = RANK.isAdmin() && LQ.supported(), fu = ad && !!S.lqf, v = ad && (!!S.lq || fu);
-  MINE.setSectorFx(S.secfx !== false, ad); // effets de secteur (activés par défaut) ; la vraie lentille d'Horizon : admin
+  MINE.setTestFx(S.fx, RANK.isAdmin()); // banc d'effets (console admin › Shaders) : jamais chez les joueurs
   LQ.setOn(v); LQ.tabBar(v && !fu); LQ.setFull(fu); LQ.setOrbs(ad && !!S.lqa); LQ.setPane(ad && (!!S.lqp || fu));
 }; // verre liquide : réservé à l'administrateur pour l'instant
-$('#o-secfx').onchange = (e) => { S.secfx = e.target.checked; save(); lqApply(); };
 $('#o-lqp').onchange = (e) => { S.lqp = e.target.checked; save(); lqApply(); toast(S.lqp ? 'Cuve en verre liquide activée' : 'Cuve en verre liquide désactivée'); };
 $('#o-lqa').onchange = (e) => { S.lqa = e.target.checked; save(); lqApply(); toast(S.lqa ? 'Astres en verre liquide activés' : 'Astres en verre liquide désactivés'); };
 $('#o-lq').onchange = (e) => { S.lq = e.target.checked; save(); lqApply(); toast(S.lq ? 'Verre liquide activé' : 'Verre liquide désactivé'); };
@@ -71,7 +70,7 @@ for (const [id, label, sub, f] of [['b-duel', 'Duel 1v1', 'Affronte un ami avec 
 QS.init({ today, grant: MINE.grant, toast, vib, playtime: MINE.playtime, giveTheme: MINE.giveTheme, themeName: MINE.themeName });
 GOALS.init({ pack: MINE.packAdd, grant: MINE.grant, xp: MINE.giveXp, level: () => MINE.levelInfo().level, toast, vib, sfx: A.ui, changed: refresh });
 let packs = null;
-const adm = ADMIN.mount({ glass: { supported: LQ.supported, full: () => !!S.lqf, setFull: (v) => { S.lqf = !!v; save(); lqApply(); } }, bot: { watch: MINE.botWatch }, call: RANK.admin, toast, vib, tierName: MINE.tierName, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
+const adm = ADMIN.mount({ fx: { list: () => [...MINE.FX_LIST, ...Object.entries(LQ.POST).map(([k, v]) => [k, v[0], v[1], 'shader'])], get: () => S.fx || '', set: (n) => { S.fx = n; save(); lqApply(); }, sandbox: () => { MINE.openSandbox(); } }, glass: { supported: LQ.supported, full: () => !!S.lqf, setFull: (v) => { S.lqf = !!v; save(); lqApply(); } }, bot: { watch: MINE.botWatch }, call: RANK.admin, toast, vib, tierName: MINE.tierName, paint: MINE.paintAstre, local: { p: () => MINE.adminLocal.packs(3), test: (r) => packs && packs.preview(r), e: () => MINE.adminLocal.eclats(10000), x: () => MINE.adminLocal.xp(1000), u: () => MINE.adminLocal.unlock() } });
 tap('#o-admin', () => { $('#m-settings').classList.remove('on'); adm.open(); });
 const evColors = Array.from({ length: 13 }, (_, i) => (MINE.BODIES[i] || [0, [200, 200, 255]])[1]);
 const ev = EVENT.mount({ call: RANK.call, name: RANK.name, askName: RANK.askName, claim: RANK.eventClaim, colors: evColors, sprite: (t) => { const c = document.createElement('canvas'); MINE.paintAstre(c, t >= 12 ? '12:2' : String(t), 96, false, true); return c; }, accent: (i) => ACCENTS[Math.max(0, Math.min(11, i | 0))].c.join(','), toast, vib, sfx: A.ui });
