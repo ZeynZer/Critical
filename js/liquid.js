@@ -279,30 +279,12 @@ export function lens(canvas) {
 // ============ Banc de shaders (console admin › Shaders) : post-traitements de la cuve, à tester ============
 // Chaque effet est un petit programme appliqué à l'image de la cuve à chaque image (purement visuel). Compilés à la demande.
 export const POST = {
-  aberration: ['Aberration chromatique', 'Les couleurs se séparent vers les bords, comme une lentille imparfaite.',
-    'vec2 d=uv-.5; float k=.006+.004*sin(uT*1.3); c=vec3(tex(p+d*uRes*k).r,tex(p).g,tex(p-d*uRes*k).b);'],
   onde: ['Onde de choc', 'Des ondes partent du bas de la cuve et déforment tout sur leur passage.',
     'vec2 cc=vec2(.5,.92)*uRes; float d=length(p-cc), w=mod(uT*260.,length(uRes)*1.3), f=exp(-pow((d-w)/16.,2.)); vec2 dir=(p-cc)/max(d,1.); c=tex(p-dir*f*11.)+f*.10;'],
-  eau: ['Sous l\'eau', 'Tout ondule doucement, reflets de lumière dansants et teinte bleutée.',
-    'vec2 q=p+vec2(sin(p.y*.045+uT*1.6),cos(p.x*.04+uT*1.3))*3.; c=tex(q); float ca=pow(abs(sin(p.x*.05+uT)+sin(p.y*.06-uT*1.3)+sin((p.x+p.y)*.03+uT*.7))/3.,3.); c=c*vec3(.78,.95,1.1)+vec3(.2,.5,.6)*ca*.45;'],
-  chaleur: ['Mirage de chaleur', 'L\'air tremble en montant, comme au-dessus d\'un brasier.',
-    'float n=sin(p.y*.09-uT*6.)*sin(p.x*.05+uT*2.)+.5*sin(p.y*.21-uT*9.); c=tex(p+vec2(n*2.4,0.)*smoothstep(0.,1.,uv.y))*vec3(1.08,1.,.9);'],
-  crt: ['Vieil écran (CRT)', 'Écran bombé, lignes de balayage, sous-pixels rouges, verts et bleus.',
-    'vec2 cu=uv*2.-1.; cu*=1.+dot(cu,cu)*.05; c=tex((cu*.5+.5)*uRes); c*=.8+.2*sin(p.y*3.14159); float s=mod(floor(p.x),3.); c*=s<1.?vec3(1.25,.9,.9):s<2.?vec3(.9,1.25,.9):vec3(.9,.9,1.25); c*=1.-dot(cu,cu)*.22; if(abs(cu.x)>1.||abs(cu.y)>1.)c=vec3(0.);'],
-  cinema: ['Cinéma', 'Contraste de film, teintes orangées et bleutées, vignette et grain.',
-    'c=tex(p); float l=dot(c,vec3(.299,.587,.114)); c=mix(vec3(l),c,1.25); c=c*vec3(1.06,1.,.9)+vec3(-.03,.01,.06)*(1.-l); c*=mix(.5,1.,smoothstep(.95,.35,length(uv-.5))); c+=(hash(p+fract(uT*7.))-.5)*.07;'],
-  bloom: ['Éclat (bloom)', 'Tout ce qui brille déborde de lumière.',
-    'c=tex(p); vec3 b=vec3(0.); for(int i=0;i<12;i++){ float a=float(i)*.5236; for(int j=0;j<3;j++){ float r=4.+float(j)*6.; b+=max(tex(p+vec2(cos(a),sin(a))*r)-.5,0.);} } c+=b/36.*2.4;'],
-  nuit: ['Vision nocturne', 'Monochrome vert, grain et lunette sombre.',
-    'float l=dot(tex(p),vec3(.3,.6,.1)); c=vec3(.15,1.,.35)*pow(l,.8)*1.5; c+=(hash(p*.5+floor(uT*24.))-.5)*.12; c*=.85+.15*sin(p.y*1.5); c*=smoothstep(.78,.3,length(uv-.5));'],
-  thermique: ['Caméra thermique', 'Les astres brillent selon leur « chaleur » (luminosité).',
-    'float l=dot(tex(p),vec3(.3,.6,.1)); c=l<.33?mix(vec3(0.,0.,.25),vec3(.6,0.,.8),l*3.):l<.66?mix(vec3(.6,0.,.8),vec3(1.,.5,0.),(l-.33)*3.):mix(vec3(1.,.5,0.),vec3(1.,1.,.85),(l-.66)*3.);'],
-  pixel: ['Rétro pixel', 'Gros pixels et couleurs réduites, façon console 16 bits.',
-    'vec2 q=(floor(p/6.)+.5)*6.; c=floor(tex(q)*6.+.5)/6.;'],
+  eau: ['Sous l\'eau', 'Tout ondule doucement, avec des reflets de lumière dansants ; les couleurs des astres restent les mêmes.',
+    'vec2 q=p+vec2(sin(p.y*.045+uT*1.6),cos(p.x*.04+uT*1.3))*3.; c=tex(q); float ca=pow(abs(sin(p.x*.05+uT)+sin(p.y*.06-uT*1.3)+sin((p.x+p.y)*.03+uT*.7))/3.,3.); c+=vec3(1.,.98,.95)*ca*.10;'],
   aurore: ['Aurore', 'Des voiles de couleur ondulent au-dessus de la cuve.',
     'c=tex(p); float b1=sin(uv.x*6.+uT*.6+sin(uv.y*3.+uT*.4)*2.); float band=smoothstep(.6,1.,b1)*smoothstep(1.,.15,uv.y); c+=mix(vec3(.2,1.,.6),vec3(.6,.3,1.),.5+.5*sin(uv.x*3.+uT))*band*.35;'],
-  holo: ['Hologramme', 'Image projetée : teinte cyan, lignes qui défilent, petits sauts d\'image.',
-    'float g=step(.985,hash(vec2(floor(p.y/6.),floor(uT*8.)))); c=tex(p+vec2(g*14.,0.)); float l=dot(c,vec3(.3,.6,.1)); c=mix(c,vec3(.3,.9,1.)*l*1.5,.6); c*=.82+.18*sin(p.y*.8+uT*10.);'],
 };
 const PFS = (body) => `#version 300 es
 precision highp float;

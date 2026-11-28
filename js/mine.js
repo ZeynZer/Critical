@@ -104,7 +104,6 @@ function onEvents() {
     else if (e.t === 'pierce') {
       // saut : l'espace se contracte (implosion), bang, puis le nouveau secteur se déploie — voir draw() et bang()
       texA = texB; texB = makeTex(e.depth); warp = 1; shake = 6; callout = null;
-      secStart();
       warpMsg = ['SECTEUR ' + (e.depth + 1), (G.mod.n || sectorName(e.depth)).toUpperCase() + ' · +' + fmt(e.pts), e.depth];
       A.chestRise(0.75); H.vib(20);
       H.track('depth', e.depth + 1, true); if (!G.nop) H.goal('sector', { n: e.depth + 1 });
@@ -455,39 +454,16 @@ function txt(s, x, y, size, col, align = 'center', font = 'Orbitron', weight = 9
 /* ============================== banc d'effets visuels (console admin › Shaders ; visuels seulement, la physique ne change pas) ============================== */
 // L'administrateur choisit un effet : il s'applique partout (tous les modes, bac à sable compris) jusqu'à ce qu'il en change.
 // « Selon le secteur » : ambiance de la règle du secteur + anomalies Grand Vide / Horizon (30 s). Les joueurs n'ont aucun effet pour l'instant.
-export const FX_LIST = [['auto', 'Selon le secteur', 'L\'ambiance suit la règle du secteur ; anomalies Grand Vide et Horizon de 30 s au 7ᵉ et 8ᵉ secteur.'],
-  ['brume', 'Brume', 'Une brume légère dérive devant et derrière les astres.'], ['gravite', 'Gravité', 'Traînées de chute et fond qui s\'assombrit vers le bas.'],
-  ['legerete', 'Légèreté', 'Fines poussières qui remontent, haut de la cuve plus clair.'], ['parois', 'Parois d\'énergie', 'Les parois deviennent des champs d\'énergie qui ondulent.'],
-  ['chaos', 'Chaos', 'Parois doublées rouge et cyan, traînées de chute.'], ['vide', 'Grand Vide', 'La cuve est noire : chaque astre n\'éclaire qu\'autour de lui.'],
-  ['horizon', 'Horizon', 'La lumière se courbe autour des trous noirs et quasars (vraie lentille).']];
-let testFx = '', secLens = false, secT0 = 0; const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+export const FX_LIST = [['vide', 'Grand Vide', 'La cuve est noire : chaque astre n\'éclaire qu\'autour de lui.'],
+  ['horizon', 'Horizon', 'La lumière se courbe autour des trous noirs et quasars (vraie lentille). Lâche un trou noir pour le voir.']];
+let testFx = '', secLens = false; const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 export function setTestFx(name, admin) { testFx = admin ? String(name || '') : ''; secLens = !!admin; }
 export const testFxName = () => testFx;
-const SP = Array.from({ length: 70 }, (_, i) => ({ x: rnd(i * 3.1 + 1), y: rnd(i * 7.7 + 2), z: 0.3 + rnd(i * 1.9 + 3) * 0.7, p: rnd(i * 5.3 + 4) * TAU }));
-const secMi = () => (G ? G.depth % 9 : 0), anomA = () => { const t = T - secT0 - 3; return t < 0 || t > 30 ? 0 : clamp(Math.min(t / 2, (30 - t) / 2), 0, 1); };
-const fxMi = () => (!G || G.duel || !testFx ? 0 : testFx === 'auto' ? secMi() : { brume: 1, gravite: 4, legerete: 5, parois: 7, chaos: 8 }[testFx] || 0);
-const darkOn = () => (!G || G.duel ? 0 : testFx === 'vide' ? 1 : testFx === 'auto' && secMi() === 6 ? anomA() : 0);
-const horizonOn = () => (!G || G.duel ? 0 : testFx === 'horizon' ? 1 : testFx === 'auto' && secMi() === 7 ? anomA() : 0);
-function secStart() { secT0 = T; }
-const secTime = () => (RM ? 0 : T);
-function sectorBack() { // derrière les astres
-  if (!testFx || !G || G.rep && G.rep.speed > 4) return; const mi = fxMi(), a = testFx === 'auto' ? clamp((T - secT0) / 1.5, 0, 1) : 1, t = secTime(); if (!mi || a <= 0) return;
-  ctx.save(); rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.clip();
-  if (mi === 1) { for (let i = 0; i < 6; i++) { const s = SP[i], cx = B.x + (((s.x + t * 0.012 * s.z) % 1.3) - 0.15) * B.w, cy = B.y + s.y * B.h, r = B.w * (0.35 + 0.3 * s.z), g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(210,225,255,${0.14 * a})`); g.addColorStop(1, 'rgba(210,225,255,0)'); ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); } }
-  if (mi === 3 || mi === 4 || mi === 8) { const k = mi === 4 ? 1.7 : 1; ctx.lineCap = 'round'; for (let i = 0; i < (mi === 8 ? 14 : 26); i++) { const s = SP[i], x = B.x + s.x * B.w, y = B.y + ((s.y + t * (0.22 + 0.3 * s.z) * k) % 1) * B.h, l = 16 * s.z * k; ctx.strokeStyle = `rgba(170,200,255,${0.26 * a * s.z})`; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y - l); ctx.lineTo(x, y); ctx.stroke(); }
-    const g = ctx.createLinearGradient(0, B.y + B.h * 0.55, 0, B.y + B.h); g.addColorStop(0, 'rgba(0,0,10,0)'); g.addColorStop(1, `rgba(0,0,10,${0.28 * a * k / 1.7})`); ctx.fillStyle = g; ctx.fillRect(B.x, B.y + B.h * 0.55, B.w, B.h * 0.45); }
-  if (mi === 5 || mi === 6) { for (let i = 0; i < 34; i++) { const s = SP[i], y = B.y + (1 - ((s.y + t * 0.045 * s.z * (mi === 6 ? 0.7 : 1)) % 1)) * B.h, x = B.x + (s.x + Math.sin(t * 0.8 + s.p) * 0.02) * B.w; ctx.fillStyle = `rgba(${mi === 5 ? '150,255,220' : '180,220,255'},${0.5 * a * s.z})`; ctx.beginPath(); ctx.arc(x, y, 1 + 1.6 * s.z, 0, TAU); ctx.fill(); }
-    const g = ctx.createLinearGradient(0, B.y, 0, B.y + B.h * 0.4); g.addColorStop(0, `rgba(170,255,230,${0.08 * a})`); g.addColorStop(1, 'rgba(170,255,230,0)'); ctx.fillStyle = g; ctx.fillRect(B.x, B.y, B.w, B.h * 0.4); }
-  if (mi === 2 || mi === 7 || mi === 8) { const col = mi === 8 ? [255, 80, 110] : [255, 79, 216]; for (const side of [0, 1]) { const x0 = side ? sx(F.W - G.inset) - 2 : sx(G.inset) + 2;
-    const g = ctx.createLinearGradient(x0 + (side ? -14 : 14), 0, x0, 0); g.addColorStop(0, rgba(col, 0)); g.addColorStop(1, rgba(col, 0.24 * a)); ctx.fillStyle = g; ctx.fillRect(side ? x0 - 14 : x0, B.y, 14, B.h);
-    ctx.strokeStyle = rgba(col, 0.75 * a); ctx.lineWidth = 1.6; ctx.beginPath(); for (let y = B.y; y <= B.y + B.h; y += 8) { const x = x0 + Math.sin(y * 0.06 + t * 3 + side) * 1.8; y === B.y ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke();
-    if (mi === 8) { ctx.strokeStyle = rgba([80, 220, 255], 0.35 * a); ctx.beginPath(); for (let y = B.y; y <= B.y + B.h; y += 8) { const x = x0 + (side ? -2 : 2) + Math.sin(y * 0.06 + t * 3.4 + side) * 1.8; y === B.y ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke(); } } }
-  ctx.restore();
-}
+const darkOn = () => (G && !G.duel && testFx === 'vide' ? 1 : 0);
+const horizonOn = () => (G && !G.duel && testFx === 'horizon' ? 1 : 0);
 let dkC = null, dkX = null, lensG = null, lensFail = false, postG = null, postFail = false; const lensC = document.createElement('canvas'), postC = document.createElement('canvas');
 function sectorFront() { // devant les astres (sous la ligne de défaite et l'interface)
-  if (!testFx || !G) return; const mi = fxMi(), a = testFx === 'auto' ? clamp((T - secT0) / 1.5, 0, 1) : 1, t = secTime();
-  if (mi === 1 && a > 0) { ctx.save(); rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.clip(); for (let i = 6; i < 10; i++) { const s = SP[i], cx = B.x + (((s.x - t * 0.009 * s.z) % 1.3 + 1.3) % 1.3 - 0.15) * B.w, cy = B.y + s.y * B.h, r = B.w * 0.4, g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(220,230,255,${0.045 * a})`); g.addColorStop(1, 'rgba(220,230,255,0)'); ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); } ctx.restore(); }
+  if (!testFx || !G) return;
   let an = darkOn();
   if (an > 0) { // Grand Vide : ténèbres, chaque astre éclaire autour de lui ; la zone de lâcher reste un peu visible
     const x0 = B.x - 4, y0 = B.y - 40, w = B.w + 8, h = B.h + 44, k = Math.min(DPR, 1.5);
@@ -592,7 +568,6 @@ function draw() {
   // puits de gravité : une cuve de verre
   ctx.fillStyle = 'rgba(4,6,20,.42)'; rr(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22); ctx.fill();
   if (!LQ.paneOn()) glassBox(B.x - 4, B.y - 40, B.w + 8, B.h + 44, 22, 0.26); // (cuve en verre liquide : la vitre est posée après les astres)
-  sectorBack();
   const sheen = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0); sheen.addColorStop(0, 'rgba(255,255,255,.1)'); sheen.addColorStop(0.07, 'rgba(255,255,255,0)'); sheen.addColorStop(0.95, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(255,255,255,.07)'); ctx.fillStyle = sheen; ctx.fillRect(B.x, B.y - 30, B.w, B.h + 20);
   if (G.inset > 0.02) { const iw = G.inset * B.u; ctx.fillStyle = 'rgba(255,79,216,.16)'; ctx.fillRect(B.x, B.y - 30, iw, B.h + 30); ctx.fillRect(B.x + B.w - iw, B.y - 30, iw, B.h + 30); } // parois resserrées
   // ligne de danger
@@ -1200,7 +1175,6 @@ function endChal(c) { // fin d'un défi du jour : réussi (objectif atteint à t
 function newRun(seed, keep, opt) {
   if (!keep) dropRun(); fpsN = fpsT = 0; G = F.newGame(seed, opt); G.nop = !!(opt && (opt.sandbox || opt.rep || opt.duel)); G.duel = !!(opt && opt.duel); $('#mn').classList.toggle('sbx', !!G.sandbox); $('#mn').classList.toggle('rpl', !!(opt && opt.rep)); G.bonus = 0; warp = slow = 0; want = false; reveal = null; aimT = F.W / 2; A.setMood(0); ended = false; parts = []; rings = []; labels = []; pops.clear(); callout = null; shown = 0; ghosts = []; shake = flash = 0; aimX = F.W / 2; aiming = false;
   resize(); // la hauteur de la cuve dépend du mode (Blitz : plus basse)
-  secStart();
   $('#mn-bot').hidden = !(opt && opt.bot);
   if (!(opt && (opt.sandbox || opt.rep || opt.duel || opt.daily || opt.bot)) && deckKeys().length) F.equip(G, deckLoad()); // l'en-tête du journal consigne le deck (cartes, étoiles) : rediffusion identique
   texB = makeTex(0); texA = null; $('#mn-m-over').classList.remove('on');
